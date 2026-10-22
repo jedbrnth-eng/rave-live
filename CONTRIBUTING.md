@@ -2,6 +2,8 @@
 
 Thanks for taking a look. RAVE LIVE is a native macOS app in Swift and Metal with no Swift package dependencies.
 
+Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Build
 ```
 swift build -c release           # all targets
