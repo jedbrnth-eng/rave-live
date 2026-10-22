@@ -1,0 +1,11 @@
+.build/
+build/
+*.xcodeproj
+tools/.venv/
+tools/gt/
+.DS_Store
+# personal library data: never commit
+bench/tracks*.json
+bench/results/
+tools/gt_edm/
+*.local.json

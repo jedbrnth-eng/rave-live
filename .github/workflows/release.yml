@@ -1,0 +1,44 @@
+name: Release
+
+# Builds RAVE LIVE.app and publishes a GitHub release tagged v<VERSION>.
+# Manual only for now (Actions tab -> Release -> Run workflow), so nothing ships by accident.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Read version
+        id: v
+        run: echo "tag=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Stop if this version is already released
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::${{ steps.v.outputs.tag }} already exists. Bump VERSION and add a CHANGELOG section first."; exit 1
+          fi
+      - name: Test
+        run: swift test
+      - name: Build RAVE LIVE.app
+        run: scripts/make_app.sh
+      - name: Package
+        run: ditto -c -k --sequesterRsrc --keepParent "build/RAVE LIVE.app" RAVE-LIVE.zip
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Release notes = this version's CHANGELOG section + the install steps.
+          v="$(tr -d '[:space:]' < VERSION)"
+          awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
+          cat .github/release-notes.md >> notes.md
+          gh release create "${{ steps.v.outputs.tag }}" RAVE-LIVE.zip \
+            --title "RAVE LIVE ${{ steps.v.outputs.tag }}" \
+            --notes-file notes.md

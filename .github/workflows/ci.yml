@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test (macOS)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Swift version
+        run: swift --version
+      - name: Build all targets (release)
+        run: swift build -c release
+      - name: Tempo-tracking tests
+        run: swift test
+      - name: Probe against synthetic drum patterns
+        run: .build/release/rave-probe synth
+      - name: Build the app bundle (ad-hoc signed)
+        run: |
+          scripts/make_app.sh
+          test -x "build/RAVE LIVE.app/Contents/MacOS/RaveLive"
+          plutil -lint "build/RAVE LIVE.app/Contents/Info.plist"
+          test -f "build/RAVE LIVE.app/Contents/Resources/AppIcon.icns"
+      - name: Data files are valid JSON
+        run: |
+          for f in $(git ls-files "*.json"); do python3 -m json.tool "$f" > /dev/null || { echo "bad JSON: $f"; exit 1; }; done
+      - name: No personal paths in tracked files
+        run: |
+          if git grep -nIE '/Users/[A-Za-z]' -- . ':!.github/workflows/ci.yml'; then echo "::error::absolute home paths found"; exit 1; fi
+      - name: Public-readiness check (no personal data)
+        run: ./scripts/check_public_ready.sh

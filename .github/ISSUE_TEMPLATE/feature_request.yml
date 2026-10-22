@@ -1,0 +1,14 @@
+name: Feature request
+description: An idea for a mode, preset or control
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why (what music or setup is it for)?

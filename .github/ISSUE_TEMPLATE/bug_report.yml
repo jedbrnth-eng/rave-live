@@ -1,0 +1,39 @@
+name: Bug report
+description: Something in RAVE LIVE is broken
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [SHOW, Stage, Classic Visuals, AURORA, Not sure]
+  - type: dropdown
+    id: source
+    attributes:
+      label: Audio source
+      options: [System audio, Microphone / line-in, Demo]
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "e.g. 15.1"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and display
+      placeholder: "e.g. MacBook Pro M3, external 144 Hz monitor"
+  - type: textarea
+    id: hud
+    attributes:
+      label: Status bar text (press H)
+      description: Copy the bottom status bar line if the beat or tempo is off.
+      render: text
