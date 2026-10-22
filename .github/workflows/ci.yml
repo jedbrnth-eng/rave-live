@@ -32,6 +32,10 @@ jobs:
           test -x "build/RAVE LIVE.app/Contents/MacOS/RaveLive"
           plutil -lint "build/RAVE LIVE.app/Contents/Info.plist"
           test -f "build/RAVE LIVE.app/Contents/Resources/AppIcon.icns"
+      - name: Build the installer disk image (and verify its contents)
+        run: scripts/make_dmg.sh
+      - name: Installer script is valid shell
+        run: bash -n install.sh
       - name: Data files are valid JSON
         run: |
           for f in $(git ls-files "*.json"); do python3 -m json.tool "$f" > /dev/null || { echo "bad JSON: $f"; exit 1; }; done

@@ -18,6 +18,7 @@
 </p>
 
 <p align="center">
+  <a href="#download-no-terminal-needed">Download</a> ·
   <a href="#what-it-does">Features</a> ·
   <a href="#photosensitivity-warning">Safety</a> ·
   <a href="#controls">Controls</a> ·
@@ -31,9 +32,29 @@
   <sub>Stage mode following a 128 BPM track, recorded full screen on a MacBook Pro. <a href="docs/demo.mp4">Watch in full quality</a>.</sub>
 </p>
 
-> **Status: pre-release (0.4).** No release has been published yet; build it from source in about a minute (below). Issues and pull requests are welcome.
+> **Status: pre-release (0.4).** This is the first public build, so expect rough edges. Issues and pull requests are welcome.
 
 ---
+
+<p align="center">
+  <a href="https://github.com/jedbrnth-eng/rave-live/releases/latest/download/RAVE-LIVE.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20RAVE%20LIVE%20for%20Mac-Free-ff2d95?style=for-the-badge&logo=apple&logoColor=white" alt="Download RAVE LIVE for Mac, free" height="56"></a><br>
+  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ · about 6 MB</sub>
+</p>
+
+## Download (no Terminal needed)
+
+1. Click the big **Download RAVE LIVE for Mac** button above. A file called `RAVE-LIVE.dmg` lands in your Downloads folder.
+2. Double-click it, then drag **RAVE LIVE** onto the **Applications** shortcut in the window that opens.
+3. Open RAVE LIVE from Applications. macOS will say it can't verify the app, because RAVE LIVE isn't notarized by Apple yet. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to RAVE LIVE, then confirm. You only do this once.
+4. Allow **Screen & System Audio Recording** when macOS asks. It is how RAVE LIVE hears what your Mac is playing; nothing is recorded.
+
+Prefer one command? Paste this into Terminal. It downloads the latest release, puts RAVE LIVE in Applications and opens it (it also clears macOS's download flag, so there is no Open Anyway step):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/rave-live/main/install.sh | bash
+```
+
+<sub>Want to read the script first? It's [install.sh](install.sh), about 50 lines. The app is open source, so you can read every line it runs. Intel Macs aren't supported yet; you can [build from source](#build-from-source) instead.</sub>
 
 ## Photosensitivity warning
 

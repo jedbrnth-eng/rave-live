@@ -30,7 +30,9 @@ jobs:
       - name: Build RAVE LIVE.app
         run: scripts/make_app.sh
       - name: Package
-        run: ditto -c -k --sequesterRsrc --keepParent "build/RAVE LIVE.app" RAVE-LIVE.zip
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "build/RAVE LIVE.app" RAVE-LIVE.zip
+          scripts/make_dmg.sh
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -39,6 +41,6 @@ jobs:
           v="$(tr -d '[:space:]' < VERSION)"
           awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
           cat .github/release-notes.md >> notes.md
-          gh release create "${{ steps.v.outputs.tag }}" RAVE-LIVE.zip \
+          gh release create "${{ steps.v.outputs.tag }}" build/RAVE-LIVE.dmg RAVE-LIVE.zip \
             --title "RAVE LIVE ${{ steps.v.outputs.tag }}" \
             --notes-file notes.md
