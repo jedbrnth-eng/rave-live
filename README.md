@@ -69,6 +69,23 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 <sub>All images are unedited frames rendered by the app (version 0.4, demo track).</sub>
 
+### Every visual in motion
+
+<p align="center">
+  <img src="docs/visuals-reel.webp" alt="A reel of every RAVE LIVE look in motion: Stage, all 33 Classic Visuals presets and AURORA, about a second each" width="860">
+</p>
+
+<sub>Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames were captured by the app itself (`--demo --snap`) from its built-in synthetic 128 BPM signal, so no music is involved; only the name captions were added afterwards.</sub>
+
+<details>
+<summary>Contact sheet of all 35 looks</summary>
+
+<p align="center">
+  <img src="docs/visuals-grid.jpg" alt="Contact sheet of Stage, all 33 Classic Visuals presets and AURORA, each labelled with its name" width="860">
+</p>
+
+</details>
+
 ## Controls
 
 | Key | Action |
