@@ -37,10 +37,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Release notes = this version's CHANGELOG section + the install steps.
+          # Release notes = the install steps first (for everyone), then this version's CHANGELOG section.
           v="$(tr -d '[:space:]' < VERSION)"
-          awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
-          cat .github/release-notes.md >> notes.md
+          cat .github/release-notes.md > notes.md
+          echo >> notes.md
+          awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && /^## \[/ {exit} on' CHANGELOG.md >> notes.md
           gh release create "${{ steps.v.outputs.tag }}" build/RAVE-LIVE.dmg RAVE-LIVE.zip \
             --title "RAVE LIVE ${{ steps.v.outputs.tag }}" \
             --notes-file notes.md

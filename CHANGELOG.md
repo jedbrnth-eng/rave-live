@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - Unreleased
+## [0.4.0] - 2026-10-22
 
 ### Added
 - Live audio analysis: FFT bands, spectral-flux onsets, kick/snare/hat pickers; system audio via ScreenCaptureKit with mic/line-in fallback.
