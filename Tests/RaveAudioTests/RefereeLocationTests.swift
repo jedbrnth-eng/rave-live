@@ -34,15 +34,18 @@ final class RefereeLocationTests: XCTestCase {
 }
 
 final class RefereeDeadPipeTests: XCTestCase {
-    /// Writing to a sidecar that has already exited used to raise an uncatchable Objective-C exception / SIGPIPE.
+    /// Writing to a sidecar that has died used to raise an uncatchable Objective-C exception / SIGPIPE.
+    /// The sidecar stays alive through startup (so init succeeds on any machine speed), then we stop it
+    /// deliberately; nothing here depends on how fast a process exits.
     func testSendToDeadSidecarFailsGracefully() throws {
         let path = NSTemporaryDirectory() + "fake-referee-\(UUID().uuidString).sh"
-        try "#!/bin/sh\necho '{\"ready\": true}'\nexit 0\n".write(toFile: path, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\necho '{\"ready\": true}'\nexec sleep 30\n".write(toFile: path, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
         addTeardownBlock { try? FileManager.default.removeItem(atPath: path) }
-        let r = try XCTUnwrap(BeatReferee(python: "/bin/sh", script: path, startupTimeout: 5))
-        Thread.sleep(forTimeInterval: 0.5)   // let the sidecar exit
-        let big = Data(count: 1 << 20)       // larger than a pipe buffer, so the write really hits the dead pipe
+        let r = try XCTUnwrap(BeatReferee(python: "/bin/sh", script: path, startupTimeout: 10))
+        r.stop()                              // terminate the sidecar: its stdin pipe now has no reader
+        Thread.sleep(forTimeInterval: 0.5)    // let the OS tear the process down
+        let big = Data(count: 1 << 20)        // larger than a pipe buffer, so the write really hits the dead pipe
         XCTAssertFalse(r.send(big))
     }
 }
