@@ -28,8 +28,8 @@
 </p>
 
 <p align="center">
-  <a href="docs/demo.mp4"><img src="docs/demo.webp" alt="RAVE LIVE in Stage mode: the LED wall, moving heads and lasers change looks on the beat of a 128 BPM track" width="860"></a><br>
-  <sub>Stage mode following a 128 BPM track, recorded full screen on a MacBook Pro. <a href="docs/demo.mp4">Watch in full quality</a>.</sub>
+  <img src="docs/visuals-reel.webp" alt="A reel of every RAVE LIVE look in motion: Stage, all 33 Classic Visuals presets and AURORA, about a second each" width="860"><br>
+  <sub>Every look in one reel: Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
 </p>
 
 > **Status: pre-release (0.4).** This is the first public build, so expect rough edges. Issues and pull requests are welcome.
@@ -92,13 +92,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 <sub>All images are unedited frames rendered by the app (version 0.4, demo track).</sub>
 
-### Every visual in motion
-
-<p align="center">
-  <img src="docs/visuals-reel.webp" alt="A reel of every RAVE LIVE look in motion: Stage, all 33 Classic Visuals presets and AURORA, about a second each" width="860">
-</p>
-
-<sub>Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames were captured by the app itself (`--demo --snap`) from its built-in synthetic 128 BPM signal, so no music is involved; only the name captions were added afterwards.</sub>
+### Every visual
 
 <details>
 <summary>Contact sheet of all 35 looks</summary>
