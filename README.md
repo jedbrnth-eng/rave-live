@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-5.10%2B-F05138?logo=swift&logoColor=white" alt="Swift 5.10+">
   <img src="https://img.shields.io/badge/GPU-Metal-555555" alt="Metal">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0 license"></a>
 </p>
 
 <p align="center">
@@ -229,4 +229,6 @@ Beat This! by CPJKU (MIT), the solver structure from Pavel Dobryakov's WebGL-Flu
 
 ## License
 
-[MIT](LICENSE) © 2026 Jed Brown. Third-party work is credited in [`CREDITS.md`](CREDITS.md).
+RAVE LIVE is free software under the [GNU GPL v3.0](LICENSE), © 2026 Jed Brown. You can use it, study it, change it and share it. If you pass it on, modified or not, you must keep the copyright and credit to Jed Brown, release your full source under GPL-3.0 too, and say what you changed. Third-party work keeps its own license, listed in [`CREDITS.md`](CREDITS.md).
+
+Want to improve it? Please send your changes here as a pull request instead of making a separate copy ([CONTRIBUTING.md](CONTRIBUTING.md)). The RAVE LIVE name and icon are not covered by the license, so a fork needs its own.
