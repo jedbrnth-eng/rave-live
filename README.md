@@ -34,6 +34,8 @@
 
 > **Status: pre-release (0.4).** This is the first public build, so expect rough edges. Issues and pull requests are welcome.
 
+> **Platform: Mac only, Linux/Windows planned.** RAVE LIVE is written for macOS (Swift, Metal and Apple's audio capture), so it does not run on Linux or Windows yet. A cross-platform version is planned; there is no date. Follow along or help in the issues.
+
 ---
 
 <p align="center">
