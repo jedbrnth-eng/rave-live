@@ -94,16 +94,11 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 ### Every visual in motion
 
-<details>
-<summary><b>Play the reel</b> (42 seconds, every look about a second each)</summary>
-
 <p align="center">
   <img src="docs/visuals-reel.webp" alt="A reel of every RAVE LIVE look in motion: Stage, all 33 Classic Visuals presets and AURORA, about a second each" width="860">
 </p>
 
-</details>
-
-<sub>Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames were captured by the app itself (`--demo --snap`) from its built-in synthetic 128 BPM signal, so no music is involved; only the name captions were added afterwards. The reel is tucked away so the page stays light on phones; open it to play.</sub>
+<sub>Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames were captured by the app itself (`--demo --snap`) from its built-in synthetic 128 BPM signal, so no music is involved; only the name captions were added afterwards.</sub>
 
 <details>
 <summary>Contact sheet of all 35 looks</summary>
