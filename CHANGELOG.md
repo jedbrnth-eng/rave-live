@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- License changed from MIT to GPL-3.0 for all new work. Versions released before this change stay available under MIT.
+
 ## [0.4.0] - 2026-10-22
 
 ### Added
