@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Jed Brown
+// SPDX-License-Identifier: GPL-3.0-only
+// Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 // SHOW mode transitions: blend scene A -> B over a beat-locked progress 0..1.
 let transitionShaderSource = #"""
 #include <metal_stdlib>

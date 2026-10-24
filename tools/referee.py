@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 """RAVE LIVE beat referee: Beat This! (CPJKU, MIT licence, ISMIR 2024) run on a sliding window.
 
 The app's own tracker is causal and fast (drives every frame). Every ~1.5 s it sends the last ~12 s of

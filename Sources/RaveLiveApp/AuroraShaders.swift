@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Jed Brown
+// SPDX-License-Identifier: GPL-3.0-only
+// Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 // AURORA mode: GPU stable-fluid simulation + ~1M particles + bloom, driven by the beat and by your
 // hands/body through the Mac camera (Vision). Fluid solver structure follows Pavel Dobryakov's
 // WebGL-Fluid-Simulation (MIT): advect -> splat -> curl/vorticity -> divergence -> pressure -> gradient.

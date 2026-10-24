@@ -40,3 +40,11 @@ Branch from `main`, keep each PR to one concern, make sure CI passes, and fill i
 RAVE LIVE is free software under the [GNU GPL v3.0](LICENSE). By opening a pull request you agree that your contribution is licensed under GPL-3.0 too, and you keep your own copyright on it.
 
 If you want something changed, send it here instead of starting a separate copy. Forks are allowed, but under the GPL a fork has to stay GPL-3.0, keep the original copyright and credit, publish its full source and say what it changed. It also needs its own name and icon, because the RAVE LIVE name and icon are not covered by the license.
+
+## File headers
+Every source file starts with this header, so credit survives if a single file is copied. Add it to new files:
+```
+// Copyright (c) 2026 Jed Brown
+// SPDX-License-Identifier: GPL-3.0-only
+// Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+```

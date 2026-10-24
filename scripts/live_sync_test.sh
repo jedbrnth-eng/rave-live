@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 # Live sync test: launches the app (SHOW), plays one file through the speakers after 4 s, quits, and
 # guarantees nothing is left playing.  usage: live_sync_test.sh <audio file> [seconds]
 set -u

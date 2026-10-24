@@ -1,4 +1,8 @@
 #!/bin/sh
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 # Fails if the repo leaks personal data. Run before any release; CI runs it too.
 # Checks: absolute home paths, email addresses, @local commit authors, local library listings,
 # .DS_Store in history, and build-machine paths baked into built binaries (when a build exists).

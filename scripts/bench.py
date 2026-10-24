@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 """Run rave-probe on every track in your own list and print a lock-time summary; per-track results go to
 bench/results/bench_results_<start>s.json (git-ignored).
 Ground truth = the BPM you supply per track (for example your DJ library's analysed BPM; octave conventions can

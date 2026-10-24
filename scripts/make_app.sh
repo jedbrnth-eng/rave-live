@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 # Builds build/RAVE LIVE.app. Signed with a local Apple Development identity if present, else ad-hoc. Not notarized.
 set -euo pipefail
 cd "$(dirname "$0")/.."
