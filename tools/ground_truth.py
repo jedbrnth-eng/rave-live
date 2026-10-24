@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 """Ground-truth beats + downbeats with Beat This! (CPJKU, MIT, ISMIR 2024) for sync evaluation.
 Usage: ground_truth.py out_dir file1 [file2 ...]  -> out_dir/<stem>.json {beats:[...], downbeats:[...]}"""
 import json, os, subprocess, sys, tempfile

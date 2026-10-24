@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 # RAVE LIVE installer. Downloads the latest release, puts RAVE LIVE.app in /Applications and opens it.
 # Source: https://github.com/jedbrnth-eng/rave-live
 # Overrides (mainly for testing): RAVE_ZIP_URL=<url or file:// path>, RAVE_INSTALL_DIR=<folder>, RAVE_NO_OPEN=1

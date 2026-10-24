@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Jed Brown
+// SPDX-License-Identifier: GPL-3.0-only
+// Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 // Compile-checks the Metal source embedded in VisualsShader.swift without launching the app.
 // Usage: swift scripts/shadercheck.swift   (prints "OK" or the Metal compiler errors)
 import Foundation

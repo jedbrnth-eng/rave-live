@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 """Score RAVE LIVE's streaming beat/downbeat tracker against Beat This! ground truth.
 For each track: run rave-probe on 0..CLIP s (same code path as live), then compute
   - beat F-measure (+-70 ms, MIREX standard), after the tracker's first 8 s

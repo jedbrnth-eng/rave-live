@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Jed Brown
+// SPDX-License-Identifier: GPL-3.0-only
+// Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
+
 // Visuals-only mode: classic feedback visualizers (WMP Ambience/Battery, iTunes Classic, Winamp/MilkDrop, scope).
 // Technique: each frame warps the previous frame (zoom/rotate/swirl + decay) and draws new audio shapes on top.
 let visualsShaderSource = #"""
