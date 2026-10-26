@@ -10,6 +10,13 @@ import RaveAudio
 final class StageView: MTKView {
     var onKey: ((NSEvent) -> Void)?
     var onMouse: ((NSPoint, NSPoint, Bool, Bool) -> Void)?   // location (0..1, top-left), delta, down, click
+    var onDropFiles: (([URL]) -> Void)?                      // .milk files / folders dropped on the window
+    override func draggingEntered(_ s: NSDraggingInfo) -> NSDragOperation { AppDelegate.milkURLs(s.draggingPasteboard).isEmpty ? [] : .copy }
+    override func performDragOperation(_ s: NSDraggingInfo) -> Bool {
+        let urls = AppDelegate.milkURLs(s.draggingPasteboard)
+        guard !urls.isEmpty else { return false }
+        onDropFiles?(urls); return true
+    }
     override var acceptsFirstResponder: Bool { true }
     override func keyDown(with event: NSEvent) { onKey?(event) }
     private func norm(_ e: NSEvent) -> NSPoint {
@@ -109,6 +116,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.onHUD = { [weak self] s in DispatchQueue.main.async { self?.hud.stringValue = s; self?.updateMilkCard() } }
         audio.onStatus = { [weak self] s in DispatchQueue.main.async { self?.status.stringValue = s } }
         view.onKey = { [weak self] e in self?.key(e) }
+        view.registerForDraggedTypes([.fileURL])
+        view.onDropFiles = { [weak self] urls in self?.milkImport(urls) }
         view.onMouse = { [weak self] p, d, down, click in
             guard let r = self?.renderer else { return }
             let pos = SIMD2<Float>(Float(p.x), Float(p.y)), vel = SIMD2<Float>(Float(d.x), Float(d.y)) * 3.0

@@ -24,7 +24,11 @@ echo "binary: $(lipo -archs "$APP/Contents/MacOS/RaveLive")"
 if [ -f vendor/projectm/lib/libprojectM-4.dylib ]; then
   mkdir -p "$APP/Contents/Frameworks"; cp vendor/projectm/lib/libprojectM-4.dylib "$APP/Contents/Frameworks/"
 else echo "note: no vendor/projectm build; MILKDROP mode will show its 'engine missing' card (run scripts/build_projectm.sh)"; fi
-# Bundled MilkDrop presets (none today): copying a folder of .milk files to "$APP/Contents/Resources/MilkDrop" is all it takes.
+# Bundled MilkDrop presets (Resources/MilkDrop/bundled.txt, fetched at the pinned pack commit by scripts/fetch_milkdrop_presets.sh)
+if [ -d vendor/milkdrop-bundled ]; then
+  mkdir -p "$APP/Contents/Resources/MilkDrop" && cp -R vendor/milkdrop-bundled/ "$APP/Contents/Resources/MilkDrop/"
+  echo "bundled MilkDrop presets: $(find "$APP/Contents/Resources/MilkDrop" -name '*.milk' | wc -l | tr -d ' ')"
+else echo "note: no vendor/milkdrop-bundled; MILKDROP starts without presets (run scripts/fetch_milkdrop_presets.sh)"; fi
 # App icon: Icon Composer bundle compiled by actool -> Assets.car (macOS 26+ native squircle) + AppIcon.icns fallback.
 mkdir -p "$APP/Contents/Resources"
 RES="$(cd "$APP/Contents/Resources" && pwd)"

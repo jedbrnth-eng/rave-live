@@ -27,10 +27,11 @@ jobs:
           fi
       - name: Test
         run: swift test
-      - name: Build the optional engines (Syphon, projectM) from their pinned sources
+      - name: Build the optional engines (Syphon, projectM) and fetch the bundled MilkDrop presets, all pinned
         run: |
           scripts/build_syphon.sh
           scripts/build_projectm.sh
+          scripts/fetch_milkdrop_presets.sh
       - name: Build RAVE LIVE.app (universal, macOS 12+)
         run: |
           scripts/make_app.sh
@@ -40,6 +41,9 @@ jobs:
             lipo -archs "$f" | grep -q x86_64 && lipo -archs "$f" | grep -q arm64 || { echo "::error::$f missing or not universal"; exit 1; }
             for a in arm64 x86_64; do vtool -arch $a -show-build "$f" | grep -q "minos 12.0" || { echo "::error::$f $a is not minos 12.0"; exit 1; }; done
           done
+          # MILKDROP must work out of the box: the curated presets are in the bundle
+          n=$(find "build/RAVE LIVE.app/Contents/Resources/MilkDrop" -name '*.milk' | wc -l)
+          [ "$n" -ge 100 ] || { echo "::error::only $n bundled MilkDrop presets"; exit 1; }
       - name: Package
         run: |
           ditto -c -k --sequesterRsrc --keepParent "build/RAVE LIVE.app" RAVE-LIVE.zip

@@ -6,16 +6,22 @@ import AppKit
 
 /// MILKDROP UI: the preset browser panel, the "Get presets" card shown when the mode can't run, keys and menu items.
 
-/// Searchable preset list: favourite, name, author, category, rating. Double-click (or Return) plays a preset.
+/// Searchable preset list: favourite, name, author, category, rating, in tabs All / Bundled / Downloaded / Mine.
+/// Double-click (or Return) plays a preset. Dropping .milk files or folders on the list (or the main window) imports them.
 final class MilkDropBrowser: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
     let milk: MilkDropRenderer
     let panel: NSPanel
     private let table = NSTableView()
     private let search = NSSearchField()
     private let favOnly = NSButton(checkboxWithTitle: "Favourites only", target: nil, action: nil)
+    private let tabs = NSSegmentedControl()
+    private let getMore = NSButton(title: MilkDropLibrary.getMoreTitle, target: nil, action: nil)
     private let info = NSTextField(labelWithString: "")
     private var rows: [MilkDropLibrary.Preset] = []
     var onPlayed: (() -> Void)?
+    var onGetMore: (() -> Void)?
+    var onAddFolder: (() -> Void)?
+    var onImport: (([URL]) -> Void)?
 
     init(milk: MilkDropRenderer) {
         self.milk = milk
@@ -35,27 +41,58 @@ final class MilkDropBrowser: NSObject, NSTableViewDataSource, NSTableViewDelegat
         rescan.frame = NSRect(x: 588, y: 480, width: 80, height: 30); rescan.autoresizingMask = [.minXMargin, .minYMargin]
         let folder = NSButton(title: "Folder…", target: self, action: #selector(openFolder))
         folder.frame = NSRect(x: 668, y: 480, width: 84, height: 30); folder.autoresizingMask = [.minXMargin, .minYMargin]
+        // second row: source tabs + getting more presets
+        tabs.segmentCount = 4
+        for (i, t) in ["All", "Bundled", "Downloaded", "Mine"].enumerated() { tabs.setLabel(t, forSegment: i); tabs.setWidth(84, forSegment: i) }
+        tabs.selectedSegment = 0; tabs.target = self; tabs.action = #selector(reload)
+        tabs.frame = NSRect(x: 12, y: 446, width: 350, height: 26); tabs.autoresizingMask = [.maxXMargin, .minYMargin]
+        getMore.target = self; getMore.action = #selector(getMoreClicked)
+        getMore.frame = NSRect(x: 412, y: 443, width: 200, height: 30); getMore.autoresizingMask = [.minXMargin, .minYMargin]
+        let add = NSButton(title: "Add Folder…", target: self, action: #selector(addFolderClicked))
+        add.frame = NSRect(x: 612, y: 443, width: 140, height: 30); add.autoresizingMask = [.minXMargin, .minYMargin]
         for (id, title, w) in [("fav", "★", 26.0), ("name", "Name", 300.0), ("author", "Author", 170.0), ("cat", "Category", 120.0), ("rating", "Rating", 70.0)] {
             let c = NSTableColumn(identifier: .init(id)); c.title = title; c.width = w; table.addTableColumn(c)
         }
         table.dataSource = self; table.delegate = self
         table.doubleAction = #selector(play); table.target = self
         table.usesAlternatingRowBackgroundColors = true
-        let scroll = NSScrollView(frame: NSRect(x: 12, y: 36, width: 736, height: 438))
+        table.registerForDraggedTypes([.fileURL])
+        let scroll = NSScrollView(frame: NSRect(x: 12, y: 36, width: 736, height: 402))
         scroll.documentView = table; scroll.hasVerticalScroller = true; scroll.autoresizingMask = [.width, .height]
         info.frame = NSRect(x: 12, y: 8, width: 736, height: 20); info.autoresizingMask = [.width, .maxYMargin]
         info.textColor = .secondaryLabelColor
-        for v in [search, favOnly, rescan, folder, scroll, info] as [NSView] { cv.addSubview(v) }
+        for v in [search, favOnly, rescan, folder, tabs, getMore, add, scroll, info] as [NSView] { cv.addSubview(v) }
         reload()
     }
 
     func show() { reload(); panel.center(); panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(search) }
 
     @objc func reload() {
-        rows = milk.library.search(search.stringValue, favoritesOnly: favOnly.state == .on)
+        let src = tabs.selectedSegment > 0 ? MilkDropLibrary.Source(rawValue: tabs.selectedSegment - 1) : nil
+        rows = milk.library.search(search.stringValue, favoritesOnly: favOnly.state == .on, source: src)
         table.reloadData()
-        info.stringValue = "\(rows.count) of \(milk.library.count) presets · \(milk.library.brokenCount) skipped as broken · double-click to play · "
-            + "keys in MILKDROP: [ ] prev/next, R random, F favourite, L lock, 1-5 rate, P this list"
+        let lib = milk.library
+        for s in MilkDropLibrary.Source.allCases { tabs.setLabel("\(s.title) \(lib.count(s))", forSegment: s.rawValue + 1) }
+        tabs.setLabel("All \(lib.count)", forSegment: 0)
+        var busy = false
+        switch lib.download {
+        case .downloading(let f): getMore.title = String(format: "Downloading… %.0f%%", f * 100); busy = true
+        case .unpacking: getMore.title = "Unpacking…"; busy = true
+        default: getMore.title = lib.count(.downloaded) > 0 ? "Update Pack…" : MilkDropLibrary.getMoreTitle
+        }
+        getMore.isEnabled = !busy
+        info.stringValue = "\(rows.count) shown · \(lib.brokenCount) skipped as broken · double-click to play · drop .milk files or folders here to add them · "
+            + "keys: [ ] prev/next, R random, Shift-F favourite, L lock, 1-5 rate"
+    }
+    @objc private func getMoreClicked() { onGetMore?() }
+    @objc private func addFolderClicked() { onAddFolder?() }
+    func tableView(_ tv: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation op: NSTableView.DropOperation) -> NSDragOperation {
+        AppDelegate.milkURLs(info.draggingPasteboard).isEmpty ? [] : .copy
+    }
+    func tableView(_ tv: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        let urls = AppDelegate.milkURLs(info.draggingPasteboard)
+        guard !urls.isEmpty else { return false }
+        onImport?(urls); return true
     }
     @objc private func rescan() { milk.library.scan(); reload() }
     @objc private func openFolder() { milk.library.openUserFolder() }
@@ -91,13 +128,18 @@ final class MilkDropBrowser: NSObject, NSTableViewDataSource, NSTableViewDelegat
         cell.stringValue = text
         return cell
     }
+    /// Select and scroll to a preset (after an import).
+    func reveal(_ p: MilkDropLibrary.Preset) {
+        tabs.selectedSegment = 0; search.stringValue = ""; reload()
+        if let i = rows.firstIndex(where: { $0.key == p.key }) { table.selectRowIndexes([i], byExtendingSelection: false); table.scrollRowToVisible(i) }
+    }
 }
 
 /// Shown over the MILKDROP mode when the engine or presets are missing. Never a crash: just this card.
 final class MilkDropCard: NSView {
     let title = NSTextField(labelWithString: "MILKDROP")
     let message = NSTextField(wrappingLabelWithString: "")
-    let get = NSButton(title: "Get MilkDrop presets…", target: nil, action: nil)
+    let get = NSButton(title: MilkDropLibrary.getMoreTitle, target: nil, action: nil)
     let folder = NSButton(title: "Open preset folder…", target: nil, action: nil)
 
     override init(frame: NSRect) {
@@ -164,14 +206,18 @@ extension AppDelegate {
     func addMilkDropMenu(to vm: NSMenu) {
         vm.addItem(.separator())
         let b = NSMenuItem(title: "MilkDrop Presets…", action: #selector(milkMenuBrowser(_:)), keyEquivalent: "p"); b.target = self; vm.addItem(b)
-        let g = NSMenuItem(title: "Get MilkDrop Presets…", action: #selector(milkMenuGet(_:)), keyEquivalent: ""); g.target = self; vm.addItem(g)
-        let o = NSMenuItem(title: "Open MilkDrop Preset Folder…", action: #selector(milkMenuFolder(_:)), keyEquivalent: ""); o.target = self; vm.addItem(o)
+        let g = NSMenuItem(title: "Get 9,800 More MilkDrop Presets…", action: #selector(milkMenuGet(_:)), keyEquivalent: ""); g.target = self; vm.addItem(g)
+        let a = NSMenuItem(title: "Add MilkDrop Preset Folder…", action: #selector(milkMenuAddFolder(_:)), keyEquivalent: ""); a.target = self; vm.addItem(a)
+        let o = NSMenuItem(title: "Open My MilkDrop Presets Folder…", action: #selector(milkMenuFolder(_:)), keyEquivalent: ""); o.target = self; vm.addItem(o)
     }
     @objc func milkMenuBrowser(_ i: NSMenuItem?) {
         guard let m = renderer?.milk else { return }
         if Self.milkBrowser == nil {
             Self.milkBrowser = MilkDropBrowser(milk: m)
             Self.milkBrowser?.onPlayed = { [weak self] in if self?.renderer.mode != .milkdrop { self?.setMode(.milkdrop) } }
+            Self.milkBrowser?.onGetMore = { [weak self] in self?.milkMenuGet(nil) }
+            Self.milkBrowser?.onAddFolder = { [weak self] in self?.milkMenuAddFolder(nil) }
+            Self.milkBrowser?.onImport = { [weak self] urls in self?.milkImport(urls) }
         }
         Self.milkBrowser?.show()
     }
@@ -187,6 +233,38 @@ extension AppDelegate {
         updateMilkCard()
     }
     @objc func milkMenuFolder(_ i: NSMenuItem?) { renderer?.milk?.library.openUserFolder() }
+    @objc func milkMenuAddFolder(_ i: NSMenuItem?) {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true; p.canChooseFiles = true; p.allowsMultipleSelection = true
+        p.message = "Choose MilkDrop preset folders or .milk files. They are copied into My Presets."
+        p.prompt = "Add"
+        guard p.runModal() == .OK else { return }
+        milkImport(p.urls)
+    }
+
+    /// File URLs on a pasteboard that are .milk files or folders (drag and drop).
+    static func milkURLs(_ pb: NSPasteboard) -> [URL] {
+        let urls = (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+        return urls.filter { u in
+            var d: ObjCBool = false
+            return u.pathExtension.lowercased() == "milk" || (FileManager.default.fileExists(atPath: u.path, isDirectory: &d) && d.boolValue)
+        }
+    }
+
+    /// Copy dropped / chosen presets into My Presets, then play the first one in MILKDROP.
+    func milkImport(_ urls: [URL]) {
+        guard let r = renderer, let m = r.milk else { return }
+        let added = m.library.importItems(urls)
+        Self.milkBrowser?.reload()
+        guard let first = added.first else { flashStatus("No .milk presets found in what was dropped."); return }
+        flashStatus(added.count == 1 ? "Added \(first.name) to My Presets" : "Added \(added.count) presets to My Presets")
+        r.metrics.event("milk:import \(added.count)", at: CACurrentMediaTime())
+        m.load(first, smooth: false, why: "import")
+        m.director.manualSwitch(now: CACurrentMediaTime())
+        if r.mode != .milkdrop { setMode(.milkdrop) }
+        Self.milkBrowser?.reveal(first)
+        updateMilkCard()
+    }
 
     /// Keys in MILKDROP mode. Returns true when handled (Shift+F favourites; plain F stays fullscreen like every mode).
     func milkKey(_ e: NSEvent) -> Bool {
@@ -213,7 +291,7 @@ extension AppDelegate {
         return true
     }
 
-    private func flashStatus(_ s: String) {
+    func flashStatus(_ s: String) {
         status.stringValue = s
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in if self?.status.stringValue == s { self?.status.stringValue = "" } }
     }

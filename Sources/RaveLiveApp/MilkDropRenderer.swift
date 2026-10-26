@@ -192,7 +192,7 @@ final class MilkDropRenderer: @unchecked Sendable {
             me.loadFailure = msg.map { String(cString: $0) } ?? "load failed"
             _ = file
         }, Unmanaged.passUnretained(self).toOpaque())
-        let paths = [MilkDropLibrary.packDir.path, MilkDropLibrary.userDir.path]
+        let paths = MilkDropLibrary.textureDirs.map { $0.path }
         var cstrs = paths.map { UnsafePointer(strdup($0)) }
         cstrs.withUnsafeMutableBufferPointer { b in lib.setTextureSearchPaths(h, b.baseAddress, b.count) }
         for c in cstrs { free(UnsafeMutablePointer(mutating: c)) }
@@ -358,6 +358,7 @@ final class MilkDropRenderer: @unchecked Sendable {
         var index = -1
         var started = 0.0
         var samples: [(mean: Double, peak: Double)] = []
+        var glMs: [Double] = []
         var lines: [String] = []
         var ok = 0, failed = 0, black = 0
         var done = false
@@ -373,7 +374,7 @@ final class MilkDropRenderer: @unchecked Sendable {
             if index >= 0 && index < list.count && !(lines.count > index) { finish(r, failure: nil) }
             index += 1
             if index >= list.count { done = true; writeSummary(); return false }
-            started = now; samples = []; thumbed = false
+            started = now; samples = []; glMs = []; thumbed = false
             r.loadFailure = nil
             let p = list[index]
             r.loadNow(p, smooth: false, blend: 0, why: "sweep")
@@ -383,7 +384,7 @@ final class MilkDropRenderer: @unchecked Sendable {
         mutating func observe(_ r: MilkDropRenderer, surface: IOSurfaceRef) {
             guard index >= 0, index < list.count, lines.count == index else { return }
             let age = CACurrentMediaTime() - started
-            if age > seconds * 0.5 && r.framesSinceLoad % 4 == 0 { samples.append(MilkDropRenderer.luma(surface)) }
+            if age > seconds * 0.5 && r.framesSinceLoad % 4 == 0 { samples.append(MilkDropRenderer.luma(surface)); glMs.append(r.glFrameMs) }
             if age > seconds * 0.85 && !thumbed {
                 thumbed = true
                 MilkDropRenderer.writeThumb(surface, to: outDir.appendingPathComponent(String(format: "sweep_%04d.png", index)))
@@ -395,12 +396,13 @@ final class MilkDropRenderer: @unchecked Sendable {
             let status = failure != nil ? "failed" : isBlack ? "black" : "ok"
             if status == "ok" { ok += 1 } else if status == "failed" { failed += 1 } else { black += 1 }
             let mean = samples.isEmpty ? 0 : samples.map { $0.mean }.reduce(0, +) / Double(samples.count)
-            let line = String(format: "%04d\t%@\t%.4f\t%.0f\t%@\t%@", index, status, mean, r.lastLoadMs, p.key, failure ?? "")
+            let gl = glMs.isEmpty ? 0 : glMs.reduce(0, +) / Double(glMs.count)
+            let line = String(format: "%04d\t%@\t%.4f\t%.0f\t%@\t%@\t%.2f", index, status, mean, r.lastLoadMs, p.key, failure ?? "", gl)
             lines.append(line)
             r.onEvent?("milk:sweep " + line)
         }
         private func writeSummary() {
-            let head = "index\tstatus\tmean_luma\tload_ms\tpreset\terror\n"
+            let head = "index\tstatus\tmean_luma\tload_ms\tpreset\terror\tgl_ms\n"
             try? (head + lines.joined(separator: "\n") + "\n").write(to: outDir.appendingPathComponent("sweep.tsv"), atomically: true, encoding: .utf8)
             let s = "presets \(list.count) ok \(ok) failed \(failed) black \(black)\n"
             try? s.write(to: outDir.appendingPathComponent("sweep_summary.txt"), atomically: true, encoding: .utf8)

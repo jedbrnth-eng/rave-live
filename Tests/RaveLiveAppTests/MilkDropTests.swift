@@ -134,4 +134,29 @@ final class MilkDropLibraryTests: XCTestCase {
         again.extraDirs = [dir]; again.scan()
         XCTAssertTrue(again.isFavorite(p0)); XCTAssertEqual(again.brokenReason(p0), "test")
     }
+
+    /// Drag-and-drop / "Add Folder…": files and folders are copied in, show up as Mine, and come back in order.
+    func testImportFilesAndFolders() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("milkimport-\(UUID().uuidString)")
+        let src = dir.appendingPathComponent("src"), folder = src.appendingPathComponent("Pack A/Sub"), mine = dir.appendingPathComponent("mine")
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        try "[preset00]\n".write(to: src.appendingPathComponent("Me - Loose One.milk"), atomically: true, encoding: .utf8)
+        try "[preset00]\n".write(to: folder.appendingPathComponent("Me - B.milk"), atomically: true, encoding: .utf8)
+        try "[preset00]\n".write(to: folder.appendingPathComponent("Me - A.milk"), atomically: true, encoding: .utf8)
+        try "not a preset".write(to: src.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
+        let lib = MilkDropLibrary(storeURL: dir.appendingPathComponent("store.json"))
+        lib.extraDirs = [mine]
+        let got = lib.importItems([src.appendingPathComponent("Me - Loose One.milk"), src.appendingPathComponent("Pack A"), src.appendingPathComponent("notes.txt")], into: mine)
+        XCTAssertEqual(got.map { $0.name }, ["Loose One", "A", "B"])
+        XCTAssertTrue(got.allSatisfy { $0.source == .mine })
+        XCTAssertTrue(fm.fileExists(atPath: mine.appendingPathComponent("Pack A/Sub/Me - A.milk").path))
+        XCTAssertFalse(fm.fileExists(atPath: mine.appendingPathComponent("notes.txt").path))
+        // the same file again is not duplicated; a folder with the same name gets a new one
+        _ = lib.importItems([src.appendingPathComponent("Me - Loose One.milk"), src.appendingPathComponent("Pack A")], into: mine)
+        XCTAssertFalse(fm.fileExists(atPath: mine.appendingPathComponent("Me - Loose One 2.milk").path))
+        XCTAssertTrue(fm.fileExists(atPath: mine.appendingPathComponent("Pack A 2/Sub/Me - B.milk").path))
+        XCTAssertEqual(lib.search("", source: .mine).filter { $0.url.lastPathComponent.hasPrefix("Me - ") }.count, 5)
+    }
 }
