@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>A festival light show that plays along with whatever your Mac is playing.</b><br>
-  Beat-locked stage lights, lasers, LED walls, pyro and 33 visualizers. Native Swift and Metal, no account, no tracking.
+  Beat-locked stage lights, lasers, LED walls, pyro, 48 visualizers and MilkDrop presets built in. Native Swift and Metal, no account, no tracking.
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
   <sub>Every look in one reel: Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
 </p>
 
-> **Status: pre-release (0.4).** This is the first public build, so expect rough edges. Issues and pull requests are welcome.
+> **Status: pre-release (0.5).** Expect rough edges. Issues and pull requests are welcome.
 
 > **Platform: Mac only, Linux/Windows planned.** RAVE LIVE is written for macOS (Swift, Metal and Apple's audio capture), so it does not run on Linux or Windows yet. A cross-platform version is planned; there is no date. Follow along or help in the issues.
 
@@ -72,7 +72,7 @@ RAVE LIVE uses flashing lights and strobes. A small share of people can have sei
 
 ## What it does
 
-Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on line-in) and RAVE LIVE turns it into a light show. It finds the tempo, the beat and the bar line in real time, then schedules every light cue on that grid, so builds and drops land where the music puts them.
+Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on line-in) and RAVE LIVE turns it into a light show. It finds the tempo, the beat and the bar line in real time, then schedules every light cue on that grid, so builds and drops land where the music puts them. Hits ease in and out on the beat instead of flickering, and every look is checked for off-beat flashes with a built-in probe ([docs/SMOOTHNESS.md](docs/SMOOTHNESS.md)).
 
 <p align="center">
   <img src="docs/screenshots/stage-drop.jpg" alt="Stage mode at a drop: LED wall, moving heads and flame jets over the crowd" width="860">
@@ -80,11 +80,11 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 | Mode | What you get |
 |---|---|
-| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals, AURORA and MILKDROP every 32 beats on a bar line, with 7 beat-locked transitions. Drops get a hard cut. |
+| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals, AURORA and MILKDROP every 32 beats on a bar line, with 7 beat-locked transitions; the next scene starts a bar early offscreen, so it fades in already running. Drops get one clean cut. |
 | **Stage** | A procedural club stage: LED wall looks, moving heads, lasers, haze, flame jets, fireballs and a crowd that reacts. A show director picks looks per phrase and tracks builds and drops. |
 | **Classic Visuals** | 48 presets, from feedback classics (Tunnel, MilkWarp, Kaleido) to Synthwave, Galaxy, Neon City, Terrain, reaction-diffusion Coral, Fireworks, Julia, Game of Life, Disco Ball, Laser Show and a scratchable Vinyl. Many react to your mouse or hands, and every preset pulses on the shared beat clock. Write your own in **Shader Lab** (drop a `.metal` file in a folder; it hot-reloads) and tweak any preset with the **Tweak panel** (`Shift`+`T`), saved as `.ravelook` files. |
 | **AURORA** | A GPU fluid simulation with about a million particles and bloom. Stir it with the mouse, or turn on the camera and paint it with your hands and body. |
-| **MILKDROP** | Plays the ~9,800 community MilkDrop presets through [projectM](https://github.com/projectM-visualizer/projectm), with preset changes locked to the beat grid: blends start on a phrase downbeat, drops get a hard cut. Searchable browser (`P`), favourites and ratings. The preset pack is a one-click download (View → Get MilkDrop Presets…). [docs/MILKDROP.md](docs/MILKDROP.md) |
+| **MILKDROP** | Plays community MilkDrop presets through [projectM](https://github.com/projectM-visualizer/projectm), with preset changes locked to the beat grid: blends start on a phrase downbeat, drops get a hard cut. About 150 hand-checked presets are built in, so it works out of the box; the other ~9,800 are one click away (View → Get 9,800 More MilkDrop Presets…), and you can drag `.milk` files or folders onto the window. Searchable browser (`P`) with Bundled / Downloaded / Mine tabs, favourites and ratings. [docs/MILKDROP.md](docs/MILKDROP.md) |
 
 ### For VJs
 

@@ -18,7 +18,7 @@ ZIP="$ROOT/presets-cream-of-the-crop-$COMMIT.zip"
 OUT="$ROOT/milkdrop-bundled"
 TOP="presets-cream-of-the-crop-master"          # the folder name of the pack's own download, so keys (favourites) match
 mkdir -p "$ROOT"
-[ -f "$ZIP" ] || curl -fL --retry 3 -o "$ZIP.part" "https://codeload.github.com/projectM-visualizer/presets-cream-of-the-crop/zip/$COMMIT"
+[ -f "$ZIP" ] || curl -fsSL --retry 3 -o "$ZIP.part" "https://codeload.github.com/projectM-visualizer/presets-cream-of-the-crop/zip/$COMMIT"
 [ -f "$ZIP.part" ] && mv "$ZIP.part" "$ZIP"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 ditto -x -k "$ZIP" "$TMP"

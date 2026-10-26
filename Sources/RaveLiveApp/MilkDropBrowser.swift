@@ -200,6 +200,21 @@ extension AppDelegate {
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: NSString(string: shot).expandingTildeInPath))
             }
         }
+        // test: --milk-import <path> imports a .milk file or folder at launch, exactly like dropping it on the window
+        if let imp = arg("--milk-import") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.milkImport([URL(fileURLWithPath: NSString(string: imp).expandingTildeInPath)]) }
+        }
+        // test: --milk-browser-shot <png> opens the preset browser after 3 s and saves it (all tabs' counts visible)
+        if let shot = arg("--milk-browser-shot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.milkMenuBrowser(nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    guard let cv = Self.milkBrowser?.panel.contentView, let rep = cv.bitmapImageRepForCachingDisplay(in: cv.bounds) else { return }
+                    cv.cacheDisplay(in: cv.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: NSString(string: shot).expandingTildeInPath))
+                }
+            }
+        }
         NSLog("RAVE LIVE: MilkDrop %@, %d presets", m.ready ? "ready" : m.problem, m.library.count)
     }
 

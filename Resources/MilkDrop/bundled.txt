@@ -1,0 +1,157 @@
+# MilkDrop presets bundled with RAVE LIVE (Contents/Resources/MilkDrop), fetched by scripts/fetch_milkdrop_presets.sh.
+# From the projectM "cream of the crop" pack: https://github.com/projectM-visualizer/presets-cream-of-the-crop
+# commit 0180df21f5e0bd39b9060cc5de420ed2f1f9e509
+# Picked by a smoothness/performance sweep and a visual review (docs/MILKDROP.md, docs/SMOOTHNESS.md).
+# Presets were released freely and are treated as public domain; authors can ask for removal (see the pack's LICENSE.md).
+# Format: <sha256>  <path inside the pack>
+b2998ce6a2c6992ce7fe97850ec8db54c5bb9b5de700e5dd9fceaa4f0d28d24c  Dancer/Blobby/suksma - not like this, not like this.milk
+7d4af3b25752c631e652ad4d07df108581e2409626d9b8a537ce093579f7a1c6  Dancer/Comet Mirror/beta106S + Phat - sentinel linearity b nz+ ski daudle.milk
+2710b7a42251393545c03156d1227bf3f2eb56eb713737ddd9d3dfc50f8ff109  Dancer/Comet Mirror/EoS + Phat - chasers 14 sentinel 616_Update_Beta_5_v2.milk
+d4ab257d9cf9c0ccd73a80ec6fa4c0ba15177d52660112e6dc4861d8a7e71886  Dancer/Glowsticks Mirror/$$$ Royal - Mashup (139).milk
+c8a596c41a26f70b04df27be02da09322d8bfa95d1eb7d89d6afd293bc33f4b7  Dancer/Glowsticks Mirror/Tripgnosis - Acidiciti.milk
+2a2cc3545028d23984440fd5d49fa9cbfe47add761c8d6ebb156708b0858fc2b  Dancer/Glowsticks Mirror/Tripgnosis - Digital Glowstix.milk
+9e2e8a2c11a48e1a0d8b4c5516710a2bb4c03c81052fd2c5d3802dfa051bfcda  Dancer/Glowsticks/LuX - RadioActive Lightsticks 2.milk
+f19ef30a45280b6ea353cfbe2f4c67dd217afda389eb538bbc16d199e27638d1  Dancer/Glowsticks/Tripgnosis - Firesticks --- Isosceles edit11.milk
+058f15a686137cc5128404db4a3f0fa5b0b22f14d5f58277f908e6e4be22a7ac  Dancer/Infect/LuxXx - Polariflamitization II.milk
+24b36d9266c653176497446269525dcf1bbe1271473d81c54b4aabc024fcd84f  Dancer/Lasers/whoraeckle' - founding kneemoe --- Isosceles edit.milk
+f2bee71d6c749931238909773cfeddbe15062eb077e1a3831c2c341d7c8c4bb7  Dancer/Spinner Mirror/Milk Artist At our Best - FED - SlowFast Ft AdamFX n Martin - HD CosmoFX Also Ft Orb A.milk
+920ebcc3864e455ec4520900b49f1693cf76fa2dc3eaeece707209b442aeb982  Dancer/Wake Mirror/Martin N AdamFX Infusion = Phat+Yin+EoS_Mandala Chaser Ft AdamFX n Martin - The Beast Mandala Chaser FX H.milk
+1dec5a94610a0e9fdeb3950b9a8efc77fa57fe7ef0e3a5f9df224bc10376b5d0  Dancer/Wake Mirror/Martin N AdamFX Infusion = Phat+Yin+EoS_Mandala Chaser Ft AdamFX n Martin - The Beast Mandala Chaser FX I.milk
+2b806f2558fdb4a3508783880323e9e06e5922dc0c955c46898bd0d1f7158c5b  Dancer/Wake Mirror/Martin N AdamFX Infusion = Phat+Yin+EoS_Mandala Chaser Ft AdamFX n Martin - The Beast Mandala Chaser FX J.milk
+ee6ac8fe1c40ad88cf7351e66e2e8b4a414c28028ca4f1de0aa5f298f7cce651  Dancer/Wake Mirror/Phat+Yin+EoS_Mandala_Chasers_SOULar_Named_Red_Pulse_b - robert verkerk.milk
+21a8d7c89b5836a410c37d2a49da1b4b75d7997f04aed251a29e112c41c1e10b  Dancer/Whirl/ORB - Plasma Rocket --- Isosceles edit.milk
+648af483aa276f6118d732dcc4f30ad7e89d724ed9e64b39594e4e2c3d68e667  Dancer/Whirl/ORB - Smoke and Ice (Jelly).milk
+94d47d85a6ebc6d41757f0d716cacdd36940b6a108c7ee4bb0ce14a087281157  Drawing/Glimmer Mirror/Serge + Jc - Neon Star Formation006.milk
+f81819de6630fe102ac97552f574e69ecd5f174a167f3473f8840a7a573316b5  Drawing/Glimmer Mirror/Serge + martin - crystal palace line012.milk
+a27649adf7569d64f9795f4e958c01a90a66a8cfa164b601bc9294c7c8728d2c  Drawing/Liquid/i poison my plants with my piss - i am for you nz.milk
+2b84e83f978cb88acbdf2bbd6df942deb05e4af3390f640fd01ef168f950b0db  Drawing/Trails Mirror/fiShbRaiN - witchcraft (necromancer remix)_phat_edit_v3.milk
+71adbd2444edf9028a4c0d39fe84b67b70391ac48ca9ffa84e1a8949fc30d971  Drawing/Trails/The NG + martin + Flexi - witchcraft (When Lines Get Desperate) --- Isosceles edit.milk
+8c0cffcdac89c05c6059724b49cdb1f72992c2830b4ed49ef86c3be0dec35124  Fractal/Core Mirror/phat_CloseIncouneters_update EoS tweak - stocky satan troll shoots organic heat seakers to collect the damned at the tech metal woodstock.milk
+7832c1fe5a527ece36965e093dc2d436254b1034388f10c4831b25d5ccc5534e  Fractal/Lattice/beta106i - Potion of Ink.milk
+baed35cfdb74564d54da1070d7ab600afa078a1efb06b6729b94f8450e34c8b2  Fractal/Lattice/EoS - skylight a1 [music warp switch].milk
+ff5e265c4660094a9789d93a5e5948ef05ffeea6dd59af9bc1d2e14eb4b56b48  Fractal/Lattice/Stahlregen & Aderrasi + Flexi + Rovastar - Fractal Twist (B2).milk
+b85f96f79c3489ff8b717fb167660eee400bfa4f47531a7245e791d32e4d1958  Fractal/Mandelbox/martin - mandelbox explorer - wreck diver nz+ em tea fee qrib.milk
+17de6df4dd11a783836c27a0530b5e17a2bdbd4af0dde1492057aa1f03742a55  Fractal/Nested Circle/Esotic vs Rozzor - Pixie Party Light (No Wave Invasion) Mandala.milk
+e3e4caacad17be9756a61486fc2dad86794a8e8b893c299f0b2fe3ce381a830f  Fractal/Nested Circle/PieturP - sides_betterSeries1.milk
+88b3e1e02d9d413dfc730d346496f0af8ec69a2fce26c2dbe7545e9ebf59b2e4  Fractal/Nested Circle/PieturP - sides_betterSeries3.milk
+81ce4240e321722b9cc8e39b1d181528f23ff535b534040470d55b0e4c0a9fa2  Fractal/Nested Circle/yin - 352 - Chromatron (warped).milk
+086c28b13d6b31c657b6b0ddfd99b5ec3afa95fe2fe46eaaba87026ebe33497d  Fractal/Nested Circle/yin - 353 - Chromatron (warped - color leak).milk
+3bd96ffcbbeea75269e48a9bd7647cd93e04747360f0795719ba14f292dd4116  Fractal/Nested Dancer/PieturP - triptrap_(crazed-perspective-mix).milk
+8b4266b8a5cfbffcf57e3fb5a5dd132b277c9e82cbae09b2845ebac413e6f87b  Fractal/Nested Pyramid/Rovastar & Krash - Hallucinogenic Pyramids (Beater Time Mix).milk
+d178b5242273483f3b686cdf86ce46c6c2425a62f15dd4983d456e76923d8b91  Fractal/Nested Spiral/Phat_Aderrasi - Chromatic Abyss (the other side)_PhatColours - EoS remix.milk
+c5e6bf0b2bccfae76647e41bd15b0ca0b7ea2de261bcb0b2b5fc8c5cbaa178c2  Fractal/Nested Spiral/Rovastar - Harlequin's Fractal Encounter - piece da rats in us2.milk
+4e5f9f0f6b6f986f08dea01291dd356084ea443403ad27f872f85343aa171278  Fractal/Nested Square/Flexi bdrv - software rmx.milk
+81bf6a50ecb1fcf5c1c15b3accc410656599ed80663f5aa4a8094294fb81e994  Fractal/Nested Square/Telek & EMPR - Ok, Where The Fcuk Are We!!.milk
+e5a3e886d094fdd9e53c07a301609ed66dbbe8fb1d15e63f5eabf6f511f58432  Fractal/Nested Square/Zylot - Vivocity (Eos waveform++).milk
+690b04858549977f184231c4f80ba66fb75262df1f3075862cb7cbc807ae3bd1  Fractal/Nested Triangle/amandio c - future engines.milk
+d21998659820442e57e5c13d68e84c544ccdc16e720a82cb6a1f369e4db3ebc4  Fractal/Nested Triangle/PieturP - HSL-here-we-go-2.milk
+fa600b5090c1cb51809dca70a9d34d6b8b8bb5f03ab419fd98e2eba3f19421b4  Fractal/Pointy/Rovastar & StudioMusic - Spider In the Mind.milk
+30f16b753405ae4f09a86c6fbba643577080a69f486377872e1dae9af57fb395  Geometric/Circles Nested/amandio c - ecllipse 2.milk
+70640179f05fb2b3605a8ff9e2f069c35f11ae7499734bfdf1044a43291d32b6  Geometric/Cube Fly/Benjam and Zylot - Tie-Dye Supernova (Sunspots Mix) - praise martin and flexi forever nz+ understarted.milk
+c0eed4262a73a7810752a98134f5fdf27607e9074f4e2ffc0cc6665b14501912  Geometric/Honeycomb/yin - 363 - Organic circuits (warming up).milk
+be46286ba673fa15705a31b8f077a1164798b254dc2f9d5a1e875a54f4b42499  Geometric/Wire Circles/hexcollie - Falconers eye.milk
+74a7cf2c3f3d5021251117c10b1928e507eb14155129b45b25b6239f1bf73fa7  Geometric/Wire Circles/Telek - Target Practice.milk
+0449d7928c4c7069cb52eed80493e03ac123fd05796915e7ea27eba3384832d9  Geometric/Wire Circles/Tripgnosis - Depth --- Isosceles edit.milk
+905529faf83517d77f8ed8091b332f60ac0fb607e9e9aca8fadadf85cd6c6546  Geometric/Wire Grid/EoS - matrix cube I convolver.milk
+8047d43386ccd4a3275662832b20346825d43feccc5f83026a6776538859f97e  Geometric/Wire Morph/Cope-WIP - Strange Attractor 2 hack spoz.milk
+3a2f96d5404a09bce077b2a2a70883ece85dbaed5bf1500b0a50851e4ba31c89  Geometric/Wire Morph/fiShbRaiN - evolution (3d)_phat_edit_v2.milk
+914490d95a5b52541718155c0ee9d3f95f8e54be0fec9104f736a2420c1f3672  Geometric/Wire Morph/Phat + EoS - blah.milk
+39115d39a09058b546ff777f1d9d9ee0cee85205589440ee9391816d2ee8c2f7  Geometric/Wire Orbits/Krash & yin + Phat - Electric universe (uncertainty principle)_remix.milk
+b45d01c516bfbf5d21ca83ce60f5de2422ecda8ddf6bfde64899eeb3bdff5851  Geometric/Wire Orbits/Krash & yin - Electric universe (nuclear secrets) (Phat_Carbon_mix).milk
+1cb095e8b5268530e5ec4684cdac1ccae9dbfeba7e4ac07f574cb53bd9dc0a86  Geometric/Wire Orbits/Krash & yin - Electric universe (nuclear secrets) (Phat_nuleus_mix).milk
+5d86955f6678f7100c0c5efa90b86c14ffc68078f4b83271eb1a786aeccdaf18  Geometric/Wire Parallel/Mstress - Aurora Boreale.milk
+1bf8d773a6ce156a1f6d35c03a262376ebf66809203eab824f0bd856c2264d95  Geometric/Wire Parallel/Mstress - Color Eater (Static Mix) --- Isosceles edit.milk
+b0d6836014f3f8f755683fcff68fd954d33850ef1e0682ae09e2b2853a52af7f  Geometric/Wire Parallel/Mstress - Color Eater (Static Mix).milk
+b4bd8415837eaa40e4357751bc1544a3dd164c62ac8a50dab06f363d493b9f11  Geometric/Wire Parallel/Mstress - Color Rain.milk
+da5dd7f70a8d23aa5e1e89e6413589cbbbfdcc4a03e493428f5fd183abce231a  Geometric/Wire Sphere/ORB - Eat me.milk
+28741744ce363078cbc6d70d70f8aa4b70e2ac2850dec90635007e7c63e88611  Geometric/Wire Torus/ORB - Flexi - Spiral Infusion.milk
+0e68d87c5bb836cdfe97a85159b23736aa906ca6f1e24d5eff7ffd56694601ab  Geometric/Wire Trace/Jc - Broken Crown.milk
+00cd9e3c70b49cdd2b7fb08bc53e7a2bcddcf271afb3d2e0c47143c3260a6ca5  Hypnotic/Polar Closeup/shifter - liquid circuitry - conjugoth.milk
+b47b84d0deaa7c3d5c59f36f3766b81982ae87ab6f8369598d43cd58cf8ef26b  Hypnotic/Polar Mirror/Milk King to the ExtreemFX flexi - divine struggle - Ft AdamFX n Martin - Picasso in Milk Molten Meltdown I.milk
+5fd54f6e9692151a43f76c1479f43d4e45c44edd24ffc4ce4b43681c6ab596b3  Hypnotic/Polar Mirror/rce-ordinary + flexi - far away distance (custom beat detection + bipolar colour ghost mix).milk
+03abeb1a7f00db96a2e92a56a7c4bcf65d30c52e214a145b31af9dbf00296dd6  Hypnotic/Polar Mirror/Reenen & Telek - Slow Shift Matrix (bb4-5 (Dynamic Beat) Mix [Flexi Nonlinear Moebius Spiral Kaleidoscope].milk
+b998b4ee6a31f7b494af72c8abe20805c188948794994c39c5bdd2df77dbf8ce  Hypnotic/Polar Static/The NG + flexi + bdrv - ultramix#05 [alien complex mix] [underground].milk
+f227d14af78af81cb259d0dbbc281fe91024ab7a9929b1e9e6e7353d860d5b10  Hypnotic/Polar Static/TonyMilkdrop - Rhythm Of My Life [Flexi - alien complex] --- Isosceles edit.milk
+cbe89ea96873c8c9c06ceb8d3fa727209e2e51430ffb5460340d86b474f1b0a9  Hypnotic/Polar Static/TonyMilkdrop - Tricolors [Flexi - techy strain + multiverse] --- Isosceles edit.milk
+3faa81f95c19dfd6099488012e6bcac7d4593238d5407830cdec40ab823279db  Hypnotic/Polar Warp/flexi - grind my glitch up [340].milk
+5c7256a6809eef02f3853318253b4b8a60edee7492164d0f11aea427522b79b7  Particles/Blobby/bdrv + al EoS - more waveforms 5 mx.milk
+5af7611bd660fba9c9a4e5cd42603b3b1f6e35c8e5ab058925790defc023c7fd  Particles/Crystal/extreme paranoia and fear unleash in spontaneous suicide flails - slapping the elite.milk
+aa458c07f42063a20d036bac438f05522455c03258a596077dfc288b3184499e  Particles/Grid/3dRaGoNs & Rovastar - StarGate rEmIx (Jelly).milk
+ade6f5a50d06de251eaf48bdc1dc28e6f314806589f11803d70ab11dd92f5392  Particles/Grid/Ondras - Radar.milk
+efbec08c6fc1c78491dc4c3f369f242236783d43197868ec9e4f4539bb29e5c8  Particles/Points Trails/Blastofftek - Plasma Revisited.milk
+c15fbe11bf70482431250c0b29cb248edfe650621f2ce674da1286a70cbaaa32  Particles/Points Trails/drugsincombat - liquidfire iii.milk
+846b3f881f5c8b8a48207dacb0eecce81dc2271346d94a409a4e1ac77b6b062c  Particles/Points Trails/EvilJim - #19 Space Voyage.milk
+b9a339cfaed2a7655981b8fd5d56527275c521ca09392e80a19e84ca13984c22  Particles/Points Trails/Jc - Crystalography.milk
+21f7d0cbf8fb40ae8426cbdd204f5eb198fa50c18818c6de37304318a35d5dcd  Particles/Points Trails/rarian rakista - Eyes through the ether.milk
+ff503962b6e5ff0d0a58cb4b39a7ee93539fee27949bcda14735ff9beb94e6cb  Particles/Points/suksma - EoS - starburst 04 double charge - mash0000 - porcupinal planck eminating singularity.milk
+2499316a3d68b50433618870529f607d882e8b01eecba5feede9c7428a3844f0  Particles/Swarm/Halfbreak - Light of Breakers.milk
+46591c2ed0c7fdd77f87a2d123de68cae279181c1b22354a97f701b3d0ec5f29  Reaction/Feedback/Flexi - shader circus [07 you can do many funny things].milk
+30e2e60dd46caf89593e58d6d0bde4732789bf56a6948c29c311d77d4ff25ece  Reaction/Feedback/Zylot - In death there is life.milk
+72bb851e14e24db26066be83a2b67166671fa35e8825e971bfa70d096ae45b80  Reaction/Growth/Stahlregen & Geiss + Rovastar - Fields of Flowers (distorted).milk
+2ad621b5196980729d2f9249f106d06949217ab510b1371c786f034025d42b78  Reaction/Liquid Blobby/hexcollie, ti@n, suksma, zylot, orb n flexi - blarffff bubble.milk
+ac92db66025ca7c9c55a3b40ac293b4b5b98c3e4cd2db0e6370b787a82688064  Reaction/Liquid Gradient/Aderrasi - Airhandler (Principle of Sharing).milk
+53d37482fc799e3ff2af312923d1d4e32fbe5e34fd4b7c0b1d36bd9bd89c6706  Reaction/Liquid Gradient/beta106i - Antidote (Sugar Wave).milk
+e1e6f44b6c3571087c012486ab9cf017f4d042d3b55f20d6ed61b7a84f5136e8  Reaction/Liquid Gradient/Illusion & Unchained - New Strategy.milk
+03830cdc97395a7266a88d2bb619b2ccbaedf4d2645580eea93deee08997e274  Reaction/Liquid Gradient/Krash and Fvese - Molten Indecision (Fvese Remix).milk
+1754681f5faea60dccf26c3c65d9e2b69e52f36cb21ba8f71cb5a368b8d4cba2  Reaction/Liquid Gradient/Redi Jedi - wheres the beef.milk
+f61132b2a111072e0ae7427122c1445512870b7e05d1b0d7c45ebbfddd5db9ae  Reaction/Liquid Ripples/Flexi - crush ice 82.milk
+901d7105e766bd4e2f7167606f77096372facbe3a2280a2c55a4bbf39217761b  Reaction/Liquid Ripples/geiss_experimental__Spiral Artifact (Filament Mix) - scallop mix.milk
+858057e27f8942ccc949d1f6f00b91e621bd197cb801b1288be069482590a67e  Reaction/Liquid Ripples/phat + EoS - Bass_responce_Red_Movements_Disorienting nebula4 - inf fin bnd.milk
+01803be5f3f974981e9bd8dbb6b06d2a8c211f873497414ac2d5651bc908dea5  Reaction/Liquid Ripples/TonyMilkdrop - Tricolors [Flexi - feedback accomplishment + techstyle] --- Isosceles edit.milk
+c8076c5b0b4e12b8d1eee4256d05b506bdf308da94d4dc1bb532d45ffcf6368c  Reaction/Liquid Ripples/TonyMilkdrop - Tricolors [Flexi - menage a trois + $this shall not retain] --- Isosceles edit.milk
+e16e71f4b2887dbca8e3896a162058bb349105cd2be99e901299d9ca530e4608  Reaction/Liquid Ripples/TonyMilkdrop - Tricolors [Flexi - the psyched out about loop + techstyle] --- Isosceles edit.milk
+a47d188599f7916a2aa4f394b2db5c4ca835743b81960396df46d34712287593  Reaction/Mountains/cope + flexi - mother-of-whirl [other kids toys].milk
+c43780a9dd2feb632bdc0e9a71da35d42b0fc1498153b93de3e023826d625c6b  Reaction/Rorschach/Flexi + Geiss - pogo-cubes on tokamak matter [mind over matter remix] 3 - heeling potion nz.milk
+f2116b769b3ea97091accacd7f525dc3f2b0dfe61854e9fad4339bcf27f4ecf4  Reaction/Viscera/EVET - Turbohole.milk
+66a83cea39bd4d58d795ca20b8f79fafe9082a59a3e4c3015e0f1d0fe151b65a  Reaction/Windy/goody + geiss  - dead cold nz+.milk
+cf43a6465ef847f7a33b40526c252ba0182e71994ade68a488083cbd04b5fc5f  Sparkle/Glimmer Mirror/Adam Eatit Mashup FX 2 martin - disco mix + Lodus + Geiss + Jellyfish Dance_1.milk
+727d2338323158da0f5cfb0bfa440ff44630b16a8132855c4f5ce3d98a4667d3  Sparkle/Glimmer Mirror/Adam Eatit Mashup FX 2 martin - disco mix + Lodus + Geiss + Ludicrous speed + Aderrasi 2.milk
+62ecb889133d41dccf4ccdfd41ef5e123182f4d8e0702a91f78e708565ffca20  Sparkle/Glimmer Mirror/AdamFX Enterz Tha Mash With Martin + stahlregen - AdamFX - In Tha Mash Effectz E.milk
+4eaae889bb4acb509e48a614698a7b6f541682ab43f8211da12f560cc69a24d7  Sparkle/Glimmer Mirror/Infused by Flexi with AdamFX 2 Stahlregen & Aderrasi + EoS + Geiss + Unchained + Zylot - Slowflowers F7.milk
+d20fa402be5c6990187b9419cca7b6ea87facabf0a88fc44084950f07c24adeb  Sparkle/Glimmer Tunnel/A Tribute to Martin - bombyx mori - Ft Flexi - AdamFX - StahlRegen - Hd In Milk Ailen FX G.milk
+558912459be4c1de040d532383284209cb91e6cb90f678a8d25b47fb42adaffc  Sparkle/Glimmer/martin - diamond cutter.milk
+b9cad7b8082c1b39a2b739fd8f29888dd898ee9752356b5de87bd3facafaa93b  Sparkle/Jewel/Goody + martin - crystal palace - Aqua Lumens.milk
+04af097349af8840796ad77bf3ff8cb8e466096896be66d969ce2d874f714fb7  Sparkle/Jewel/goody + martin - crystal palace - devotee.milk
+0a86e58460409b0267d27155e3576fe6fe885ea3c398429bd120eb1761392d6f  Sparkle/Jewel/Serge + martin - crystal palace star001.milk
+76083b02a540a120b9492b9b6ad250796577bdc75b4ce05c8de88234e9e693c5  Sparkle/Jewel/Starz in MilkHDFX - Stahlregen & Aderrasi + EoS + Geiss + Unchained + Zylot + Flexi + Martin + AdamFX E.milk
+f1e64ac13a832aa173667fe1aef8d67ce2bb3b38a333cfba1c673200adb186f5  Sparkle/Mass Stars/phat + EoS - Bass_responce_Red_Movements_Disorienting nebula3.milk
+1db2e6cd92e10d9440edb2f89182862d251cee87ea90c84245399fdf754a84f3  Sparkle/Mass Stars/phat + EoS - Bass_responce_Red_Movements_Disorienting nebula3_fire_works_uninverted seizure85b.milk
+9adeb2a0fd612fe637c10d5750b6396a5ff031baf44694fbc74ca859c22955ec  Sparkle/Mass Stars/phat + EoS - Bass_responce_Red_Movements_Disorienting nebula3_fire_works_uninverted.milk
+0bd96e87d2b99987765ccb293e19744b5bd70c7fd30e11aafc8c94b4870b0959  Sparkle/Squares/mddb-rar bdrv - license to drill + Flexi - drill and practice [growth] --- Isosceles edit1.milk
+904e013717f40e02c711ee42619a99a90d20546025236b9b066d0bc009578d7f  Sparkle/Squares/mddb-rar bdrv - license to drill + Flexi - drill and practice [growth] --- Isosceles edit2.milk
+2926e23be88153c3a3703ed17e3d671b8ab6ce65c8fabece32c15e0a42e1fbdd  Supernova/Burst/$$$ Royal - Mashup (354).milk
+d5dd5fd64429395005fdad98a305893ada440afe6cf5fb4f42ed53cb4a91ad04  Supernova/Burst/Dark One - Clouds.milk
+de9f910ee6efc12e6328458d51145320a6c3565218de8502f2fe107b6628f5ec  Supernova/Burst/EoS + Phat - recursion frustum 02_Ananda_Flash_Remix zion 6 orange hold.milk
+783ecc24350c00c7d24a7d8b70c062c8010e6af50ca78c45861ca71d2e078b83  Supernova/Burst/va ultramix2 - 460 nz+ thee parchmeant --- Isosceles edit2.milk
+af73d7f47f9fbe7c2f559fe93ebf4c58710965f1eb3cef0c3ff75a77bc1d455b  Supernova/Gas/Pithlit - Nova.milk
+cda129c061241de538f76b1b6f20f20e1c709a45f938fa780ce1506a97094452  Supernova/Gas/Waltra - Heaven.milk
+8ea6d1949589d01ffe6cc115961144777f87e666f7881ee8c979247e9b126c71  Supernova/Orbits/Benski - Atom Smasher.milk
+4c609f39d2d1d16ece36144e8b6a5331b75a0d8abede6825d383240e47c81fe3  Supernova/Orbits/Syst3mFailur - phat - EoS planetfunk-tracers(devilglobe-1).milk
+5e79eb3005b114342f9cf07ca397424726e02a621596a920dc506ded632ffdc4  Supernova/Orbits/Syst3mFailur - satanic ring V2 nz+ toby f-zero.milk
+497939a684d4e7f559131ba13fa7212716f1894f08be87e20841fe25348e5c1e  Supernova/Radiate/Hexcollie n EoS - sunburst baboon.milk
+fd0a20de79d55fc2e64df630581a0712dca0f3abea20ccbc8b5b3d30eff4b8b9  Supernova/Radiate/Mstress - Quiet Lake3.milk
+67c0a4f3b8c7b471d728ab0785272a06c632d872f8c4a815a89bee1ef2aca0a8  Supernova/Stars/PieturP - HSL-tunnelvisions.milk
+0244f31a9edb04fa8f38527a995be08620c498ff6b7d9cfef7bda513c657c47b  Supernova/Stars/PieturP - HSL-tunnelvisions_morphing - mash0000 - solidity in discontinuity vs quantum instability.milk
+4595dfe6119346fe2662a31f3e0d0e9afef0a1c6c196de5efbf4c0e8964b8bf1  Waveform/Spectrum/Phat_shifter - Angel.milk
+99baa793a4efd9cae0797649f168592d302c7329a1ca008469ce1404e496f28a  Waveform/Spectrum/Phat_shifter - Angel2.milk
+dd2b51e53702e1fe28cc2b2637fe3aee0124605b95f9fb26b8d0801d2cc90e32  Waveform/Spectrum/Phat_shifter - Angel3.milk
+ed0f9ad2f94c104ef8d9c87e8448056e39b7fbcaea82e18d788bf969e10808d7  Waveform/Spectrum/Phat_shifter - Angel4 (Jelly 5-55).milk
+e48da2c318f19d0e7fccc265057a38ff73ec9789213c2c8c1c2a9dc5c1f97032  Waveform/Spectrum/Phat_shifter - Angel4.milk
+7b48713e600ba69e9b1aee71d1780e1160c6f0b668803af02633a4ace6cba746  Waveform/Wire Circular/Cope - The Sunspot.milk
+dd4cf45969d7d0bde1a4c137af7c2701b5419555840c3b01fdfd4f17f28c285a  Waveform/Wire Circular/Stahlregen & Geiss + TobiasWolfBoi - Space Gelatin (Color Xplosion 5-5).milk
+d20cba3102ae48efdc6503c2123d19e15fe8768f4a5f8212122235630944f4dc  Waveform/Wire Circular/Zylot - Crossing Over (Geiss Tweak).milk
+fc5319396ebf4d4e9a44eeff66c2285aa830ec72f0163aea53fcd972d7144bc7  Waveform/Wire Flat Double/Geiss - Explosion 2.milk
+8eacb0074d9212c540b9c282066c303cfd21b5d5ab2a94355a998b7510b4ca4f  Waveform/Wire Flat Double/Geiss - Explosion 3.milk
+9d434e817860fd935c3f73b983a5b42319340e403ee72948e6c80748529a9b3f  Waveform/Wire Flat Double/Stahlregen - Downpour x Spectre PS2.milk
+8523178634193c5c63aedc1011172031d17fc012c9fd7d1801c1dfd53739c86e  Waveform/Wire Flat Double/Waltra - Phantom Spectrum .milk
+9dc92136f6eb7540ee4e34b83f91580b3607c629227cc32b03e9e0f7317eec2f  Waveform/Wire Flat/beta106i - Ashes of Air (Molecular Level).milk
+4bb71c2b882949bf2f975f32abd56835d41012ccb9722bef00999ea253903926  Waveform/Wire Flat/Geiss - Color Pox (Acid Impression Mix).milk
+73c9e90545ed0648f37605092e48fb14744e4cecc7dde2819a3ffb704e40b402  Waveform/Wire Flat/Goody's Fatal Color Attraction PS2-0 - var.milk
+5625951c9e67d39318d8b1fd7f33d16382ae6b7b13e99a12d7ec579ef2ea64b3  Waveform/Wire Flat/goody(2), stahlregen (2) - second collaboration (ps2-0) - #4 (Jelly V2).milk
+55280eef86e2fd287555063ac3f07227e55173d929e8976707fa0f6940b1cc98  Waveform/Wire Flat/goody(2),stahlregen (2),fed - 2nd collaboration(ps2-0) - #5.milk
+267762edf4f50ab9209bb6a9bc5c5bb02c20f0ff9fb3c16677c4adb7a974c6d2  Waveform/Wire Flat/Waltra - Spectrum 4.milk
+52d201f535667cddfa327b26b34f2789de4b551394355cc458ca4ff61f7e3f37  Waveform/Wire Mirror/LuxXx - Stickflower I b.milk
+9403520c6a7378cbe5ad0153a6d3e4f5689bc30c4630a210ba4f0d185a3cee92  Waveform/Wire Rising/EVET - Jewelsmoke.milk
+a989fa28d399081e1e3e576537c4c6b107bcdee68b5a10b78d5baf7bf0a6c34b  Waveform/Wire Tangle/beta106i - Burning Form (Seething Mass) - mash0000 - fire paint easter egg internals.milk
+6174e64231ecbac1d572ffe9985d3bed190288cf154b105e8e3aa4e35ed5be8a  Waveform/Wire Tangle/Hexcollie - hairy colors.milk
+b47c24dc52e2127fdbf470c2615c6e7843b1979d7055831b6237f489ee537e96  Waveform/Wire Tangle/Rovastar - Snapshot Of Space (Neon Jelly).milk
