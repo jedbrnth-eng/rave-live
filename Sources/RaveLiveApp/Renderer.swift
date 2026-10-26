@@ -44,7 +44,8 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
     var intensity: Intensity = .normal
     enum Mode: Int, CaseIterable { case show, stage, visuals, aurora, milkdrop
-        var title: String { ["SHOW (auto)", "Stage", "Classic Visuals", "AURORA", "MILKDROP"][rawValue] } }
+        var title: String { ["SHOW (auto)", "Stage", "Classic Visuals", "AURORA", "MILKDROP"][rawValue] }
+        var probeName: String { ["show", "stage", "visuals", "aurora", "milkdrop"][rawValue] } }
     var mode: Mode = .show
     var visualsMode: Bool { mode == .visuals }
     var aurora: AuroraRenderer?
@@ -90,6 +91,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     var snapTimes: [Double] = []
     var lumLogPath: String?          // --lumlog <file>: per-frame "elapsed phase beatIdx meanLuma kick" for beat-lock proofs
     private var lumBuf = "elapsed phase beatIdx luma kick\n", lumFlushed = 0.0
+    var smooth: SmoothProbe?         // --smoothlog <file>: per-frame flicker / motion of the final frame (SmoothProbe)
     var snapDir = URL(fileURLWithPath: NSString(string: "~/.cache/ravelive").expandingTildeInPath)
     var onHUD: ((String) -> Void)?
     private var pendingKickHost: Double = 0
@@ -258,6 +260,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             if let tr = transition {
                 ensureOffscreen(size)
                 let prog = Float((tbc - tr.startBeat) / tr.beats)
+                transitionProgress = prog
                 if prog >= 1 {
                     transition = nil
                     encodeScene(showScene, cb: cb, rpd: rpd, ctx: ctx)
@@ -319,6 +322,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         } : nil
         if let fo = frameOutput { fo.process(cb: cb, texture: drawable.texture, overlay: labOverlay) }
         else if let ov = labOverlay { FrameOutput.drawOverlay(ov, cb: cb, on: drawable.texture) }
+        if let sp = smooth { sp.encode(cb: cb, source: drawable.texture, meta: probeMeta(elapsed: elapsed, dt: dt, phase: phase, locked: locked, kick: kickVisual, d: d)) }
         cb.present(drawable)
         cb.commit()
         if snapNow {
@@ -350,6 +354,25 @@ final class Renderer: NSObject, MTKViewDelegate {
                           strobeOverride ? "  ·  ⚠️ STROBE LIMIT OFF" : (strobeEnabled ? "" : "  ·  strobe off"))
                    + "  ·  \(intensity.title) (I)  ·  beat \(Int(beatIdx) % 4 + 1)/4  ·  " + syncInfo)
         }
+    }
+
+    /// What is on screen right now, for the smoothness probe's log.
+    private func probeMeta(elapsed: Double, dt: Float, phase: Double, locked: Bool, kick: Float, d: ShowDirector.Output) -> SmoothProbe.Meta {
+        func name(_ m: Mode) -> String {
+            switch m {
+            case .visuals: return visuals?.currentName ?? "?"
+            case .milkdrop: return milk?.currentName ?? "?"
+            case .aurora: return "sym\(aurora?.symmetry ?? 0)"
+            default: return "stage\(Int(stage)) look\(Int(forcedLook ?? d.look))"
+            }
+        }
+        let scene = mode == .show ? showScene : mode
+        var trans = "-"
+        if mode == .show, let tr = transition {
+            trans = String(format: "%@:%@>%@:%.3f", Self.transitionNames[tr.type].replacingOccurrences(of: " ", with: "_"), tr.from.probeName, tr.to.probeName, transitionProgress)
+        }
+        return .init(t: elapsed, dt: dt, phase: phase, beat: Int(beatIdx), locked: locked, kick: kick, drop: d.drop, build: d.build,
+                     mode: mode.probeName, scene: scene.probeName, preset: name(scene), trans: trans)
     }
 
     struct SceneCtx { var size: CGSize; var dt: Float; var s: AudioSnapshot; var newKick: Bool; var newHat: Bool; var look: Float; var dropStarted: Bool; var now: Double }
@@ -388,6 +411,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     struct Transition { var from: Mode; var to: Mode; var type: Int; var startBeat: Double; var beats: Double }
     private(set) var showScene: Mode = .aurora
     private var transition: Transition?
+    private var transitionProgress: Float = 0
     private var sceneStartBeat = 0.0
     private var lastBar = -1
     private var dropScenes = 0

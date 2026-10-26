@@ -92,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let pr = arg("--preset").flatMap(Int.init) { r.visuals?.preset = pr; r.visuals?.autoCycle = false }
         if let s = arg("--snap") { r.snapTimes = s.split(separator: ",").compactMap { Double($0) }.sorted() }
         r.lumLogPath = arg("--lumlog").map { NSString(string: $0).expandingTildeInPath }
+        if let sl = arg("--smoothlog") { r.smooth = SmoothProbe(device: r.device, path: NSString(string: sl).expandingTildeInPath) }
         setupMilkDrop(args)
         window.contentView!.addSubview(view)
 
@@ -158,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let q = arg("--autoquit").flatMap(Double.init) {
             DispatchQueue.main.asyncAfter(deadline: .now() + q) { [weak self] in
                 guard let self else { return }
-                self.renderer.metrics.dump(to: self.metricsURL); NSApp.terminate(nil)
+                self.renderer.metrics.dump(to: self.metricsURL); self.renderer.smooth?.finish(); NSApp.terminate(nil)
             }
         }
         if args.contains("--fullscreen") { window.toggleFullScreen(nil) }
@@ -246,7 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Double-clicked .ravelook files (also at launch, before the renderer exists).
     func application(_ sender: NSApplication, open urls: [URL]) { PresetLab.pendingOpen += urls; DispatchQueue.main.async { [weak self] in if self?.renderer != nil { self?.setMode(.visuals) } } }
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ n: Notification) { vj.shutdown(); renderer?.metrics.dump(to: metricsURL); audio.stopReferee() }
+    func applicationWillTerminate(_ n: Notification) { vj.shutdown(); renderer?.metrics.dump(to: metricsURL); renderer?.smooth?.finish(); audio.stopReferee() }
 
     private func photosensitivityWarningIfNeeded(skip: Bool, then: @escaping () -> Void) {
         let key = "acceptedPhotosensitivityWarning"
