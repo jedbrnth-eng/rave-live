@@ -10,6 +10,11 @@ swift build -c release --product RaveLiveApp
 APP="build/RAVE LIVE.app"
 rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS"
 cp .build/release/RaveLiveApp "$APP/Contents/MacOS/RaveLive"
+# MILKDROP engine (LGPL libprojectM, loaded at runtime): bundled when scripts/build_projectm.sh has been run.
+if [ -f vendor/projectm/lib/libprojectM-4.dylib ]; then
+  mkdir -p "$APP/Contents/Frameworks"; cp vendor/projectm/lib/libprojectM-4.dylib "$APP/Contents/Frameworks/"
+else echo "note: no vendor/projectm build; MILKDROP mode will show its 'engine missing' card (run scripts/build_projectm.sh)"; fi
+# Bundled MilkDrop presets (none today): copying a folder of .milk files to "$APP/Contents/Resources/MilkDrop" is all it takes.
 # App icon: Icon Composer bundle compiled by actool -> Assets.car (macOS 26+ native squircle) + AppIcon.icns fallback.
 mkdir -p "$APP/Contents/Resources"
 RES="$(cd "$APP/Contents/Resources" && pwd)"

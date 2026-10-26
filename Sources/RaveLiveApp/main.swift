@@ -88,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let pr = arg("--preset").flatMap(Int.init) { r.visuals?.preset = pr; r.visuals?.autoCycle = false }
         if let s = arg("--snap") { r.snapTimes = s.split(separator: ",").compactMap { Double($0) }.sorted() }
         r.lumLogPath = arg("--lumlog").map { NSString(string: $0).expandingTildeInPath }
+        setupMilkDrop(args)
         window.contentView!.addSubview(view)
 
         hud.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
@@ -100,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.frame = NSRect(x: 40, y: 80, width: 700, height: 200)
         status.autoresizingMask = [.maxYMargin, .maxXMargin]
         window.contentView!.addSubview(status)
-        r.onHUD = { [weak self] s in DispatchQueue.main.async { self?.hud.stringValue = s } }
+        r.onHUD = { [weak self] s in DispatchQueue.main.async { self?.hud.stringValue = s; self?.updateMilkCard() } }
         audio.onStatus = { [weak self] s in DispatchQueue.main.async { self?.status.stringValue = s } }
         view.onKey = { [weak self] e in self?.key(e) }
         view.onMouse = { [weak self] p, d, down, click in
@@ -114,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for m in Renderer.Mode.allCases { modeControl.setLabel(m.title, forSegment: m.rawValue); modeControl.setWidth(110, forSegment: m.rawValue) }
         modeControl.target = self; modeControl.action = #selector(modeClicked(_:))
         modeControl.selectedSegment = r.mode.rawValue
-        modeControl.frame = NSRect(x: 12, y: window.contentView!.bounds.height - 40, width: 456, height: 28)
+        modeControl.frame = NSRect(x: 12, y: window.contentView!.bounds.height - 40, width: CGFloat(Renderer.Mode.allCases.count * 110 + 6), height: 28)
         modeControl.autoresizingMask = [.minYMargin, .maxXMargin]
         window.contentView!.addSubview(modeControl)
         r.onModeChange = { [weak self] m in DispatchQueue.main.async { self?.modeControl.selectedSegment = m.rawValue } }
@@ -196,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if m == .visuals { renderer.visuals?.autoCycle = true }
         modeControl.selectedSegment = m.rawValue
         renderer.metrics.event("mode->" + m.title, at: CACurrentMediaTime())
+        updateMilkCard()
     }
     func toggleCamera() {
         guard let r = renderer else { return }
@@ -221,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         vm.addItem(.separator())
         let cam = NSMenuItem(title: "Camera Hands & Body (AURORA)", action: #selector(menuCamera(_:)), keyEquivalent: "k"); cam.target = self; vm.addItem(cam)
         let fs = NSMenuItem(title: "Fullscreen", action: #selector(menuFullscreen(_:)), keyEquivalent: "f"); fs.target = self; vm.addItem(fs)
+        addMilkDropMenu(to: vm)
         viewItem.submenu = vm
         NSApp.mainMenu = main
     }
@@ -241,6 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func key(_ e: NSEvent) {
         let r = renderer!
+        if milkKey(e) { return }
         let ch = e.charactersIgnoringModifiers?.lowercased() ?? ""
         switch (ch, e.modifierFlags.contains(.shift)) {
         case ("s", true):

@@ -40,8 +40,8 @@ final class Renderer: NSObject, MTKViewDelegate {
         var shake: Float { [0.0, 0.4, 1.0][rawValue] }      // camera shake on hits
     }
     var intensity: Intensity = .normal
-    enum Mode: Int, CaseIterable { case show, stage, visuals, aurora
-        var title: String { ["SHOW (auto)", "Stage", "Classic Visuals", "AURORA"][rawValue] } }
+    enum Mode: Int, CaseIterable { case show, stage, visuals, aurora, milkdrop
+        var title: String { ["SHOW (auto)", "Stage", "Classic Visuals", "AURORA", "MILKDROP"][rawValue] } }
     var mode: Mode = .show
     var visualsMode: Bool { mode == .visuals }
     var aurora: AuroraRenderer?
@@ -54,6 +54,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     private var pinchPrev: [Bool] = []
     var onModeChange: ((Mode) -> Void)?
     var visuals: VisualsRenderer?
+    var milk: MilkDropRenderer?
     private var lastDropTime = -100.0
     private var eventsLogged = 0
     private var strobeFromBlinder = false
@@ -111,7 +112,9 @@ final class Renderer: NSObject, MTKViewDelegate {
         visuals = VisualsRenderer(device: dev, pixelFormat: view.colorPixelFormat)
         let pc = Int(ProcessInfo.processInfo.environment["RAVE_PARTICLES"] ?? "") ?? 1_000_000
         aurora = AuroraRenderer(device: dev, pixelFormat: view.colorPixelFormat, particles: pc)
+        milk = MilkDropRenderer(device: dev, pixelFormat: view.colorPixelFormat, library: MilkDropLibrary())
         super.init()
+        milk?.onEvent = { [weak self] e in self?.metrics.event(e, at: CACurrentMediaTime()) }
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -271,6 +274,10 @@ final class Renderer: NSObject, MTKViewDelegate {
                 encodeScene(showScene, cb: cb, rpd: rpd, ctx: ctx)
             }
         } else {
+            if mode == .milkdrop, let m = milk, let ev = m.direct(beat: Int(beatIdx), phase: phase, beatLocked: locked, dropStarted: dropStarted, now: now,
+                                                                energy: s.energy, intensity: intensity.rawValue, bpm: s.bpm) {
+                metrics.event(ev, at: now)
+            }
             encodeScene(mode, cb: cb, rpd: rpd, ctx: ctx)
         }
         lastDropTime = director.dropTime
@@ -316,12 +323,13 @@ final class Renderer: NSObject, MTKViewDelegate {
             lumBuf += String(format: "%.4f %.4f %d %.4f %.4f\n", elapsed, phase, Int(beatIdx), sum / max(n, 1) / 255, kickVisual)
             if elapsed - lumFlushed > 2 { lumFlushed = elapsed; try? lumBuf.write(toFile: path, atomically: false, encoding: .utf8) }
         }
-        metrics.state = (mode == .show ? "show:\(showScene.title) " : "") + (mode == .aurora ? "aurora hands=\(camera?.hands.count ?? 0) " : visualsMode ? "visuals:\(visuals?.preset ?? -1) " : "stage ") + String(format: "bpm=%.1f conf=%.2f e=%.2f look=%.0f beam=%.0f laser=%.0f build=%.2f drop=%.2f fade=%.2f src=%@ gaps=%d",
+        metrics.state = (mode == .show ? "show:\(showScene.title) " : "") + (mode == .milkdrop ? "milkdrop:\(milk?.currentName ?? "") " : "") + (mode == .aurora ? "aurora hands=\(camera?.hands.count ?? 0) " : visualsMode ? "visuals:\(visuals?.preset ?? -1) " : "stage ") + String(format: "bpm=%.1f conf=%.2f e=%.2f look=%.0f beam=%.0f laser=%.0f build=%.2f drop=%.2f fade=%.2f src=%@ gaps=%d",
                                s.bpm, s.confidence, e, d.look, d.beamProg, d.laserProg, d.build, d.drop, fade, s.source, s.droppedGaps)
         if hudVisible && Int(elapsed * 4) != Int((elapsed - Double(dt)) * 4) {
             let m = metrics.summary(recent: 600)
             let showName = mode == .show ? "SHOW → " + (transition != nil ? "transition to " : "") + showScene.title + (showScene == .visuals ? " " + VisualsRenderer.presetNames[visuals?.preset ?? 0] : "") : ""
-            let modeName = mode == .show ? showName : mode == .aurora ? "AURORA" + (camera?.running == true ? " · camera on (\(camera?.hands.count ?? 0) hands)" : " · drag the mouse, C = camera") : visualsMode ? "VISUALS: " + VisualsRenderer.presetNames[(visuals?.preset ?? 0) % VisualsRenderer.count] + ((visuals?.autoCycle ?? true) ? " (auto)" : "") : "STAGE"
+            let milkName = "MILKDROP: " + (milk?.ready == true ? (milk?.currentName ?? "") + (milk?.director.locked == true ? " (locked)" : "") : "no presets")
+            let modeName = mode == .milkdrop ? milkName : mode == .show ? showName + (showScene == .milkdrop ? " " + (milk?.currentName ?? "") : "") : mode == .aurora ? "AURORA" + (camera?.running == true ? " · camera on (\(camera?.hands.count ?? 0) hands)" : " · drag the mouse, C = camera") : visualsMode ? "VISUALS: " + VisualsRenderer.presetNames[(visuals?.preset ?? 0) % VisualsRenderer.count] + ((visuals?.autoCycle ?? true) ? " (auto)" : "") : "STAGE"
             onHUD?(modeName + "  ·  " + String(format: "%@  ·  %.0f BPM  conf %.0f%%  ·  %.0f fps  p95 %.1f ms  ·  latency p50 %.0f ms%@",
                           s.playing ? "LIVE" : (fade > 0.05 ? "LIVE (quiet)" : "WAITING FOR MUSIC"),
                           s.bpm, s.confidence * 100, m.fps, m.frameP95 * 1000, m.latP50 * 1000,
@@ -349,6 +357,8 @@ final class Renderer: NSObject, MTKViewDelegate {
                 if vis.preset != before { metrics.event("preset->" + VisualsRenderer.presetNames[vis.preset], at: ctx.now) }
             }
             vis.encode(cb: cb, rpd: rpd, size: ctx.size, dt: ctx.dt, s: ctx.s, u: u, input: visualsInput(dt: ctx.dt, now: ctx.now))
+        case .milkdrop:
+            milk?.encode(cb: cb, rpd: rpd, size: ctx.size, u: u, playing: ctx.s.playing)
         default:
             if let enc = cb.makeRenderCommandEncoder(descriptor: rpd) {
                 enc.setRenderPipelineState(pipeline)
@@ -379,6 +389,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     private func nextSlot(energy: Float) -> Mode {
         if slots.isEmpty {
             slots = [Mode](repeating: .visuals, count: 10) + [.aurora, .aurora, .aurora, .stage, .stage]
+            if milk?.ready == true && showMilkDrop { slots += [.milkdrop, .milkdrop, .milkdrop] }
             slots.shuffle()
         }
         if let i = slots.lastIndex(where: { $0 != showScene }) { return slots.remove(at: i) }
@@ -396,6 +407,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             }
         case .aurora: aurora?.newVariant(seed: srand(1000))
         case .stage: stage = Float(srand(4))
+        case .milkdrop: milk?.loadNext(loud: dropMoment || ctx.s.energy > 0.6, smooth: false, blendSeconds: 0, why: "show")
         default: break
         }
         transition = Transition(from: showScene, to: to, type: type, startBeat: beat, beats: beats)
@@ -405,6 +417,8 @@ final class Renderer: NSObject, MTKViewDelegate {
         lastTransitionType = type
     }
     private var lastTransitionType = -1
+    /// SHOW also rotates through MilkDrop presets when the engine and presets are there.
+    var showMilkDrop = true
     private var dropMoment = false
 
     private func showStep(ctx: SceneCtx, beatClock: Double, locked: Bool, energy: Float) {
