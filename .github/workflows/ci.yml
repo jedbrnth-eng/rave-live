@@ -32,6 +32,17 @@ jobs:
           scripts/check_app.sh
       - name: Headless smoke run (skips if this runner has no GPU)
         run: scripts/smoke_test.sh
+      - name: Keep the smoke-run snapshot
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-arm64
+          path: |
+            build/smoke/*.png
+            build/smoke/log.txt
+            build/smoke/metrics.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Build the installer disk image (and verify its contents)
         run: scripts/make_dmg.sh
       - name: Installer script is valid shell
@@ -71,3 +82,14 @@ jobs:
           scripts/check_app.sh
       - name: Headless smoke run (skips if this runner has no GPU)
         run: scripts/smoke_test.sh
+      - name: Keep the smoke-run snapshot
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-x86_64
+          path: |
+            build/smoke/*.png
+            build/smoke/log.txt
+            build/smoke/metrics.json
+          if-no-files-found: ignore
+          retention-days: 14

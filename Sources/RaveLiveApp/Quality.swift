@@ -27,7 +27,7 @@ enum QualityTier: String, CaseIterable {
         let name = device.name
         if device.supportsFamily(.apple7) { return (.high, "\(name), Apple GPU") }      // M1 and newer
         if name.localizedCaseInsensitiveContains("intel") || device.isLowPower { return (.low, "\(name), integrated GPU") }
-        return (.medium, "\(name), discrete GPU")                                         // AMD Radeon etc.
+        return (.medium, "\(name), non-Apple GPU")                                        // AMD Radeon, VMs
     }
 
     var particlesEffective: Int { Int(ProcessInfo.processInfo.environment["RAVE_PARTICLES"] ?? "") ?? particles }
@@ -103,7 +103,7 @@ final class QualityController: NSObject {
         if let fixed = fixedSize {
             v.drawableSize = CGSize(width: (fixed.width * s).rounded(), height: (fixed.height * s).rounded())
         } else if s >= 1 {
-            v.autoResizeDrawable = true
+            if !v.autoResizeDrawable { v.drawableSize = v.convertToBacking(v.bounds).size; v.autoResizeDrawable = true }
         } else {
             v.autoResizeDrawable = false
             let px = v.convertToBacking(v.bounds).size
