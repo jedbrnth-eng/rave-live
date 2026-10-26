@@ -45,8 +45,8 @@ final class UserShaderLibrary {
     /// Example shaders shipped in the app bundle (Resources/Shaders), or the repo's community/shaders when run from a checkout.
     static var bundledExamples: URL? {
         if let r = Bundle.main.resourceURL?.appendingPathComponent("Shaders"), FileManager.default.fileExists(atPath: r.path) { return r }
-        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("community/shaders")
+        // `swift run` from a checkout (no #filePath: release binaries must not embed build-machine paths)
+        let repo = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("community/shaders")
         return FileManager.default.fileExists(atPath: repo.path) ? repo : nil
     }
 

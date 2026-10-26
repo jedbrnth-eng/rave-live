@@ -228,7 +228,8 @@ final class PresetLab: NSObject {
 
     // MARK: .ravelook files
     func look(forPreset name: String) -> RaveLook {
-        let ver = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("VERSION"), encoding: .utf8))?
+        // `swift run` from a checkout: VERSION in the working directory (no #filePath: release binaries must not embed build-machine paths)
+        let ver = (try? String(contentsOf: URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("VERSION"), encoding: .utf8))?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let appVer = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ver ?? "dev"
         return RaveLook(preset: name, params: tweak(for: name), name: name, author: nil, app: "RAVE LIVE " + appVer)
