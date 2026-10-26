@@ -1,0 +1,74 @@
+RAVE LIVE patch for projectM 4.1.8 (LGPL-2.1-or-later; this patch is under the same licence).
+Adds projectm_opengl_render_frame_fbo(): draw the final image into a caller-supplied framebuffer object
+instead of framebuffer 0, so a host can render offscreen into an IOSurface-backed FBO (no window, no
+default framebuffer). Applied by scripts/build_projectm.sh with `patch -p1`.
+
+diff -ru a/src/api/include/projectM-4/render_opengl.h b/src/api/include/projectM-4/render_opengl.h
+--- a/src/api/include/projectM-4/render_opengl.h
++++ b/src/api/include/projectM-4/render_opengl.h
+@@ -41,6 +41,16 @@
+  */
+ PROJECTM_EXPORT void projectm_opengl_render_frame(projectm_handle instance);
+ 
++/**
++ * @brief Renders a single frame into the given framebuffer object instead of framebuffer 0.
++ *
++ * Needed by hosts that render offscreen (no default framebuffer), e.g. into an IOSurface-backed FBO.
++ *
++ * @param instance The projectM instance handle.
++ * @param framebuffer_object_id The OpenGL framebuffer object to draw the final image into.
++ */
++PROJECTM_EXPORT void projectm_opengl_render_frame_fbo(projectm_handle instance, uint32_t framebuffer_object_id);
++
+ #ifdef __cplusplus
+ } // extern "C"
+ #endif
+diff -ru a/src/libprojectM/ProjectM.cpp b/src/libprojectM/ProjectM.cpp
+--- a/src/libprojectM/ProjectM.cpp
++++ b/src/libprojectM/ProjectM.cpp
+@@ -90,7 +90,7 @@
+     m_textureManager = std::make_unique<Renderer::TextureManager>(m_textureSearchPaths);
+ }
+ 
+-void ProjectM::RenderFrame()
++void ProjectM::RenderFrame(uint32_t targetFramebufferObject)
+ {
+     // Don't render if window area is zero.
+     if (m_windowWidth == 0 || m_windowHeight == 0)
+@@ -167,7 +167,7 @@
+     m_activePreset->RenderFrame(audioData, renderContext);
+ 
+     // ToDo: Allow external apps to provide a custom target framebuffer.
+-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
++    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFramebufferObject);
+     glViewport(0, 0, renderContext.viewportSizeX, renderContext.viewportSizeY);
+ 
+ #ifdef USE_GLES
+diff -ru a/src/libprojectM/ProjectM.hpp b/src/libprojectM/ProjectM.hpp
+--- a/src/libprojectM/ProjectM.hpp
++++ b/src/libprojectM/ProjectM.hpp
+@@ -101,7 +101,7 @@
+ 
+     void ResetTextures();
+ 
+-    void RenderFrame();
++    void RenderFrame(uint32_t targetFramebufferObject = 0);
+ 
+     void SetBeatSensitivity(float sensitivity);
+ 
+diff -ru a/src/libprojectM/ProjectMCWrapper.cpp b/src/libprojectM/ProjectMCWrapper.cpp
+--- a/src/libprojectM/ProjectMCWrapper.cpp
++++ b/src/libprojectM/ProjectMCWrapper.cpp
+@@ -171,6 +171,12 @@
+     projectMInstance->RenderFrame();
+ }
+ 
++void projectm_opengl_render_frame_fbo(projectm_handle instance, uint32_t framebuffer_object_id)
++{
++    auto projectMInstance = handle_to_instance(instance);
++    projectMInstance->RenderFrame(framebuffer_object_id);
++}
++
+ void projectm_set_beat_sensitivity(projectm_handle instance, float sensitivity)
+ {
+     auto projectMInstance = handle_to_instance(instance);

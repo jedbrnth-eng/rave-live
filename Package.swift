@@ -13,5 +13,6 @@ let package = Package(
         .executableTarget(name: "RaveProbe", dependencies: ["RaveAudio"], path: "Sources/RaveProbe"),
         .executableTarget(name: "RaveLiveApp", dependencies: ["RaveAudio"], path: "Sources/RaveLiveApp"),
         .testTarget(name: "RaveAudioTests", dependencies: ["RaveAudio"], path: "Tests/RaveAudioTests"),
+        .testTarget(name: "RaveLiveAppTests", dependencies: ["RaveLiveApp"], path: "Tests/RaveLiveAppTests"),
     ]
 )

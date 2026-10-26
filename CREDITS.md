@@ -24,3 +24,13 @@
   Shader Lab's `palette()` helper is Inigo Quilez's cosine palette formula. The example shaders in `community/shaders/` are CC0-1.0.
 - Checked and not used (licence): aubio (GPL-3), BTrack (GPL-3), Essentia (AGPL-3), madmom (licence unclear),
   BeatNet (CC-BY-4.0, Python real-time downbeat model; considered, Beat This! measured better as referee).
+- **projectM** (projectM team, LGPL-2.1-or-later) — https://github.com/projectM-visualizer/projectm — the MilkDrop engine
+  behind MILKDROP mode. Version 4.1.8, built from the release source by `scripts/build_projectm.sh` with one small patch
+  (`scripts/projectm-patches/0001-render-frame-to-fbo.patch`, same licence: render into a caller-supplied framebuffer).
+  Shipped as a separate dynamic library (`RAVE LIVE.app/Contents/Frameworks/libprojectM-4.dylib`) that RAVE LIVE loads at
+  runtime, so it can be replaced with any compatible build. Licence text: https://github.com/projectM-visualizer/projectm/blob/master/COPYING
+  (also in the source tarball); corresponding source = the pinned upstream tarball + the patch above. projectM bundles
+  projectm-eval (MIT), GLM (MIT), SOIL2 (MIT-0/public domain) and hlslparser (MIT).
+- **MilkDrop presets** — not bundled. "Get MilkDrop presets…" downloads projectM's "cream of the crop" pack
+  (https://github.com/projectM-visualizer/presets-cream-of-the-crop) on the user's click. Most presets were released
+  without a licence; projectM treats them as public domain and removes presets on the author's request.

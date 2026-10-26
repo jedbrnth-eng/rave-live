@@ -20,6 +20,11 @@ cp "$BIN" "$APP/Contents/MacOS/RaveLive"
 # behaviour on newer macOS back to macOS 12 rules. Stamp 14.0 so macOS 13+ behaves exactly as before.
 vtool -set-build-version macos "$MIN_MACOS" 14.0 -replace -output "$APP/Contents/MacOS/RaveLive" "$APP/Contents/MacOS/RaveLive" 2>/dev/null
 echo "binary: $(lipo -archs "$APP/Contents/MacOS/RaveLive")"
+# MILKDROP engine (LGPL libprojectM, loaded at runtime): bundled when scripts/build_projectm.sh has been run.
+if [ -f vendor/projectm/lib/libprojectM-4.dylib ]; then
+  mkdir -p "$APP/Contents/Frameworks"; cp vendor/projectm/lib/libprojectM-4.dylib "$APP/Contents/Frameworks/"
+else echo "note: no vendor/projectm build; MILKDROP mode will show its 'engine missing' card (run scripts/build_projectm.sh)"; fi
+# Bundled MilkDrop presets (none today): copying a folder of .milk files to "$APP/Contents/Resources/MilkDrop" is all it takes.
 # App icon: Icon Composer bundle compiled by actool -> Assets.car (macOS 26+ native squircle) + AppIcon.icns fallback.
 mkdir -p "$APP/Contents/Resources"
 RES="$(cd "$APP/Contents/Resources" && pwd)"

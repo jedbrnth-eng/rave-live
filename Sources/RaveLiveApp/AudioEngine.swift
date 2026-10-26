@@ -73,6 +73,8 @@ final class AudioEngine: @unchecked Sendable {
     var onDevicesChanged: (() -> Void)?
     private var lastSoundHost: Double = 0
     var onStatus: ((String) -> Void)?
+    /// Raw mono capture samples (capture queue), e.g. for the MilkDrop engine.
+    var onPCM: ((UnsafeBufferPointer<Float>) -> Void)?
     /// Beat This! referee sidecar (nil until it has loaded, or if the tools venv is missing).
     private var referee: BeatReferee?
     var refereeEnabled = true
@@ -204,6 +206,7 @@ final class AudioEngine: @unchecked Sendable {
         }
         let a = analyzer!
         let frames = a.process(buf)
+        onPCM?(buf)
         lock.lock(); let ref = referee; lock.unlock()
         if let ref { ref.feed(buf, sampleRate: sr); ref.step(a) }
         guard !frames.isEmpty else { return }
