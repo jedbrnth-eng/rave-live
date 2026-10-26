@@ -229,9 +229,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewItem.submenu = vm
         main.addItem(AudioMenu.shared.menuItem(audio: audio))
         vj.addMenus(to: main)
+        if let lab = renderer?.visuals?.lab { lab.onWantClassic = { [weak self] in if self?.renderer.mode != .visuals { self?.setMode(.visuals) } }; main.addItem(lab.makeMenu()) }   // Visuals menu: Tweak panel, looks, Shader Lab
         NSApp.mainMenu = main
     }
 
+    /// Double-clicked .ravelook files (also at launch, before the renderer exists).
+    func application(_ sender: NSApplication, open urls: [URL]) { PresetLab.pendingOpen += urls; DispatchQueue.main.async { [weak self] in if self?.renderer != nil { self?.setMode(.visuals) } } }
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ n: Notification) { vj.shutdown(); renderer?.metrics.dump(to: metricsURL); audio.stopReferee() }
 
@@ -250,6 +253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let r = renderer!
         if vj.handleKey(e) { return }
         let ch = e.charactersIgnoringModifiers?.lowercased() ?? ""
+        if r.visuals?.lab.handleKey(e, classic: r.mode == .visuals) == true { return }   // Shift+T Tweak panel (plain t stays tap tempo)
         switch (ch, e.modifierFlags.contains(.shift)) {
         case ("s", true):
             if !r.strobeOverride {

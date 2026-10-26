@@ -356,6 +356,7 @@ final class Renderer: NSObject, MTKViewDelegate {
                 vis.direct(look: ctx.look, dropStarted: ctx.dropStarted)
                 if vis.preset != before { metrics.event("preset->" + VisualsRenderer.presetNames[vis.preset], at: ctx.now) }
             }
+            vis.overlaysOn = mode == .visuals
             vis.encode(cb: cb, rpd: rpd, size: ctx.size, dt: ctx.dt, s: ctx.s, u: u, input: visualsInput(dt: ctx.dt, now: ctx.now))
         default:
             if let enc = cb.makeRenderCommandEncoder(descriptor: rpd) {
@@ -398,7 +399,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         case .visuals:
             if let v = visuals {
                 v.autoCycle = false
-                let loud = [0, 2, 6, 8, 9, 10, 11, 12, 13, 18, 20, 22, 24, 25, 27, 31], calm = [1, 3, 7, 14, 15, 16, 17, 19, 21, 23, 26, 28, 29, 30, 32]
+                let loud = VisualsRenderer.loudPresets, calm = VisualsRenderer.calmPresets
                 v.preset = v.nextFromBag(prefer: dropMoment || ctx.s.energy > 0.6 ? loud : calm)
                 v.newVariant()
             }

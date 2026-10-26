@@ -18,5 +18,9 @@
   BSD-3-Clause) — https://github.com/Syphon/Syphon-Framework — optional Syphon output. Built from source commit
   f4761677a45b8034a3c2069ec0f3d2553da81fba by `scripts/build_syphon.sh` (not vendored in git); the licence text ships inside the
   bundled framework (`Syphon.framework/Resources/License.txt`). BSD-3-Clause is GPL-3.0 compatible.
+- **Visuals pack 3 (presets 33-47) and Shader Lab** — re-implemented from scratch, no third-party code: Julia sets with the
+  smooth iteration count (Inigo Quilez's published formulation), Conway's Game of Life (1970), times-table "string art"
+  (Mathologer-style modular multiplication circle), goniometer / XY vectorscope plotting, cell-exit box marching (as Neon City).
+  Shader Lab's `palette()` helper is Inigo Quilez's cosine palette formula. The example shaders in `community/shaders/` are CC0-1.0.
 - Checked and not used (licence): aubio (GPL-3), BTrack (GPL-3), Essentia (AGPL-3), madmom (licence unclear),
   BeatNet (CC-BY-4.0, Python real-time downbeat model; considered, Beat This! measured better as referee).

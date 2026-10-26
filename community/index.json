@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "items": [
+    { "type": "shader", "file": "shaders/pulse_rings.metal", "name": "Pulse Rings", "author": "RAVE LIVE", "license": "CC0-1.0",
+      "description": "One ring per beat leaves the centre; the downbeat ring is brighter.", "tags": ["beat", "rings", "example"] },
+    { "type": "shader", "file": "shaders/spectrum_bloom.metal", "name": "Spectrum Bloom", "author": "RAVE LIVE", "license": "CC0-1.0",
+      "description": "Flower petals drawn from the live spectrum.", "tags": ["spectrum", "flower", "example"] },
+    { "type": "shader", "file": "shaders/feedback_tunnel.metal", "name": "Feedback Tunnel", "author": "RAVE LIVE", "license": "CC0-1.0",
+      "description": "Zooms its own last frame into an endless tunnel around the waveform.", "tags": ["feedback", "waveform", "example"] },
+    { "type": "shader", "file": "shaders/pointer_paint.metal", "name": "Pointer Paint", "author": "RAVE LIVE", "license": "CC0-1.0",
+      "description": "Paint glowing ink with the mouse or your hands; the beat drops ink too.", "tags": ["interactive", "feedback", "example"] },
+    { "type": "look", "file": "looks/kick_cubes_kaleido.ravelook", "name": "Kick Cubes Kaleido", "author": "RAVE LIVE", "license": "CC0-1.0",
+      "description": "Kick Cubes at double speed through a 6-fold kaleidoscope.", "tags": ["kaleidoscope", "example"] }
+  ]
+}
