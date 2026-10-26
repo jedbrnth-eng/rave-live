@@ -138,7 +138,12 @@ extension AppDelegate {
         if let n = arg("--milk-sweep").flatMap(Int.init) {
             let secs = arg("--milk-sweep-secs").flatMap(Double.init) ?? 1.5
             let seed = arg("--milk-sweep-seed").flatMap(UInt64.init) ?? 42
-            m.sweep = .init(list: m.library.sample(n, seed: seed), seconds: secs, outDir: r.snapDir)
+            var list = m.library.sample(n, seed: seed)
+            // --milk-sweep-list <file>: one preset path per line instead of a random sample
+            if let lf = arg("--milk-sweep-list"), let txt = try? String(contentsOfFile: NSString(string: lf).expandingTildeInPath, encoding: .utf8) {
+                list = txt.split(separator: "\n").map { m.library.preset(at: URL(fileURLWithPath: String($0))) }
+            }
+            m.startSweep(.init(list: list, seconds: secs, outDir: r.snapDir))
             try? FileManager.default.createDirectory(at: r.snapDir, withIntermediateDirectories: true)
         }
         NSLog("RAVE LIVE: MilkDrop %@, %d presets", m.ready ? "ready" : m.problem, m.library.count)
@@ -182,12 +187,12 @@ extension AppDelegate {
         case "r":
             m.loadNext(loud: false, smooth: true, blendSeconds: 1.5, why: "random"); m.director.manualSwitch(now: now)
         case "f":
-            if let p = m.current { let on = m.library.toggleFavorite(p); flashStatus(on ? "★ Favourite: \(p.name)" : "Removed from favourites: \(p.name)") }
+            if let p = m.currentPreset { let on = m.library.toggleFavorite(p); flashStatus(on ? "★ Favourite: \(p.name)" : "Removed from favourites: \(p.name)") }
         case "l":
             m.director.locked.toggle(); flashStatus(m.director.locked ? "Preset locked (L to unlock)" : "Preset unlocked: changes follow the beat again")
         case "p": milkMenuBrowser(nil)
         case "0", "1", "2", "3", "4", "5":
-            if let p = m.current { m.library.setRating(p, Int(ch)!); flashStatus(ch == "0" ? "Rating cleared" : "Rated \(ch)/5: \(p.name)") }
+            if let p = m.currentPreset { m.library.setRating(p, Int(ch)!); flashStatus(ch == "0" ? "Rating cleared" : "Rated \(ch)/5: \(p.name)") }
         default: return false
         }
         Self.milkBrowser?.reload()

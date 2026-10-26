@@ -29,6 +29,7 @@ final class MilkDropRenderer: @unchecked Sendable {
     private var pmSize = (0, 0)
     private var framesSinceLoad = 0
     private var lumaSamples: [(mean: Double, peak: Double)] = []
+    private var loadedAt = 0.0, lastLumaAt = 0.0
     private var glFailed = false
     private var pcmScratch: [Float] = []
 
@@ -38,7 +39,7 @@ final class MilkDropRenderer: @unchecked Sendable {
     private var busy = false
     private var commands: [Command] = []
     private var pcm: [Float] = []
-    private(set) var current: MilkDropLibrary.Preset?
+    private var current: MilkDropLibrary.Preset?        // written on the GL thread under `lock`
     private var loadFailure: String?
     /// Last GL frame time (ms) and preset load time (ms), for the HUD/metrics.
     private(set) var glFrameMs = 0.0, lastLoadMs = 0.0
@@ -55,7 +56,11 @@ final class MilkDropRenderer: @unchecked Sendable {
     /// Called on the GL thread when a preset was loaded / skipped (event text for the metrics log).
     var onEvent: ((String) -> Void)?
     /// Test sweep (`--milk-sweep N`): load N presets one after another, classify each as ok / failed / black.
-    var sweep: Sweep?
+    /// GL thread only once started; `sweepMode` is the main-thread view of it.
+    private var sweep: Sweep?
+    private(set) var sweepMode = false
+    /// Call before the first frame (main thread).
+    func startSweep(_ s: Sweep) { sweep = s; sweepMode = true }
 
     private enum Command { case load(MilkDropLibrary.Preset, smooth: Bool, blend: Double, why: String) }
 
@@ -95,11 +100,12 @@ final class MilkDropRenderer: @unchecked Sendable {
         lock.lock(); let key = current?.key; lock.unlock()
         if let p = library.neighbour(of: key, step: dir) { load(p, smooth: false, why: dir > 0 ? "next" : "prev") }
     }
+    var currentPreset: MilkDropLibrary.Preset? { lock.lock(); defer { lock.unlock() }; return current }
     var currentName: String { lock.lock(); defer { lock.unlock() }; return current.map { ($0.author.isEmpty ? "" : $0.author + " - ") + $0.name } ?? "" }
 
     /// Beat-locked automatic changes (MILKDROP mode). Returns the event text when it switched.
     func direct(beat: Int, phase: Double, beatLocked: Bool, dropStarted: Bool, now: Double, energy: Float, intensity: Int, bpm: Double) -> String? {
-        guard ready, sweep == nil else { return nil }
+        guard ready, !sweepMode else { return nil }
         director.holdBeats = MilkDropDirector.hold(intensity: intensity, energy: energy)
         let a = director.step(beat: beat, phase: phase, beatLocked: beatLocked, dropStarted: dropStarted, now: now)
         guard a != .none else { return nil }
@@ -267,17 +273,21 @@ final class MilkDropRenderer: @unchecked Sendable {
             return
         }
         lock.lock(); current = p; lock.unlock()
-        framesSinceLoad = 0; lumaSamples = []
+        framesSinceLoad = 0; lumaSamples = []; loadedAt = CACurrentMediaTime(); lastLumaAt = 0
         onEvent?(String(format: "milk:loaded(%@) %@ [%.0f ms]", why, p.name, lastLoadMs))
     }
 
-    /// "Skip broken": a preset that stays black for ~2 s while music plays is remembered and skipped.
+    /// "Skip broken": a preset that is still pitch black 3-6 s after loading while music plays is remembered and skipped.
+    /// (Measured on the cream-of-the-crop pack: some presets fade in from black over ~2 s, so earlier checks misfire.)
     private func checkBlack(_ s: IOSurfaceRef, playing: Bool) {
-        guard let p = current, framesSinceLoad >= 60, framesSinceLoad <= 180, framesSinceLoad % 15 == 0 else { return }
-        guard playing else { lumaSamples = []; return }
+        guard let p = current, lumaSamples.count < 7 else { return }
+        let now = CACurrentMediaTime(), age = now - loadedAt
+        guard age >= 3, now - lastLumaAt >= 0.5 else { return }
+        guard playing else { lumaSamples = []; loadedAt = now - 2.5; return }   // judge only with sound
+        lastLumaAt = now
         lumaSamples.append(Self.luma(s))
-        guard framesSinceLoad == 180, lumaSamples.count >= 6 else { return }
-        if lumaSamples.allSatisfy({ $0.mean < 0.012 && $0.peak < 0.08 }) {
+        guard lumaSamples.count == 7 else { return }
+        if lumaSamples.allSatisfy({ $0.mean < 0.004 && $0.peak < 0.04 }) {
             library.markBroken(p, reason: "renders black")
             onEvent?("milk:skip(black) " + p.name)
             if let next = library.pick(loud: false) { loadNow(next, smooth: false, blend: 0, why: "skip") }
@@ -330,6 +340,7 @@ final class MilkDropRenderer: @unchecked Sendable {
         var lines: [String] = []
         var ok = 0, failed = 0, black = 0
         var done = false
+        var thumbed = false
 
         init(list: [MilkDropLibrary.Preset], seconds: Double, outDir: URL) { self.list = list; self.seconds = seconds; self.outDir = outDir }
 
@@ -341,7 +352,7 @@ final class MilkDropRenderer: @unchecked Sendable {
             if index >= 0 && index < list.count && !(lines.count > index) { finish(r, failure: nil) }
             index += 1
             if index >= list.count { done = true; writeSummary(); return false }
-            started = now; samples = []
+            started = now; samples = []; thumbed = false
             r.loadFailure = nil
             let p = list[index]
             r.loadNow(p, smooth: false, blend: 0, why: "sweep")
@@ -351,15 +362,15 @@ final class MilkDropRenderer: @unchecked Sendable {
         mutating func observe(_ r: MilkDropRenderer, surface: IOSurfaceRef) {
             guard index >= 0, index < list.count, lines.count == index else { return }
             let age = CACurrentMediaTime() - started
-            if age > seconds * 0.5 && r.framesSinceLoad % 6 == 0 { samples.append(MilkDropRenderer.luma(surface)) }
-            if age > seconds - 0.12 && samples.count >= 3 {
+            if age > seconds * 0.5 && r.framesSinceLoad % 4 == 0 { samples.append(MilkDropRenderer.luma(surface)) }
+            if age > seconds * 0.85 && !thumbed {
+                thumbed = true
                 MilkDropRenderer.writeThumb(surface, to: outDir.appendingPathComponent(String(format: "sweep_%04d.png", index)))
-                finish(r, failure: nil)
             }
         }
         private mutating func finish(_ r: MilkDropRenderer, failure: String?) {
             let p = list[index]
-            let isBlack = failure == nil && !samples.isEmpty && samples.allSatisfy { $0.mean < 0.012 && $0.peak < 0.08 }
+            let isBlack = failure == nil && !samples.isEmpty && samples.allSatisfy { $0.mean < 0.004 && $0.peak < 0.04 }
             let status = failure != nil ? "failed" : isBlack ? "black" : "ok"
             if status == "ok" { ok += 1 } else if status == "failed" { failed += 1 } else { black += 1 }
             let mean = samples.isEmpty ? 0 : samples.map { $0.mean }.reduce(0, +) / Double(samples.count)
