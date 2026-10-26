@@ -1144,7 +1144,8 @@ float3 stringArt(float2 p, constant float *u, constant float *spec, float aspect
     float2 A = R * float2(cos(r0), sin(r0)), B = A;
     float2 rA = float2(cos(dA), sin(dA)), rB = float2(cos(dA * k), sin(dA * k));
     float3 col = float3(0.0);
-    for (int i = 0; i < N; i++) {
+    int NN = length(p) < R + 0.04 ? N : 0;                                           // chords never leave the circle: skip the loop outside
+    for (int i = 0; i < NN; i++) {
         float fi = float(i) / float(N);
         float d = segDist(p, A, B);
         col += pal(HUE + fi * 0.5) * exp(-d * 280.0) * (0.12 + 0.4 * specAt(spec, fi));
@@ -1161,8 +1162,9 @@ float3 stringArt(float2 p, constant float *u, constant float *spec, float aspect
 // ---- 38 fireflies: a swarm over a night meadow; each blinks on its own clock but they synchronise to the beat as the
 // music gets louder (real fireflies do this); hold the mouse / a hand and they gather and circle around it
 float2 flyPos(float fi, float t, float aspect) {
-    float a = hash21(float2(fi, 1.0)) * 6.28, b = hash21(float2(fi, 2.0)) * 6.28;
-    float sx = 0.05 + 0.07 * hash21(float2(fi, 3.0)), sy = 0.04 + 0.06 * hash21(float2(fi, 4.0));
+    float h = hash21(float2(fi, 1.0));
+    float a = h * 6.28, b = fract(h * 17.3) * 6.28;
+    float sx = 0.05 + 0.07 * fract(h * 29.7), sy = 0.04 + 0.06 * fract(h * 41.9);
     return float2(sin(t * sx + a) * 0.85 * aspect + 0.15 * sin(t * sx * 2.7 + b), -0.1 + 0.5 * sin(t * sy + b) + 0.1 * cos(t * sy * 3.1 + a));
 }
 float3 fireflies(float2 p, constant float *u, float aspect) {
@@ -1176,12 +1178,16 @@ float3 fireflies(float2 p, constant float *u, float aspect) {
     float bpz = exp(-fract(tb) * 5.0);
     for (int i = 0; i < 48; i++) {
         float fi = float(i);
+        float h = hash21(float2(fi, 8.0));                                            // one hash per fly; the rest are cheap fract multiples
         float2 fp = flyPos(fi, t, aspect);
-        float2 orbit = ATTRACT_POS + (0.06 + 0.12 * hash21(float2(fi, 8.0))) * float2(cos(t * (0.5 + 0.6 * hash21(float2(fi, 9.0))) + fi), sin(t * (0.4 + 0.6 * hash21(float2(fi, 10.0))) + fi * 1.3));
-        fp = mix(fp, orbit, ATTRACT * (0.6 + 0.4 * hash21(float2(fi, 11.0))));
-        float own = fract(t * (0.2 + 0.2 * hash21(float2(fi, 5.0))) + hash21(float2(fi, 6.0)));
-        float blink = mix(exp(-own * 4.0), bpz, sync);
+        if (ATTRACT > 0.001) {
+            float2 orbit = ATTRACT_POS + (0.06 + 0.12 * h) * float2(cos(t * (0.5 + 0.6 * fract(h * 7.13)) + fi), sin(t * (0.4 + 0.6 * fract(h * 11.7)) + fi * 1.3));
+            fp = mix(fp, orbit, ATTRACT * (0.6 + 0.4 * fract(h * 3.31)));
+        }
         float d = length(p - fp);
+        if (d > 0.45) continue;                                                       // glow is invisible beyond this
+        float own = fract(t * (0.2 + 0.2 * fract(h * 5.77)) + fract(h * 13.1));
+        float blink = mix(exp(-own * 4.0), bpz, sync);
         float3 fc = mix(float3(0.75, 1.0, 0.35), pal(HUE + fi * 0.02), 0.35);
         col += fc * (exp(-d * 60.0) * 1.6 + exp(-d * 10.0) * 0.14) * (0.15 + blink);
     }
