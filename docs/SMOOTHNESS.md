@@ -84,5 +84,58 @@ any change the peak must stay in the first bins (on or just after the beat) and 
 
 ## Results
 
-Filled in from the final sweep (`evidence/` is not committed; numbers are from `--demo`, 1280 x 720, three instances
-sharing the GPU).
+From `--demo` (128 BPM: groove, snare-roll build, gap, drop), 1280 x 720, 46 s per look with three or four app
+instances sharing the GPU, on an M4 Max; before = the 0.5 integration build with only the probe added, after = this
+branch. Logs and contact sheets stay out of git.
+
+**Classic, Stage and AURORA (55 looks):** 45 met the 8 jumps/min target before, all 55 after. Median per look:
+flick p99 0.030 → 0.019, resid p99 0.024 → 0.017, dmean p99 0.019 → 0.014. Beat peak in the first 3 of 8 phase bins:
+52 → 54 looks. Contact sheets of all 48 Classic presets at the groove and the drop still look as full as before.
+
+| look | jumps/min | flick p99 | resid p99 | dmean p99 | beat contrast (peak bin) |
+|---|---|---|---|---|---|
+| Stage look 0 | 20.6 → 0.0 | 0.045 → 0.026 | 0.038 → 0.022 | 0.037 → 0.014 | 0.33 → 0.26 (0 → 1) |
+| Stage look 1 | 33.0 → 0.0 | 0.047 → 0.019 | 0.039 → 0.018 | 0.041 → 0.016 | 0.32 → 0.30 (0 → 0) |
+| Stage look 3 | 40.0 → 0.0 | 0.061 → 0.056 | 0.048 → 0.030 | 0.046 → 0.024 | 0.40 → 0.38 (0 → 0) |
+| Stage look 4 | 33.1 → 0.0 | 0.045 → 0.023 | 0.039 → 0.020 | 0.045 → 0.021 | 0.45 → 0.41 (0 → 0) |
+| Wormhole | 50.9 → 0.0 | 0.126 → 0.034 | 0.094 → 0.023 | 0.081 → 0.018 | 0.26 → 0.18 (0 → 0) |
+| Bars | 16.5 → 5.5 | 0.095 → 0.063 | 0.080 → 0.049 | 0.094 → 0.061 | 0.92 → 0.56 (1 → 2) |
+| Crystals | 13.8 → 1.4 | 0.073 → 0.040 | 0.069 → 0.040 | 0.072 → 0.038 | 0.99 → 0.63 (0 → 1) |
+| Kick Cubes | 12.4 → 2.7 | 0.106 → 0.104 | 0.090 → 0.083 | 0.064 → 0.038 | 0.33 → 0.29 (0 → 0) |
+| Plasma | 6.9 → 0.0 | 0.161 → 0.042 | 0.094 → 0.036 | 0.060 → 0.031 | 0.23 → 0.17 (0 → 0) |
+| Laser Grid | 6.9 → 0.0 | 0.033 → 0.018 | 0.029 → 0.015 | 0.030 → 0.017 | 0.17 → 0.12 (0 → 0) |
+| Northern Lights | 0.0 → 0.0 | 0.039 → 0.019 | 0.026 → 0.013 | 0.038 → 0.019 | 0.30 → 0.30 (1 → 1) |
+| Hyperdrive (reference) | 0.0 → 0.0 | 0.030 → 0.022 | 0.022 → 0.017 | 0.005 → 0.003 | 0.15 → 0.16 (0 → 0) |
+| Neon City (reference) | 0.0 → 0.0 | 0.028 → 0.021 | 0.024 → 0.020 | 0.015 → 0.011 | 0.14 → 0.14 (0 → 1) |
+| AURORA | 0.0 → 0.0 | 0.026 → 0.027 | 0.025 → 0.025 | 0.019 → 0.016 | 0.19 → 0.24 (0 → 0) |
+
+The beat contrast of the punchiest looks (Bars, Crystals) is lower because hits no longer jump to full in one frame,
+but the peak stays on or just after the beat. Normal vs Wild on the same looks: Wild keeps higher on-beat contrast
+(Stage look 3: 0.38 vs 0.50; Kick Cubes 0.29 vs 0.37) and more punch (Kick Cubes 2.7 vs 11 jumps/min).
+
+**MilkDrop, 40 random pack presets (locked, no changes):** the biggest frame-to-frame changes got smaller on 39 of 40
+(median flick p99 0.092 → 0.060, dmean p99 0.069 → 0.048). Presets built on per-frame noise (Skin Dots, pixel
+"glitch" presets) still count many jumps (easing splits a long run into several short ones), which is why the
+built-in set was picked by the probe: 149 of 650 candidates pass. In a 10-minute MILKDROP run with automatic
+beat-locked changes, one-frame spikes went 11 → 0 after the IOSurface fix.
+
+**Transitions (SHOW, `--show-hold 12`, built-in presets only).** Four 25-minute runs (two Normal, two Wild):
+
+| type | count | glitch frames | max one-frame dmean / resid |
+|---|---|---|---|
+| drop cut (flash cut) | 56 | 0 | 0.87 / 0.86 (the cut on the drop itself) |
+| iris | 203 | 0 | 0.27 / 0.26 |
+| liquid melt | 201 | 0 | 0.12 / 0.16 |
+| zoom punch | 180 | 8, all in one Wild run: a MilkDrop preset's own flashes (removed from the set since) | 0.37 / 0.33 |
+| spin kaleido | 151 | 0 | 0.14 / 0.13 |
+| glitch (Wild only) | 87 | 1 (the effect's own slice flip) | 0.19 / 0.17 |
+| pixel dissolve (Wild only) | 78 | 32 (the effect's block flips) | 0.21 / 0.20 |
+
+Confirmation on the final build (149 presets, calmer Wild MilkDrop), 12 minutes Normal + 12 minutes Wild: 223
+transitions of all 7 types (12 more drop cuts), **0 glitch frames**; one-frame spikes 0 (Normal) and 2 (Wild, both
+under 0.07). Frame time inside vs outside transitions: p50 16.8 vs 16.7 ms and p99 27-29 vs 24-25 ms with four
+instances sharing the GPU; p99 17.4 vs 17.4 ms with two. Drops: 14 per 25 minutes (one per demo loop); before the drop
+fix only the first drop of a session was found.
+
+Before the MilkDrop texture fix, runs of the same length had 6-15 one-frame excursions each, almost all in or next to
+a MilkDrop scene; a 10-minute MILKDROP run had 11, and 0 after.
