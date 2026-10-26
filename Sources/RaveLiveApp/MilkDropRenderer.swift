@@ -111,8 +111,9 @@ final class MilkDropRenderer: @unchecked Sendable {
         guard a != .none else { return nil }
         let blend = MilkDropDirector.blendSeconds(bpm: beatLocked ? bpm : 0)
         guard let name = loadNext(loud: a == .cut || energy > 0.6, smooth: a == .blend, blendSeconds: blend, why: a == .cut ? "cut" : "blend") else { return nil }
-        return String(format: "milk:%@ beat=%d bar=%d phrase=%d phase=%.3f locked=%d %@", a == .cut ? "cut(drop)" : "blend", beat,
-                      MilkDropDirector.mod(beat, 4), MilkDropDirector.mod(beat, 16), phase, beatLocked ? 1 : 0, name)
+        let ob = director.beatForLog(beat)
+        return String(format: "milk:%@ beat=%d bar=%d phrase=%d phase=%.3f locked=%d renderer_beat=%d %@", a == .cut ? "cut(drop)" : "blend", ob,
+                      MilkDropDirector.mod(ob, 4), MilkDropDirector.mod(ob, 16), phase, beatLocked ? 1 : 0, beat, name)
     }
 
     // MARK: - Metal side (render thread)

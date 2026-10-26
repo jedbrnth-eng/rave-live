@@ -59,6 +59,23 @@ final class MilkDropDirectorTests: XCTestCase {
         for (_, ph, _) in ch { XCTAssertLessThan(ph, 0.25) }
     }
 
+    func testFlipFloppingBarEstimateIsIgnored() {
+        // the renderer's bar estimate flips by +2 / -2 beats at phase ~0.18 every few beats (seen in demo mode)
+        var d = MilkDropDirector()
+        var changes: [(Double, MilkDropDirector.Action)] = []
+        var t = 0.0
+        while t < 120 * 60 / 128 {
+            let clock = t * 128 / 60, whole = Int(floor(clock)), ph = clock - floor(clock)
+            let flipped = (whole / 2) % 2 == 1 && !(whole % 2 == 0 && ph < 0.18)
+            let a = d.step(beat: whole + (flipped ? 2 : 0), phase: ph, beatLocked: true, dropStarted: false, now: t)
+            if a != .none { changes.append((clock, a)) }
+            t += 1.0 / 60
+        }
+        XCTAssertFalse(changes.isEmpty)
+        for (c, _) in changes { XCTAssertLessThan(c - floor(c), 0.1, "change at clock \(c) is mid-beat") }
+        for i in 1..<changes.count { XCTAssertGreaterThanOrEqual(changes[i].0 - changes[i - 1].0, 31.9) }
+    }
+
     func testLockedPresetNeverChanges() {
         var d = MilkDropDirector(); d.locked = true
         XCTAssertTrue(run(&d, beats: 200, dropAt: 100).isEmpty)

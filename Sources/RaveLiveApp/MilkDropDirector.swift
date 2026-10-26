@@ -20,8 +20,13 @@ struct MilkDropDirector {
     var locked = false
 
     private(set) var lastSwitchBeat: Int?
-    private var lastBeat = Int.min
     private var lastSwitchTime = -1.0e9
+    /// Own beat counter: +1 on every phase wrap, so it never jumps mid-beat. It adopts the renderer's counter (bar and
+    /// phrase alignment) on a drop, or once the renderer has disagreed by the same amount for 8 beats in a row.
+    /// (The renderer's bar estimate can flip back and forth by 2 beats on some material; a phrase change must not follow that.)
+    private(set) var own: Int?
+    private var lastPhase = 0.0
+    private var pendingOffset = 0, offsetRun = 0
 
     /// Hold length for the current intensity (0 chill, 1 normal, 2 wild) and loudness.
     static func hold(intensity: Int, energy: Float) -> Int {
@@ -30,32 +35,53 @@ struct MilkDropDirector {
     }
 
     /// Call once per frame. `beat` is the renderer's musical beat counter (beat 0 of each bar is a downbeat,
-    /// aligned so the last drop opened a phrase); `beatLocked` says whether that counter means anything.
-    /// `phase` is how far into `beat` this frame is (0..1): a phrase change only starts on the frame the downbeat begins.
+    /// aligned so the last drop opened a phrase), `phase` how far into that beat this frame is (0..1);
+    /// `beatLocked` says whether either means anything.
     mutating func step(beat: Int, phase: Double, beatLocked: Bool, dropStarted: Bool, now: Double) -> Action {
-        defer { lastBeat = beat }
         if lastSwitchTime < -1.0e8 { lastSwitchTime = now }       // the first preset counts as a switch
-        // the renderer re-aligns its counter (bar found, drop opens a phrase): that is not elapsed time, keep the hold intact
-        if beatLocked, lastBeat != Int.min, abs(beat - lastBeat) >= 2, let last = lastSwitchBeat { lastSwitchBeat = last + (beat - lastBeat) }
-        if locked { return .none }
+        guard beatLocked else {
+            own = nil
+            if locked { return .none }
+            if dropStarted || now - lastSwitchTime >= unlockedHoldSeconds {
+                lastSwitchTime = now; lastSwitchBeat = nil
+                return dropStarted ? .cut : .blend
+            }
+            return .none
+        }
+        var wrapped = false
+        if own == nil { own = beat; pendingOffset = 0; offsetRun = 0 }
+        else if phase < lastPhase - 0.5 { own! += 1; wrapped = true }
+        lastPhase = phase
         if dropStarted {
+            // the drop is the new phrase grid: adopt the renderer's counter now (it re-aligns its phrase on the drop too)
+            own = beat; pendingOffset = 0; offsetRun = 0
+            if locked { return .none }
             lastSwitchBeat = beat; lastSwitchTime = now
             return .cut
         }
-        guard beatLocked else {
-            if now - lastSwitchTime >= unlockedHoldSeconds { lastSwitchTime = now; lastSwitchBeat = nil; return .blend }
-            return .none
+        if wrapped {
+            let off = beat - own!
+            if off == 0 { offsetRun = 0 } else if off == pendingOffset { offsetRun += 1 } else { pendingOffset = off; offsetRun = 1 }
+            if offsetRun >= 8 {
+                // a stable re-alignment (bar found, phrase shift after a drop): not elapsed time, so keep the hold intact
+                own! += off
+                if let last = lastSwitchBeat { lastSwitchBeat = last + off }
+                offsetRun = 0
+            }
         }
-        // only on the frame the counter reaches a phrase downbeat (not on every frame of that beat)
-        guard beat != lastBeat, Self.mod(beat, phraseBeats) == 0, phase < 0.25 else { return .none }
-        if let last = lastSwitchBeat, beat - last < holdBeats, beat >= last { return .none }
+        // only on the frame a phrase downbeat begins
+        guard !locked, wrapped, let b = own, Self.mod(b, phraseBeats) == 0 else { return .none }
+        if let last = lastSwitchBeat, b - last < holdBeats, b >= last { return .none }
         if lastSwitchBeat == nil && now - lastSwitchTime < 4 { return .none }   // just switched while unlocked
-        lastSwitchBeat = beat; lastSwitchTime = now
+        lastSwitchBeat = b; lastSwitchTime = now
         return .blend
     }
 
+    /// The director's own beat counter (renderer's when not locked yet), for event logs.
+    func beatForLog(_ rendererBeat: Int) -> Int { own ?? rendererBeat }
+
     /// Note a manual change (keys, browser) so the next automatic one waits a full hold.
-    mutating func manualSwitch(now: Double) { lastSwitchBeat = lastBeat == Int.min ? nil : lastBeat; lastSwitchTime = now }
+    mutating func manualSwitch(now: Double) { lastSwitchBeat = own; lastSwitchTime = now }
 
     /// Blend length in seconds: `bars` whole bars at the current tempo (2 s when there is no tempo).
     static func blendSeconds(bpm: Double, bars: Int = 2) -> Double {
