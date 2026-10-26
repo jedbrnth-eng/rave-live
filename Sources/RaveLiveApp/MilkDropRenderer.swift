@@ -27,6 +27,7 @@ final class MilkDropRenderer: @unchecked Sendable {
     private var targets: [Target] = []
     private var nextTarget = 0
     private var pmSize = (0, 0)
+    private var pmMesh = (0, 0)
     private var framesSinceLoad = 0
     private var lumaSamples: [(mean: Double, peak: Double)] = []
     private var loadedAt = 0.0, lastLumaAt = 0.0
@@ -174,7 +175,8 @@ final class MilkDropRenderer: @unchecked Sendable {
         lib.setHardCutEnabled(h, false)
         lib.setPresetLocked(h, true)
         lib.setFPS(h, 60)
-        lib.setMeshSize(h, 64, 48)
+        pmMesh = QualityTier.active.milkMesh
+        lib.setMeshSize(h, pmMesh.0, pmMesh.1)
         lib.setFailedCallback(h, { file, msg, user in
             guard let user else { return }
             let me = Unmanaged<MilkDropRenderer>.fromOpaque(user).takeUnretainedValue()
@@ -247,6 +249,8 @@ final class MilkDropRenderer: @unchecked Sendable {
             pcmScratch.removeAll(keepingCapacity: true)
         }
         lib.setBeatSensitivity(pm, sensitivity)
+        let mesh = QualityTier.active.milkMesh          // View > Quality can change while running
+        if mesh != pmMesh { pmMesh = mesh; lib.setMeshSize(pm, mesh.0, mesh.1) }
 
         let t = targets[nextTarget % targets.count]
         nextTarget += 1

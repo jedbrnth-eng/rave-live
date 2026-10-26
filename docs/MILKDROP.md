@@ -32,7 +32,7 @@ projectM team treats them as public domain and removes any on the author's reque
 | --- | --- |
 | `]` / `[` | next / previous preset (alphabetical) |
 | `R` | random preset (short blend) |
-| `F` | favourite the current preset (fullscreen stays on cmd-F) |
+| `Shift-F` | favourite the current preset (plain `F` is fullscreen, as in every mode) |
 | `L` | lock the current preset (no automatic changes, drops included) |
 | `1`–`5`, `0` | rate the current preset, clear the rating |
 | `P` / cmd-P | preset browser: search by name, author or category, favourites filter, double-click to play |

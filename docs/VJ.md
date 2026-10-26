@@ -6,8 +6,8 @@ and run a clean fullscreen output on a projector while you control it from the l
 ## Syphon output (Resolume, VDMX, OBS, MadMapper, Millumin…)
 
 **Output > Syphon Server "RAVE LIVE"** (or launch with `--syphon`). The server publishes the final frame of every mode
-(SHOW, Stage, Classic, AURORA, transitions included) at the render resolution. In OBS, add a *Syphon Client* source and
-pick `RAVE LIVE`. The Control HUD and the cheat sheet are never part of the published frame.
+(SHOW, Stage, Classic, AURORA, MILKDROP, Shader Lab, transitions included) at the render resolution. In OBS, add a *Syphon Client* source and
+pick `RAVE LIVE`. The Control HUD, the cheat sheet, the Tweak panel and Shader Lab error messages are never part of the published frame.
 
 Syphon support comes from [Syphon-Framework](https://github.com/Syphon/Syphon-Framework) (BSD-3-Clause). It is optional:
 `scripts/build_syphon.sh` builds a universal (arm64 + x86_64, macOS 12+) `vendor/Syphon.framework` from a pinned source
@@ -80,23 +80,31 @@ not on Syphon or the output display.
 | Key | Action |
 |---|---|
 | V | next mode |
-| ⌘1 … ⌘4 | SHOW / Stage / Classic Visuals / AURORA |
-| ] / [ | next / previous preset |
-| 1 … 8 | preset (Classic) or Stage look |
+| ⌘1 … ⌘5 | SHOW / Stage / Classic Visuals / AURORA / MILKDROP |
+| ] / [ | next / previous preset (Classic; in MILKDROP the MilkDrop preset) |
+| 1 … 8 | preset (Classic) or Stage look; in MILKDROP 1–5 rate the preset, 0 clears |
 | A | auto-cycle presets on/off |
 | I | intensity Chill / Normal / Wild |
 | B | blackout |
 | S | strobe on/off |
 | Shift-S | lift / restore the 3 flashes per second limit |
 | T | tap tempo |
-| ← / → | BPM −0.1 / +0.1 (with Shift: 1) |
+| Shift-T, ⇧⌘T | Tweak panel (Classic Visuals) |
+| ⌘S / ⌘O | save / open a `.ravelook` |
+| ← / → | BPM −0.1 / +0.1 (with Shift: 1); inside the open Tweak panel ←→ change a value |
 | , / . | beat nudge: visuals 10 ms earlier / later |
-| M | system audio ↔ microphone |
+| M | system audio ↔ the last input device |
 | C, ⌘K | camera hands & body (AURORA) |
-| F, ⌘F | fullscreen (Esc exits) |
+| F, ⌘F | fullscreen (Esc exits), in every mode |
+| P, ⌘P | MilkDrop preset browser |
+| R | MILKDROP: random preset · open Tweak panel: reset the preset |
+| L | MILKDROP: lock the preset (no automatic changes) |
+| Shift-F | MILKDROP: favourite the preset |
 | H | Control HUD |
 | ? | cheat sheet |
 | ⌘L | MIDI Learn… |
+
+In MILKDROP mode the MIDI targets *Preset next / previous* step MilkDrop presets and *Auto-cycle* toggles the preset lock.
 
 ## Test flags
 

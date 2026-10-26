@@ -16,6 +16,8 @@ enum QualityTier: String, CaseIterable {
     var particles: Int { [250_000, 500_000, 1_000_000][Self.allCases.firstIndex(of: self)!] }
     /// Drawable size relative to the view's pixels; the layer scales it up to fill the window.
     var renderScale: CGFloat { [0.6, 0.8, 1.0][Self.allCases.firstIndex(of: self)!] }
+    /// projectM warp mesh (MILKDROP). Its render size already follows the drawable, so it shrinks with `renderScale`.
+    var milkMesh: (Int, Int) { [(32, 24), (48, 36), (64, 48)][Self.allCases.firstIndex(of: self)!] }
     /// High/Medium blur twice (two radii); Low blurs once.
     var fullBloom: Bool { self != .low }
 

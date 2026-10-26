@@ -312,7 +312,13 @@ final class Renderer: NSObject, MTKViewDelegate {
         if (snapNow || lumLogPath != nil) && drawable.texture.storageMode == .managed, let b = cb.makeBlitCommandEncoder() {
             b.synchronize(resource: drawable.texture); b.endEncoding()
         }
-        frameOutput?.process(cb: cb, texture: drawable.texture)
+        // Shader Lab errors + Tweak panel are for the performer: drawn after Syphon / the output display take the frame
+        let labOverlay: ((MTLRenderCommandEncoder, CGSize) -> Void)? = mode == .visuals ? { [weak self] e, sz in
+            guard let v = self?.visuals else { return }
+            v.lab.drawOverlays(e, size: sz, device: v.device, pixelFormat: drawable.texture.pixelFormat)
+        } : nil
+        if let fo = frameOutput { fo.process(cb: cb, texture: drawable.texture, overlay: labOverlay) }
+        else if let ov = labOverlay { FrameOutput.drawOverlay(ov, cb: cb, on: drawable.texture) }
         cb.present(drawable)
         cb.commit()
         if snapNow {
@@ -364,7 +370,6 @@ final class Renderer: NSObject, MTKViewDelegate {
                 vis.direct(look: ctx.look, dropStarted: ctx.dropStarted)
                 if vis.preset != before { metrics.event("preset->" + VisualsRenderer.presetNames[vis.preset], at: ctx.now) }
             }
-            vis.overlaysOn = mode == .visuals
             vis.encode(cb: cb, rpd: rpd, size: ctx.size, dt: ctx.dt, s: ctx.s, u: u, input: visualsInput(dt: ctx.dt, now: ctx.now))
         case .milkdrop:
             milk?.encode(cb: cb, rpd: rpd, size: ctx.size, u: u, playing: ctx.s.playing)

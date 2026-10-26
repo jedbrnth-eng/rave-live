@@ -188,7 +188,7 @@ extension AppDelegate {
     }
     @objc func milkMenuFolder(_ i: NSMenuItem?) { renderer?.milk?.library.openUserFolder() }
 
-    /// Keys in MILKDROP mode. Returns true when handled (F favourites here; fullscreen stays on cmd-F).
+    /// Keys in MILKDROP mode. Returns true when handled (Shift+F favourites; plain F stays fullscreen like every mode).
     func milkKey(_ e: NSEvent) -> Bool {
         guard let r = renderer, let m = r.milk, r.mode == .milkdrop, !e.modifierFlags.contains(.command) else { return false }
         let ch = e.charactersIgnoringModifiers?.lowercased() ?? ""
@@ -199,6 +199,7 @@ extension AppDelegate {
         case "r":
             m.loadNext(loud: false, smooth: true, blendSeconds: 1.5, why: "random"); m.director.manualSwitch(now: now)
         case "f":
+            guard e.modifierFlags.contains(.shift) else { return false }
             if let p = m.currentPreset { let on = m.library.toggleFavorite(p); flashStatus(on ? "★ Favourite: \(p.name)" : "Removed from favourites: \(p.name)") }
         case "l":
             m.director.locked.toggle(); flashStatus(m.director.locked ? "Preset locked (L to unlock)" : "Preset unlocked: changes follow the beat again")

@@ -17,8 +17,8 @@ final class MidiControl {
             switch self {
             case .modeNext: return "Mode next"
             case .modePrev: return "Mode previous"
-            case .presetNext: return "Preset next"
-            case .presetPrev: return "Preset previous"
+            case .presetNext: return "Preset next (Classic / MILKDROP)"
+            case .presetPrev: return "Preset previous (Classic / MILKDROP)"
             case .intensity: return "Intensity (knob: Chill/Normal/Wild, pad: cycle)"
             case .brightness: return "Master brightness (knob)"
             case .strobe: return "Strobe (hold; 3 flashes/s limit applies)"
@@ -28,7 +28,7 @@ final class MidiControl {
             case .nudgeLater: return "Beat nudge later (+10 ms)"
             case .bpmUp: return "BPM +0.1"
             case .bpmDown: return "BPM -0.1"
-            case .autoCycle: return "Auto-cycle on/off"
+            case .autoCycle: return "Auto-cycle on/off (MILKDROP: preset lock)"
             }
         }
     }

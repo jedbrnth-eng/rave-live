@@ -83,7 +83,9 @@ final class FrameOutput {
         } catch { NSLog("RAVE LIVE: brightness pass unavailable: \(error)") }
     }
 
-    func process(cb: MTLCommandBuffer, texture tex: MTLTexture) {
+    /// `overlay` draws performer-only UI (Shader Lab errors, Tweak panel) onto the control surface after Syphon and the
+    /// output display have taken their copy: onto the preview while an output display runs, else onto the main frame.
+    func process(cb: MTLCommandBuffer, texture tex: MTLTexture, overlay: ((MTLRenderCommandEncoder, CGSize) -> Void)? = nil) {
         if brightness < 0.999, let p = dimPipeline {
             let rpd = MTLRenderPassDescriptor()
             rpd.colorAttachments[0].texture = tex; rpd.colorAttachments[0].loadAction = .load; rpd.colorAttachments[0].storeAction = .store
@@ -100,7 +102,10 @@ final class FrameOutput {
             blit.copy(from: tex, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(), sourceSize: MTLSize(width: w, height: h, depth: 1),
                       to: d.texture, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin())
             blit.endEncoding()
+            if let ov = overlay { Self.drawOverlay(ov, cb: cb, on: d.texture) }
             cb.present(d)
+        } else if let ov = overlay, preview == nil {
+            Self.drawOverlay(ov, cb: cb, on: tex)
         }
         if let cap = onCapture {
             onCapture = nil
@@ -112,6 +117,13 @@ final class FrameOutput {
                 if let img = Self.cgImage(copy) { DispatchQueue.main.async { cap(img) } }
             }
         }
+    }
+
+    static func drawOverlay(_ ov: (MTLRenderCommandEncoder, CGSize) -> Void, cb: MTLCommandBuffer, on t: MTLTexture) {
+        let rpd = MTLRenderPassDescriptor()
+        rpd.colorAttachments[0].texture = t; rpd.colorAttachments[0].loadAction = .load; rpd.colorAttachments[0].storeAction = .store
+        guard let enc = cb.makeRenderCommandEncoder(descriptor: rpd) else { return }
+        ov(enc, CGSize(width: t.width, height: t.height)); enc.endEncoding()
     }
 
     static func cgImage(_ tex: MTLTexture) -> CGImage? {

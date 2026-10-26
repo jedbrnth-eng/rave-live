@@ -224,8 +224,10 @@ final class VJRig: NSObject, NSMenuDelegate {
         switch a {
         case .modeNext where press: app.setMode(Renderer.Mode(rawValue: (r.mode.rawValue + 1) % Renderer.Mode.allCases.count)!)
         case .modePrev where press: app.setMode(Renderer.Mode(rawValue: (r.mode.rawValue + Renderer.Mode.allCases.count - 1) % Renderer.Mode.allCases.count)!)
-        case .presetNext where press: if let v = r.visuals { v.preset = (v.preset + 1) % VisualsRenderer.count; v.autoCycle = false }
-        case .presetPrev where press: if let v = r.visuals { v.preset = (v.preset + VisualsRenderer.count - 1) % VisualsRenderer.count; v.autoCycle = false }
+        case .presetNext where press, .presetPrev where press:
+            let dir = a == .presetNext ? 1 : -1
+            if r.mode == .milkdrop, let m = r.milk { m.step(dir); m.director.manualSwitch(now: CACurrentMediaTime()) }
+            else if let v = r.visuals { v.preset = (v.preset + VisualsRenderer.count + dir) % VisualsRenderer.count; v.autoCycle = false }
         case .intensity:
             if t.continuous { r.intensity = Renderer.Intensity(rawValue: min(2, Int(t.value * 3)))! }
             else if press { r.intensity = Renderer.Intensity(rawValue: (r.intensity.rawValue + 1) % 3)! }
@@ -239,11 +241,12 @@ final class VJRig: NSObject, NSMenuDelegate {
         case .nudgeLater where press: r.userOffset += 0.01
         case .bpmUp where press: app.audio.tempo?.nudge += 0.1
         case .bpmDown where press: app.audio.tempo?.nudge -= 0.1
-        case .autoCycle where press: r.visuals?.autoCycle.toggle()
+        case .autoCycle where press:
+            if r.mode == .milkdrop, let m = r.milk { m.director.locked.toggle() } else { r.visuals?.autoCycle.toggle() }
         default: return
         }
         if t.continuous && !t.pressed && !t.released && logURL == nil { return }   // a turning knob would flood the metrics events
-        let v = r.visuals.map { VisualsRenderer.presetNames[$0.preset % VisualsRenderer.count] } ?? "-"
+        let v = r.mode == .milkdrop ? "MilkDrop " + (r.milk?.currentName ?? "-") : r.visuals.map { VisualsRenderer.presetNames[$0.preset % VisualsRenderer.count] } ?? "-"
         log(String(format: "midi: %@ value %.2f%@ -> mode %@ · preset %@ · intensity %@ · brightness %.2f · blackout %@ · strobe %@",
                    a.rawValue, t.value, t.pressed ? " press" : (t.released ? " release" : ""), r.mode.title, v, r.intensity.title,
                    output?.brightness ?? 1, r.blackout ? "on" : "off", r.manualStrobe ? "held" : "off"))
@@ -303,6 +306,9 @@ final class VJRig: NSObject, NSMenuDelegate {
         case .visuals: presetLine = preset
         case .aurora: presetLine = "AURORA symmetry \(r.aurora?.symmetry ?? 0)" + (r.camera?.running == true ? " · camera" : "")
         case .stage: presetLine = "Stage look \(Int(r.stage) + 1)"
+        case .milkdrop:
+            let m = r.milk
+            presetLine = m?.ready == true ? (m?.currentName ?? "-") + (m?.director.locked == true ? " (locked)" : "") : (m?.lib == nil ? "MilkDrop engine missing" : "no MilkDrop presets")
         default: presetLine = "-"
         }
         let locked = s.bpm > 0 && s.confidence > 0.25
@@ -342,11 +348,14 @@ final class VJRig: NSObject, NSMenuDelegate {
 
         MODES & PRESETS
         V           next mode
-        Cmd 1-4     SHOW / Stage / Classic / AURORA
+        Cmd 1-5     SHOW / Stage / Classic /
+                    AURORA / MILKDROP
         ]  [        next / previous preset
         1 - 8       preset (Classic) or Stage look
         A           auto-cycle presets on/off
         C, Cmd K    camera hands & body (AURORA)
+        Shift T     Tweak panel (Classic)
+        Cmd S, O    save / open a .ravelook
 
         VIEW & OUTPUT
         F, Cmd F    fullscreen      Esc  exit
@@ -356,7 +365,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         Output menu Syphon, Send to Display
         """,
         """
-        
+
 
         SHOW CONTROL
         I           intensity Chill/Normal/Wild
@@ -366,11 +375,14 @@ final class VJRig: NSObject, NSMenuDelegate {
         T           tap tempo
         Left/Right  BPM -/+ 0.1 (Shift: 1)
         ,  .        beat nudge -/+ 10 ms
-        M           system audio <-> mic
+        M           system audio <-> input
 
-        MIDI
-        Controls menu: Learn, clock sync,
-        import/export mappings (JSON)
+        MILKDROP
+        P, Cmd P    preset browser (any mode)
+        ]  [  R     next / previous / random
+        L           lock preset (no auto changes)
+        Shift F     favourite
+        1-5, 0      rate / clear rating
         """,
     ]
 

@@ -23,8 +23,6 @@ final class VisualsRenderer {
     /// Index into the Shader Lab list when a user shader is selected, else nil.
     var userIndex: Int? { preset >= Self.builtinNames.count ? preset - Self.builtinNames.count : nil }
     let lab = PresetLab()
-    /// Tweak panel / error overlays are drawn only when Classic Visuals is the mode on screen (not inside SHOW).
-    var overlaysOn = true
     /// Pointer input (mouse + camera hands), normalised 0..1 with a top-left origin, handed to the visuals shader.
     struct Pointer { var pos: SIMD2<Float>; var vel: SIMD2<Float>; var strength: Float }   // vel in 0..1 units per second; strength 0.5 hover, 1 drag/hand
     struct Input { var pointers: [Pointer] = []; var clicks: [(pos: SIMD2<Float>, age: Float)] = [] }
@@ -189,7 +187,6 @@ final class VisualsRenderer {
             e.setFragmentBytes(v, length: v.count * 4, index: 0)
             e.setFragmentTexture(dst, index: 0)
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-            if overlaysOn { lab.drawOverlays(e, size: size, device: device, pixelFormat: pixelFormat) }
             e.endEncoding()
         }
         cur = 1 - cur

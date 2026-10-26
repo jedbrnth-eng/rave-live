@@ -270,7 +270,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("s", false): r.strobeEnabled.toggle()
         case ("b", _): r.blackout.toggle()
         case ("f", _): window.toggleFullScreen(nil)
-        case ("h", _): r.hudVisible.toggle(); hud.isHidden = !r.hudVisible
         case ("m", _): AudioMenu.shared.toggle()
         case ("t", _): audio.tempo?.tap(at: CACurrentMediaTime())
         case ("i", _): r.intensity = Renderer.Intensity(rawValue: (r.intensity.rawValue + 1) % 3)!
@@ -278,6 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case (".", _): r.userOffset += 0.01      // visuals later
         case ("v", _): setMode(Renderer.Mode(rawValue: (r.mode.rawValue + 1) % Renderer.Mode.allCases.count)!)
         case ("c", _): toggleCamera()
+        case ("p", _): milkMenuBrowser(nil)      // MilkDrop browser from any mode (playing a preset switches to MILKDROP)
         case ("a", _): r.visuals?.autoCycle.toggle()
         case ("]", _): if let v = r.visuals { v.preset = (v.preset + 1) % VisualsRenderer.count; v.autoCycle = false }
         case ("[", _): if let v = r.visuals { v.preset = (v.preset + VisualsRenderer.count - 1) % VisualsRenderer.count; v.autoCycle = false }
