@@ -121,9 +121,12 @@ final class AudioEngine: @unchecked Sendable {
 
     private func startDevice(_ uid: String?, handler: @escaping SampleHandler) async {
         if #available(macOS 13.0, *), let sys = sysCapture as? SystemAudioCapture { await sys.stop() }
-        // Don't wait on the permission prompt: the device delivers silence until the user answers.
-        let permission = MicCapture.permissionStatus
-        if permission == "not determined" { Task { _ = await MicCapture.requestPermission() } }
+        // Ask before opening the device: opening it while the prompt is pending stalls CoreAudio (seen on macOS 12).
+        var permission = MicCapture.permissionStatus
+        if permission == "not determined" {
+            onStatus?("Allow microphone access to listen to the input (RAVE LIVE only analyses it, nothing is recorded).")
+            permission = await MicCapture.requestPermission() ? "granted" : "denied"
+        }
         var device = uid.flatMap { u in AudioInputDevice.all().first { $0.uid == u } }
         var note = ""
         if uid != nil && device == nil { note = "That input device isn't connected; using the default input. " }

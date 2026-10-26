@@ -62,8 +62,11 @@ picture keeps the same overall brightness. High is exactly the look of earlier v
 - CI builds, tests and smoke-runs the app on an Intel runner (`macos-15-intel`) as well as Apple silicon.
   The smoke run skips with a clear message when the runner has no GPU.
 - The x86_64 slice was run under Rosetta on Apple silicon in all four modes.
+- macOS 12.5.1 in a virtual machine (Apple silicon, paravirtual GPU): the demo renders AURORA at 60 fps, and without
+  `--demo` the app falls back to the default input and stays at 60 fps while the microphone prompt waits.
 
-Not yet checked on real hardware: an Intel Mac with an Intel UHD/Iris or AMD GPU, and a physical macOS 12 Mac.
+Not yet checked: an Intel Mac with an Intel UHD/Iris or AMD GPU, a physical macOS 12 Mac, and live input capture on
+macOS 12 after granting microphone access (the VM test could not answer the permission prompt).
 If you have one, please run `open -n "/Applications/RAVE LIVE.app" --args --demo` and report how it looks and the fps
 from the status bar in an issue.
 
