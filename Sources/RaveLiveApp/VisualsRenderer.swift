@@ -32,8 +32,13 @@ final class VisualsRenderer {
     let sim: MTLRenderPipelineState
     let comp: MTLRenderPipelineState
     let device: MTLDevice
-    private var tex: [MTLTexture] = []
-    private var cur = 0
+    /// Two feedback slots so two presets can run at once during a crossfade (Classic preset changes). Each slot is
+    /// cleared when a preset starts in it or after it sat unused, so a preset never opens on another preset's old frame.
+    private var texSets: [[MTLTexture]] = [[], []]
+    private var curs = [0, 0]
+    private var slotPreset = [-1, -1]
+    private var slotLastUse = [-100.0, -100.0]
+    var slot = 0
     private var peaks = [Float](repeating: 0, count: 128)
     var v = [Float](repeating: 0, count: 64)
     private var simTex: [MTLTexture] = []
@@ -113,19 +118,27 @@ final class VisualsRenderer {
     func encode(cb: MTLCommandBuffer, rpd: MTLRenderPassDescriptor, size: CGSize, dt: Float,
                 s: AudioSnapshot, u: [Float], input: Input = Input()) {
         let w = max(1, Int(size.width)), h = max(1, Int(size.height))
-        if tex.first?.width != w || tex.first?.height != h {
+        let sl = slot, now = CACurrentMediaTime()
+        var stale = slotPreset[sl] != preset || now - slotLastUse[sl] > 0.25
+        if texSets[sl].first?.width != w || texSets[sl].first?.height != h {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: w, height: h, mipmapped: false)
             d.usage = [.renderTarget, .shaderRead]; d.storageMode = .private
-            tex = (0..<2).compactMap { _ in device.makeTexture(descriptor: d) }
-            // clear both once
+            texSets[sl] = (0..<2).compactMap { _ in device.makeTexture(descriptor: d) }
+            stale = true
+        }
+        slotPreset[sl] = preset; slotLastUse[sl] = now
+        let tex = texSets[sl]
+        guard tex.count == 2 else { return }
+        if stale {             // fresh start: no feedback garbage from an earlier preset or visit
             for t in tex {
                 let c = MTLRenderPassDescriptor()
                 c.colorAttachments[0].texture = t; c.colorAttachments[0].loadAction = .clear
                 c.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1); c.colorAttachments[0].storeAction = .store
                 cb.makeRenderCommandEncoder(descriptor: c)?.endEncoding()
             }
+            if Self.simPresets.contains(preset) { lastSimPreset = -1 }
         }
-        guard tex.count == 2 else { return }
+        let cur = curs[sl]
         for i in 0..<128 { peaks[i] = max(s.spectrum[i], peaks[i] - dt * 0.35) }
 
         lab.drainPending()
@@ -189,7 +202,7 @@ final class VisualsRenderer {
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             e.endEncoding()
         }
-        cur = 1 - cur
+        curs[sl] = 1 - cur
     }
 
     /// CPU-side state for presets that need memory: Vinyl's scratch offset, Fireflies' smoothed pull toward the pointer.

@@ -22,16 +22,18 @@ float fbm(float2 p) { float a = 0.5, s = 0; for (int i = 0; i < 5; i++) { s += a
 float3 pal(float t) { return 0.5 + 0.5 * cos(6.28318 * (t + float3(0.0, 0.33, 0.67))); }
 float2 rot(float2 p, float a) { float c = cos(a), s = sin(a); return float2(c * p.x - s * p.y, s * p.x + c * p.y); }
 
-// u: 0 progress, 1 type, 2 time, 3 aspect, 4 beat pulse, 5 hue
+// u: 0 progress, 1 type, 2 time, 3 aspect, 4 beat pulse, 5 hue, 6 flash amount (drop cut: 0.3 Chill, 0.55 Normal, 1 Wild)
 fragment float4 tmix(VOut in [[stage_in]], texture2d<float> A [[texture(0)]], texture2d<float> B [[texture(1)]],
                      constant float *u [[buffer(0)]]) {
-    float p = clamp(u[0], 0.0, 1.0); int type = int(u[1]); float t = u[2], aspect = u[3], hue = u[5];
+    float p = clamp(u[0], 0.0, 1.0); int type = int(u[1]); float t = u[2], aspect = u[3], hue = u[5], flash = u[6];
     float e = p * p * (3.0 - 2.0 * p);
     float2 uv = in.uv;
     float2 c = (uv - 0.5) * float2(aspect, 1.0);
     float3 col;
-    if (type == 0) {                       // drop: hard cut on the beat + white flash
-        col = B.sample(ls, uv).rgb + float3(1.0) * pow(1.0 - p, 4.0) * 1.2;
+    if (type == 0) {                       // drop: one clean cut on the drop + a short white bloom that eases out
+        float3 b = B.sample(ls, uv).rgb;
+        float f = flash * pow(1.0 - p, 3.0);
+        col = mix(b, float3(1.0), f * 0.6) + b * f * 0.5;
     } else if (type == 1) {                // iris: B opens from the centre with a glowing ring
         float r = e * 1.15 * max(aspect, 1.0);
         float d = length(c) - r;
@@ -55,7 +57,7 @@ fragment float4 tmix(VOut in [[stage_in]], texture2d<float> A [[texture(0)]], te
         }
         a /= 6.0;
         float3 b = B.sample(ls, (uv - 0.5) / zb + 0.5).rgb;
-        col = mix(a, b, smoothstep(0.25, 0.85, p)) + float3(1.0) * exp(-abs(p - 0.5) * 14.0) * 0.35;
+        col = mix(a, b, smoothstep(0.25, 0.85, p)) + float3(1.0) * exp(-abs(p - 0.5) * 14.0) * 0.12 * (0.5 + flash);
     } else if (type == 4) {                // glitch slices with RGB split
         float row = floor(uv.y * 28.0);
         float step = floor(p * 14.0);
@@ -69,6 +71,9 @@ fragment float4 tmix(VOut in [[stage_in]], texture2d<float> A [[texture(0)]], te
         float2 q = (floor(uv / float2(sz / aspect, sz)) + 0.5) * float2(sz / aspect, sz);
         float h = h21(floor(uv / float2(sz / aspect, sz)) + 0.37);
         col = h < e ? B.sample(ls, q).rgb : A.sample(ls, q).rgb;
+    } else if (type == 7) {                // crossfade (Classic preset changes): soft dissolve, the outgoing scene drifts back a little
+        float3 a = A.sample(ls, (uv - 0.5) / (1.0 + 0.04 * e) + 0.5).rgb;
+        col = mix(a, B.sample(ls, uv).rgb, e);
     } else {                               // spin-kaleido: both scenes rotate through a mirror fold
         float fold = sin(3.14159 * p);
         float a = atan2(c.y, c.x), r = length(c);

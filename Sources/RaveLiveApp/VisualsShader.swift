@@ -161,13 +161,17 @@ float3 wormhole(float2 p, constant float *u) {
     float z = 1.0 / max(r, 0.001);
     float tw = a + z * 0.15 * sin(t * 0.2) + t * 0.1;
     float travel = z + tb * 0.35;
-    float ring = exp(-abs(fract(travel) - 0.5) * 18.0);
-    float spokes = exp(-abs(fract(tw / (2.0 * PI) * 16.0) - 0.5) * 22.0);
-    float pulse = exp(-abs(fract(travel * 0.25 - tb * 0.25 + 0.5) - 0.5) * 40.0) * (0.5 + KICK);
+    // rings get denser than a pixel near the tunnel's end (d travel / d pixel ~ z^2 / height): fade them to their
+    // average there instead of letting them shimmer frame to frame
+    float dens = z * z * 2.0 / RES_Y;
+    float aa = clamp(1.4 - dens * 2.5, 0.0, 1.0);
+    float ring = mix(0.1, exp(-abs(fract(travel) - 0.5) * 18.0), aa);
+    float spokes = mix(0.08, exp(-abs(fract(tw / (2.0 * PI) * 16.0) - 0.5) * 22.0), clamp(1.4 - z * 16.0 / RES_Y * 2.5, 0.0, 1.0));
+    float pulse = exp(-abs(fract(travel * 0.25 - tb * 0.25 + 0.5) - 0.5) * 40.0) * (0.45 + 0.6 * KICK) * aa;
     float fog = exp(-z * 0.12);
     float3 c = pal(HUE + travel * 0.02 + cos(a) * 0.1) * (ring * 0.9 + spokes * 0.35) * fog;
-    c += float3(1.0) * pulse * fog * 1.2;
-    c += pal(HUE + 0.5) * exp(-r * 6.0) * (0.3 + BEAT);       // light at the end of the tunnel
+    c += float3(1.0) * pulse * fog * 0.9;
+    c += pal(HUE + 0.5) * exp(-r * 6.0) * (0.35 + 0.6 * BEAT);       // light at the end of the tunnel
     return c;
 }
 float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
@@ -252,8 +256,8 @@ float3 crystals(float2 p, constant float *u, constant float *spec) {
     }
     float h = hash21(id);
     float s = specAt(spec, h);
-    float3 col = pal(h + HUE) * (0.08 + 0.9 * s * s) * (0.7 + 0.6 * KICK) * smoothstep(1.0, 0.0, d1);
-    col += pal(h + 0.5) * exp(-(d2 - d1) * (30.0 - 15.0 * KICK)) * (0.3 + 1.2 * KICK + BEAT * 0.4);
+    float3 col = pal(h + HUE) * (0.08 + 0.9 * s * s) * (0.82 + 0.3 * KICK) * smoothstep(1.0, 0.0, d1);
+    col += pal(h + 0.5) * exp(-(d2 - d1) * (30.0 - 10.0 * KICK)) * (0.35 + 0.7 * KICK + BEAT * 0.3);
     return col;
 }
 
@@ -398,9 +402,9 @@ float3 nebula(float2 p, constant float *u) {
     float2 q = p * (1.2 + VAR);
     float2 w1 = float2(fbm5(q + float2(0.0, t)), fbm5(q + float2(5.2, 1.3) - t));
     float2 w2 = float2(fbm5(q + 3.0 * w1 + float2(1.7, 9.2) + t * 1.5), fbm5(q + 3.0 * w1 + float2(8.3, 2.8)));
-    float f = fbm5(q + (3.0 + 2.0 * BASS) * w2);
-    float3 col = pal(HUE + f * 0.8 + length(w2) * 0.3) * pow(f, 2.2) * (1.6 + 1.2 * BEAT);
-    col += pal(HUE + 0.5) * pow(length(w1), 4.0) * 0.5 * (0.5 + KICK);
+    float f = fbm5(q + (3.0 + 1.1 * BASS) * w2);
+    float3 col = pal(HUE + f * 0.8 + length(w2) * 0.3) * pow(f, 2.2) * (1.7 + 0.8 * BEAT);
+    col += pal(HUE + 0.5) * pow(length(w1), 4.0) * 0.5 * (0.6 + 0.6 * KICK);
     return col;
 }
 
@@ -1683,8 +1687,8 @@ fragment float4 vwarp(VOut in [[stage_in]], constant float *u [[buffer(0)]], con
     } else if (P == 47) { nw = vinyl(p, u, spec, aspect);
     } else {                    // plasma (no feedback)
         float2 q = p * (1.5 + 0.5 * sin(t * 0.1));
-        float v = sin(q.x * 3.0 + t) + sin(q.y * 4.0 - t * 1.3) + sin((q.x + q.y) * 2.5 + t * 0.7) + sin(length(q) * 6.0 - t * 2.0 - BASS * 4.0);
-        nw = pal(hue + v * 0.15 + tb * 0.03) * (0.55 + 0.45 * sin(v * 2.0)) * (0.7 + 0.5 * BEAT);
+        float v = sin(q.x * 3.0 + t * 0.8) + sin(q.y * 4.0 - t * 1.0) + sin((q.x + q.y) * 2.5 + t * 0.6) + sin(length(q) * 6.0 - t * 1.5 - BASS * 2.0);
+        nw = pal(hue + v * 0.15 + tb * 0.03) * (0.55 + 0.45 * sin(v * 2.0)) * (0.75 + 0.35 * BEAT);
     }
     float3 outc = old + nw;
     if (P == 31) {              // skyline occludes the sky and its windows glow
