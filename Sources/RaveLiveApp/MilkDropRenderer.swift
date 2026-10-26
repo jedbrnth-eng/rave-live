@@ -41,6 +41,8 @@ final class MilkDropRenderer: @unchecked Sendable {
     private var pcm: [Float] = []
     private var current: MilkDropLibrary.Preset?        // written on the GL thread under `lock`
     private var loadFailure: String?
+    private var skips = 0               // under `lock`; GL thread counts, render thread compares
+    private var skipsSeen = 0
     /// Last GL frame time (ms) and preset load time (ms), for the HUD/metrics.
     private(set) var glFrameMs = 0.0, lastLoadMs = 0.0
     /// Shown on the card when MILKDROP can't run.
@@ -106,6 +108,9 @@ final class MilkDropRenderer: @unchecked Sendable {
     /// Beat-locked automatic changes (MILKDROP mode). Returns the event text when it switched.
     func direct(beat: Int, phase: Double, beatLocked: Bool, dropStarted: Bool, now: Double, energy: Float, intensity: Int, bpm: Double) -> String? {
         guard ready, !sweepMode else { return nil }
+        // a broken preset was skipped on the GL thread: that was a change, so the next automatic one waits a full hold
+        lock.lock(); let sk = skips; lock.unlock()
+        if sk != skipsSeen { skipsSeen = sk; director.manualSwitch(now: now) }
         director.holdBeats = MilkDropDirector.hold(intensity: intensity, energy: energy)
         let a = director.step(beat: beat, phase: phase, beatLocked: beatLocked, dropStarted: dropStarted, now: now)
         guard a != .none else { return nil }
@@ -269,6 +274,7 @@ final class MilkDropRenderer: @unchecked Sendable {
             // remember it and move on (the sweep classifies instead of remembering)
             if sweep == nil {
                 library.markBroken(p, reason: "load: " + f)
+                lock.lock(); skips += 1; lock.unlock()
                 if attempt < 5, let next = library.pick(loud: false) { loadNow(next, smooth: smooth, blend: blend, why: why, attempt: attempt + 1) }
             }
             return
@@ -291,6 +297,7 @@ final class MilkDropRenderer: @unchecked Sendable {
         if lumaSamples.allSatisfy({ $0.mean < 0.004 && $0.peak < 0.04 }) {
             library.markBroken(p, reason: "renders black")
             onEvent?("milk:skip(black) " + p.name)
+            lock.lock(); skips += 1; lock.unlock()
             if let next = library.pick(loud: false) { loadNow(next, smooth: false, blend: 0, why: "skip") }
         }
     }

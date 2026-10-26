@@ -68,7 +68,10 @@ same 7 transitions as the other scenes; each visit loads a fresh preset. `--no-s
   projectM renders at most 1920 px wide; Metal scales to the drawable.
 - Audio: `AudioEngine.onPCM` hands the captured mono samples to a small buffer that the GL thread feeds to
   `projectm_pcm_add_float` each frame.
-- `MilkDropDirector.swift` is the pure beat-grid logic (unit-tested in `Tests/RaveLiveAppTests`).
+- `MilkDropDirector.swift` is the pure beat-grid logic (unit-tested in `Tests/RaveLiveAppTests`). It keeps its own
+  beat counter that only advances when the beat phase wraps, and adopts the renderer's bar/phrase alignment on a drop
+  or once it has been stable for 8 beats: the renderer's bar estimate can flip by 2 beats back and forth, and a phrase
+  change must not follow that.
 
 ## Test flags
 
@@ -82,6 +85,10 @@ same 7 transitions as the other scenes; each visit loads a fresh preset. `--no-s
                                 load N presets back to back, classify each ok / failed / black, write
                                 sweep.tsv, sweep_summary.txt and a thumbnail per preset into --snapdir
 --no-show-milkdrop              keep MILKDROP out of the SHOW rotation
+--milk-download-now             run the "Get presets" download without the confirmation dialog
+--milk-ui-shot <file.png>       save the AppKit overlay (card, HUD) after 4 s; the Metal layer is not included
+env RAVE_MILKDROP_ROOT=<dir>    use <dir> instead of ~/Library/Application Support/RAVE LIVE/MilkDrop
+env RAVE_PROJECTM_LIB=<dylib>   load this libprojectM build first
 ```
 
 Events in the metrics JSON: `milk:blend beat=N bar=B phrase=P phase=X locked=1 <name>`, `milk:cut(drop) …`,

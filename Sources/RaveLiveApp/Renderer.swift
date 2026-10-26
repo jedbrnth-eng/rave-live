@@ -328,7 +328,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         if hudVisible && Int(elapsed * 4) != Int((elapsed - Double(dt)) * 4) {
             let m = metrics.summary(recent: 600)
             let showName = mode == .show ? "SHOW → " + (transition != nil ? "transition to " : "") + showScene.title + (showScene == .visuals ? " " + VisualsRenderer.presetNames[visuals?.preset ?? 0] : "") : ""
-            let milkName = "MILKDROP: " + (milk?.ready == true ? (milk?.currentName ?? "") + (milk?.director.locked == true ? " (locked)" : "") : "no presets")
+            let milkName = "MILKDROP: " + (milk?.ready == true ? (milk?.currentName ?? "") + (milk?.director.locked == true ? " (locked)" : "") : milk?.lib == nil ? "engine missing" : "no presets")
             let modeName = mode == .milkdrop ? milkName : mode == .show ? showName + (showScene == .milkdrop ? " " + (milk?.currentName ?? "") : "") : mode == .aurora ? "AURORA" + (camera?.running == true ? " · camera on (\(camera?.hands.count ?? 0) hands)" : " · drag the mouse, C = camera") : visualsMode ? "VISUALS: " + VisualsRenderer.presetNames[(visuals?.preset ?? 0) % VisualsRenderer.count] + ((visuals?.autoCycle ?? true) ? " (auto)" : "") : "STAGE"
             onHUD?(modeName + "  ·  " + String(format: "%@  ·  %.0f BPM  conf %.0f%%  ·  %.0f fps  p95 %.1f ms  ·  latency p50 %.0f ms%@",
                           s.playing ? "LIVE" : (fade > 0.05 ? "LIVE (quiet)" : "WAITING FOR MUSIC"),

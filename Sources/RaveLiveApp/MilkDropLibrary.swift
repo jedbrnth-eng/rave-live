@@ -28,6 +28,8 @@ final class MilkDropLibrary: @unchecked Sendable {
     static let skipCategories: Set<String> = ["! Transition"]
 
     static let root: URL = {
+        // RAVE_MILKDROP_ROOT moves everything elsewhere (tests, portable setups)
+        if let r = ProcessInfo.processInfo.environment["RAVE_MILKDROP_ROOT"] { return URL(fileURLWithPath: r, isDirectory: true) }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSString(string: "~/Library/Application Support").expandingTildeInPath)
         return base.appendingPathComponent("RAVE LIVE/MilkDrop", isDirectory: true)

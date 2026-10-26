@@ -146,6 +146,18 @@ extension AppDelegate {
             m.startSweep(.init(list: list, seconds: secs, outDir: r.snapDir))
             try? FileManager.default.createDirectory(at: r.snapDir, withIntermediateDirectories: true)
         }
+        // test: --milk-download-now runs the "Get MilkDrop presets" download without the confirmation dialog
+        if args.contains("--milk-download-now") {
+            m.library.downloadPack { ok in NSLog("RAVE LIVE: MilkDrop download %@, %d presets", ok ? "done" : "failed", m.library.count) }
+        }
+        // test: --milk-ui-shot <png> renders the AppKit overlay (card, HUD) after 4 s; the Metal layer is not included
+        if let shot = arg("--milk-ui-shot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                guard let cv = self?.window.contentView, let rep = cv.bitmapImageRepForCachingDisplay(in: cv.bounds) else { return }
+                cv.cacheDisplay(in: cv.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: NSString(string: shot).expandingTildeInPath))
+            }
+        }
         NSLog("RAVE LIVE: MilkDrop %@, %d presets", m.ready ? "ready" : m.problem, m.library.count)
     }
 
