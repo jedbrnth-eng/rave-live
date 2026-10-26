@@ -9,3 +9,5 @@ bench/tracks*.json
 bench/results/
 tools/gt_edm/
 *.local.json
+evidence/
+vendor/

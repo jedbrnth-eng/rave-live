@@ -1078,7 +1078,7 @@ float3 rainGlass(float2 p, constant float *u, constant float *spec, float aspect
     float fog = (1.0 - wiped) * (1.0 - clear);
     float3 sharp = rainBackdrop(p + off, 0.0, u, spec, aspect);
     float3 soft = rainBackdrop(p, 1.0, u, spec, aspect) * 0.8 + float3(0.02, 0.025, 0.035);
-    return mix(sharp, soft, fog) + float3(1.0) * clamp(hl, 0.0, 1.0) * 0.22;
+    return mix(sharp * (1.0 + 0.6 * clear), soft, fog) + float3(1.0) * clamp(hl, 0.0, 1.0) * 0.3 + pal(HUE + 0.6) * clear * 0.03;   // drops: brighter lenses
 }
 
 // ---- 36 kick cubes: a field of glowing cubes seen from above; heights follow the spectrum, half of them jump on each kick,
