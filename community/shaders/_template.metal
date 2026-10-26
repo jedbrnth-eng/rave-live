@@ -1,6 +1,6 @@
 // RAVE LIVE Shader Lab starter. Copy this file, rename it (no leading "_"), and save: it shows up in Classic Visuals
 // after the built-in presets (press ] to step to it). Every save reloads it. Guide: docs/SHADERS.md
-// Licence: pick one and keep this line, e.g. "SPDX-License-Identifier: CC0-1.0" or "GPL-3.0-or-later".
+// SPDX-License-Identifier: GPL-3.0-or-later  (the licence for shaders sent to community/; see community/README.md)
 
 float4 rave(Rave r) {
     float2 p = r.p;                                   // centred coordinates, y up

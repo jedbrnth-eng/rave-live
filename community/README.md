@@ -1,8 +1,5 @@
 # RAVE LIVE community visuals
 
-> **DRAFT.** The licence terms for contributions are Jed's decision and are not final. Until this note is gone, open
-> an issue before sending a big batch.
-
 This folder collects Shader Lab shaders (`.metal`) and look presets (`.ravelook`) made by RAVE LIVE users. The app
 ships the shaders in `shaders/` as examples and copies them into your Shader Lab folder on first launch. A later
 version can read `index.json` to offer the whole collection in the app.
@@ -22,8 +19,8 @@ community/
 ## Send yours (pull request)
 
 1. Fork the repo and add your file to `community/shaders/` or `community/looks/`.
-2. At the top of a shader, add a comment with its name, a one-line description, your name or handle, and an SPDX
-   licence line (see below).
+2. At the top of a shader, add a comment with its name, a one-line description, your name or handle, and the line
+   `// SPDX-License-Identifier: GPL-3.0-or-later` (see below).
 3. Add an entry to `index.json` (copy an existing one).
 4. In the PR, attach a screenshot or a short clip, and say which music you tested it with.
 5. Checklist:
@@ -33,19 +30,24 @@ community/
    - No full-screen flashing faster than 3 times a second. RAVE LIVE has a photosensitivity limit, and contributions
      must respect it.
    - No Apple-GPU-only features (it has to run on Intel and AMD Macs too).
-   - The code is yours, or you have the right to share it under the licence you chose. Shadertoy code is often
-     "all rights reserved" or CC BY-NC-SA: don't submit it unless the author's licence allows it, and keep their
+   - The code is yours, or you have the right to share it under GPL-3.0-or-later. Shadertoy code is often
+     "all rights reserved" or CC BY-NC-SA: don't submit it unless the author's licence allows that, and keep their
      credit.
 
-## Licence for contributions (DRAFT, Jed decides)
+## Licence for contributions
 
-Proposal: each file states its own licence on an SPDX line, and the accepted licences are:
+Shaders and looks contributed here are licensed under **GPL-3.0-or-later**: everyone can use, change and share them,
+and changed versions that are shared stay open under the same terms. Put this line at the top of every file you send
+(looks: in the `license` field of `index.json`):
 
-- `CC0-1.0` (public domain dedication): recommended for shaders and looks, so anyone can remix them, including in
-  their own VJ sets and other apps.
-- `GPL-3.0-or-later` (the app's licence family): for code you want to stay open.
+```
+// SPDX-License-Identifier: GPL-3.0-or-later
+```
 
-The repo itself stays GPL-3.0 (see [LICENSE](../LICENSE)). Files with no SPDX line won't be merged.
+You keep the copyright on your work; the licence is what lets RAVE LIVE ship it and others build on it. Files without
+the SPDX line won't be merged. The example shaders that ship with the app (marked "example shipped with RAVE LIVE") are
+CC0, so you can start your own shader from one without any conditions. The app itself is GPL-3.0 (see
+[LICENSE](../LICENSE)).
 
 ## index.json
 
@@ -54,7 +56,7 @@ The repo itself stays GPL-3.0 (see [LICENSE](../LICENSE)). Files with no SPDX li
   "version": 1,
   "items": [
     { "type": "shader", "file": "shaders/pulse_rings.metal", "name": "Pulse Rings", "author": "RAVE LIVE",
-      "license": "CC0-1.0", "description": "...", "tags": ["beat", "rings"] }
+      "license": "GPL-3.0-or-later", "description": "...", "tags": ["beat", "rings"] }
   ]
 }
 ```
