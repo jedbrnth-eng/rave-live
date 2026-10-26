@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] - Unreleased
+## [0.5.0] - 2026-10-26
 
 ### Added
 - **Intel Macs and macOS 12 Monterey.** One universal app (Apple silicon + Intel) for macOS 12 and later. System audio needs macOS 13; on macOS 12 pick an input in the Audio menu (BlackHole works for system audio; see docs/COMPATIBILITY.md).
