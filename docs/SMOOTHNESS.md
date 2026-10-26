@@ -116,7 +116,8 @@ but the peak stays on or just after the beat. Normal vs Wild on the same looks: 
 **MilkDrop, 40 random pack presets (locked, no changes):** the biggest frame-to-frame changes got smaller on 39 of 40
 (median flick p99 0.092 → 0.060, dmean p99 0.069 → 0.048). Presets built on per-frame noise (Skin Dots, pixel
 "glitch" presets) still count many jumps (easing splits a long run into several short ones), which is why the
-built-in set was picked by the probe: 149 of 650 candidates pass. In a 10-minute MILKDROP run with automatic
+built-in set was picked with the probe: 233 of 650 candidates passed its limits and the speed check, and 149 remain
+after the per-category/per-author caps and a look at every one. In a 10-minute MILKDROP run with automatic
 beat-locked changes, one-frame spikes went 11 → 0 after the IOSurface fix.
 
 **Transitions (SHOW, `--show-hold 12`, built-in presets only).** Four 25-minute runs (two Normal, two Wild):
