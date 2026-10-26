@@ -63,6 +63,10 @@ VERSION="$(tr -d '[:space:]' < VERSION)"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace LSMinimumSystemVersion -string "$MIN_MACOS" "$APP/Contents/Info.plist"
+# Optional Syphon output (scripts/build_syphon.sh builds vendor/Syphon.framework); loaded at runtime when present.
+if [ -d vendor/Syphon.framework ]; then
+  mkdir -p "$APP/Contents/Frameworks" && cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
+fi
 # Sign with a local Apple Development identity when there is one (keeps macOS permission grants
 # stable across rebuilds); otherwise ad-hoc, so anyone can build. Override with RAVE_SIGN_IDENTITY.
 IDENTITY="${RAVE_SIGN_IDENTITY:-}"
