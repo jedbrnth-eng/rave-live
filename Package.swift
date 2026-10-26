@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "RaveLive",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v12)],
     products: [
         .library(name: "RaveAudio", targets: ["RaveAudio"]),
         .executable(name: "rave-probe", targets: ["RaveProbe"]),

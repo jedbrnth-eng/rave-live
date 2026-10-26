@@ -63,17 +63,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r_displayInfo = "\(NSScreen.main?.localizedName ?? "?") max \(maxHz) Hz, target \(view.preferredFramesPerSecond) fps"
         view.drawableSize = CGSize(width: w, height: h)
         view.autoResizeDrawable = arg("--width") == nil
+        QualityController.shared.setUp(view: view, override: arg("--quality"))
         guard let r = Renderer(view: view, audio: audio) else {
             let a = NSAlert()
             a.alertStyle = .critical
             a.messageText = "RAVE LIVE can't start the GPU renderer"
-            a.informativeText = "This app needs a Mac with Metal support (macOS 14 or later). Metal could not be initialised on this machine."
+            a.informativeText = "This app needs a Mac with Metal support (macOS 12 or later). Metal could not be initialised on this machine."
             a.runModal()
             NSApp.terminate(nil)
             return
         }
         renderer = r
         view.delegate = r
+        QualityController.shared.attach(r)
         r.forcedLook = arg("--look").flatMap(Float.init); r.forcedBeam = arg("--beam").flatMap(Float.init); r.forcedLaser = arg("--laser").flatMap(Float.init)
         if args.contains("--visuals") { r.mode = .visuals }
         if args.contains("--stage") { r.mode = .stage }
@@ -135,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.audio.refereeEnabled = !args.contains("--no-referee")
             self.audio.startReferee()
             if args.contains("--demo") { self.audio.startDemo() }
-            else { Task { await self.audio.start(args.contains("--mic") ? .mic : .system) } }
+            else { let src = AudioMenu.initialSource(args); Task { await self.audio.start(src) } }
         }
         dumpTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -221,7 +223,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         vm.addItem(.separator())
         let cam = NSMenuItem(title: "Camera Hands & Body (AURORA)", action: #selector(menuCamera(_:)), keyEquivalent: "k"); cam.target = self; vm.addItem(cam)
         let fs = NSMenuItem(title: "Fullscreen", action: #selector(menuFullscreen(_:)), keyEquivalent: "f"); fs.target = self; vm.addItem(fs)
+        vm.addItem(QualityController.shared.menuItem())
         viewItem.submenu = vm
+        main.addItem(AudioMenu.shared.menuItem(audio: audio))
         NSApp.mainMenu = main
     }
 
@@ -255,7 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("b", _): r.blackout.toggle()
         case ("f", _): window.toggleFullScreen(nil)
         case ("h", _): r.hudVisible.toggle(); hud.isHidden = !r.hudVisible
-        case ("m", _): Task { await audio.start(audio.source == .mic ? .system : .mic) }
+        case ("m", _): AudioMenu.shared.toggle()
         case ("t", _): audio.tempo?.tap(at: CACurrentMediaTime())
         case ("i", _): r.intensity = Renderer.Intensity(rawValue: (r.intensity.rawValue + 1) % 3)!
         case (",", _): r.userOffset -= 0.01      // visuals earlier

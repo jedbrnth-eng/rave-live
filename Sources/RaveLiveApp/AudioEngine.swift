@@ -31,15 +31,45 @@ struct AudioSnapshot {
     var spectrum = [Float](repeating: 0, count: 128)
 }
 
-enum InputSource: String { case system, mic }
+/// Where audio comes from: system audio (ScreenCaptureKit, macOS 13+) or a CoreAudio input device.
+enum InputSource: Equatable {
+    case system
+    case device(String?)          // CoreAudio device UID; nil = the system default input
+    static let mic = InputSource.device(nil)
+
+    /// UserDefaults form: "system", "device:" (default input) or "device:<uid>".
+    var key: String {
+        switch self {
+        case .system: return "system"
+        case .device(let uid): return "device:" + (uid ?? "")
+        }
+    }
+    init(key: String) {
+        if key.hasPrefix("device:") { let uid = String(key.dropFirst(7)); self = .device(uid.isEmpty ? nil : uid) } else { self = .system }
+    }
+    static let defaultsKey = "audioSource"
+    /// The last source the user picked (system audio by default; the default input on macOS 12).
+    static var saved: InputSource {
+        get {
+            let s = UserDefaults.standard.string(forKey: defaultsKey).map(InputSource.init(key:)) ?? .system
+            return s == .system && !SystemAudio.isSupported ? .mic : s
+        }
+        set { UserDefaults.standard.set(newValue.key, forKey: defaultsKey) }
+    }
+}
 
 final class AudioEngine: @unchecked Sendable {
     private let lock = NSLock()
     private var snap = AudioSnapshot()
     private var analyzer: LiveAnalyzer?
-    private let sys = SystemAudioCapture()
+    private var sysCapture: AnyObject?          // SystemAudioCapture, created on first use (macOS 13+)
     private let mic = MicCapture()
     private(set) var source: InputSource = .system
+    private(set) var sourceLabel = "system"     // shown in the HUD/metrics
+    private var loggedFirstAudio = false
+    private var deviceObserver: AnyObject?
+    /// Called on the main queue when the input device list changes (menu refresh).
+    var onDevicesChanged: (() -> Void)?
     private var lastSoundHost: Double = 0
     var onStatus: ((String) -> Void)?
     /// Beat This! referee sidecar (nil until it has loaded, or if the tools venv is missing).
@@ -60,28 +90,65 @@ final class AudioEngine: @unchecked Sendable {
     var tempo: TempoTracker? { analyzer?.tempo }
 
     func start(_ src: InputSource) async {
-        source = src
+        if deviceObserver == nil {
+            deviceObserver = AudioInputDevice.observeChanges { [weak self] in self?.devicesChanged() }
+        }
         let handler: SampleHandler = { [weak self] buf, sr, pts in self?.ingest(buf, sr, pts) }
+        loggedFirstAudio = false
         switch src {
         case .system:
-            if !CapturePermission.screenRecordingGranted { CapturePermission.requestScreenRecording() }
-            sys.onSamples = handler
-            sys.onError = { [weak self] e in self?.onStatus?("Capture error: \(e)") }
-            do { try await sys.start(); onStatus?("") }
-            catch { onStatus?(CapturePermission.fixInstructions) }
-        case .mic:
-            await sys.stop()
-            _ = await MicCapture.requestPermission()
-            mic.onSamples = handler
-            do { try mic.start(); onStatus?("") } catch { onStatus?("Microphone failed: \(error.localizedDescription)") }
+            if #available(macOS 13.0, *) {
+                mic.stop()
+                source = .system; sourceLabel = "system"
+                if !CapturePermission.screenRecordingGranted { CapturePermission.requestScreenRecording() }
+                let sys = (sysCapture as? SystemAudioCapture) ?? SystemAudioCapture()
+                sysCapture = sys
+                await sys.stop()
+                sys.onSamples = handler
+                sys.onError = { [weak self] e in self?.onStatus?("Capture error: \(e)") }
+                do { try await sys.start(); onStatus?("") }
+                catch { onStatus?(CapturePermission.fixInstructions) }
+            } else {
+                // macOS 12: ScreenCaptureKit has no audio. Use the default input and say how to get system audio.
+                await startDevice(nil, handler: handler)
+                onStatus?(CapturePermission.macOS12Instructions)
+            }
+        case .device(let uid):
+            await startDevice(uid, handler: handler)
         }
+    }
+
+    private func startDevice(_ uid: String?, handler: @escaping SampleHandler) async {
+        if #available(macOS 13.0, *), let sys = sysCapture as? SystemAudioCapture { await sys.stop() }
+        _ = await MicCapture.requestPermission()
+        var device = uid.flatMap { u in AudioInputDevice.all().first { $0.uid == u } }
+        var note = ""
+        if uid != nil && device == nil { note = "That input device isn't connected; using the default input. " }
+        if device == nil { device = AudioInputDevice.defaultInput() }
+        source = .device(uid)
+        sourceLabel = "input:" + (device?.name ?? "default")
+        mic.stop()
+        mic.onSamples = handler
+        do {
+            try mic.start(device: device)
+            NSLog("RAVE LIVE: listening to input \"%@\"", device?.name ?? "default")
+            onStatus?(note)
+        } catch { onStatus?(note + "Input failed: \(error.localizedDescription)") }
+    }
+
+    /// Hot-plug: refresh menus; if the device we listen to vanished (or the default input changed), restart.
+    private func devicesChanged() {
+        onDevicesChanged?()
+        guard case .device(let uid) = source else { return }
+        let present = uid.map { u in AudioInputDevice.all().contains { $0.uid == u } } ?? false
+        if uid == nil || !present { Task { await self.start(self.source) } }
     }
 
     /// Demo / test mode: a synthetic EDM arrangement (groove -> build -> gap -> drop) streamed through
     /// the same analysis path in real time. Nothing is played out loud.
     private var demoTimer: DispatchSourceTimer?
     func startDemo() {
-        source = .system
+        source = .system; sourceLabel = "demo"
         let sr = 48000.0
         var groove = Synth.house; groove.bpm = 128
         var buildA = Synth.Pattern(name: "build", bpm: 128, kick: "................", snare: "x...x...x...x...", hat: "..x...x...x...x.")
@@ -122,6 +189,10 @@ final class AudioEngine: @unchecked Sendable {
 
     private func ingest(_ buf: UnsafeBufferPointer<Float>, _ sr: Double, _ pts: Double) {
         if analyzer == nil || analyzer!.sampleRate != sr { analyzer = LiveAnalyzer(sampleRate: sr) }
+        if !loggedFirstAudio {
+            loggedFirstAudio = true
+            NSLog("RAVE LIVE: analyzer receiving audio from %@ (%.0f Hz, %d-frame buffers)", sourceLabel, sr, buf.count)
+        }
         let a = analyzer!
         let frames = a.process(buf)
         lock.lock(); let ref = referee; lock.unlock()
@@ -158,8 +229,8 @@ final class AudioEngine: @unchecked Sendable {
         snap.phaseHostTime = bufEnd
         snap.silentFor = lastSoundHost > 0 ? max(0, bufEnd - lastSoundHost) : 999
         snap.playing = snap.silentFor < 0.15
-        snap.source = source.rawValue
-        snap.droppedGaps = sys.droppedGaps
+        snap.source = sourceLabel
+        if #available(macOS 13.0, *), let sys = sysCapture as? SystemAudioCapture { snap.droppedGaps = sys.droppedGaps }
     }
 }
 

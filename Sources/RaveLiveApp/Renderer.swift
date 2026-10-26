@@ -109,7 +109,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             transitionPipeline = try dev.makeRenderPipelineState(descriptor: td)
         } catch { NSLog("Shader error: \(error)"); return nil }
         visuals = VisualsRenderer(device: dev, pixelFormat: view.colorPixelFormat)
-        let pc = Int(ProcessInfo.processInfo.environment["RAVE_PARTICLES"] ?? "") ?? 1_000_000
+        let pc = QualityTier.active.particlesEffective   // 1M on High; RAVE_PARTICLES overrides
         aurora = AuroraRenderer(device: dev, pixelFormat: view.colorPixelFormat, particles: pc)
         super.init()
     }
@@ -298,6 +298,10 @@ final class Renderer: NSObject, MTKViewDelegate {
         let elapsed = now - t0
         let snapNow = !snapTimes.isEmpty && elapsed >= snapTimes[0]
         if snapNow { snapTimes.removeFirst() }
+        // Discrete GPUs (Intel Macs with AMD): drawables are managed, so copy GPU -> CPU before getBytes.
+        if (snapNow || lumLogPath != nil) && drawable.texture.storageMode == .managed, let b = cb.makeBlitCommandEncoder() {
+            b.synchronize(resource: drawable.texture); b.endEncoding()
+        }
         cb.present(drawable)
         cb.commit()
         if snapNow {
