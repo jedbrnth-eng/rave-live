@@ -111,8 +111,14 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 ### New in 0.5
 
-<!-- Screenshots for 0.5 go here (MILKDROP, presets 33–47, Shader Lab, Tweak panel, Control HUD). Keep each JPEG small; no videos in git. -->
-<sub>Screenshots of MILKDROP, the new presets, Shader Lab and the VJ tools are coming.</sub>
+<table>
+  <tr>
+    <td><img src="docs/screenshots/milkdrop.webp" alt="MILKDROP mode playing one of the built-in MilkDrop presets: a green and blue textured tunnel"></td>
+    <td><img src="docs/screenshots/kick-cubes.webp" alt="New Classic preset Kick Cubes: a field of teal and green cubes that jump with the kick"></td>
+  </tr>
+</table>
+
+<sub>MILKDROP with a built-in preset, and Kick Cubes, one of the 15 new Classic presets. Unedited frames rendered by the app (version 0.5, demo track, at the drop).</sub>
 
 ### Every visual
 
