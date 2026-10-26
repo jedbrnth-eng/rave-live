@@ -27,8 +27,10 @@ jobs:
           fi
       - name: Test
         run: swift test
-      - name: Build RAVE LIVE.app
-        run: scripts/make_app.sh
+      - name: Build RAVE LIVE.app (universal, macOS 12+)
+        run: |
+          scripts/make_app.sh
+          scripts/check_app.sh
       - name: Package
         run: |
           ditto -c -k --sequesterRsrc --keepParent "build/RAVE LIVE.app" RAVE-LIVE.zip
