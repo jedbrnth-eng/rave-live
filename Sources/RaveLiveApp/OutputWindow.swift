@@ -18,6 +18,7 @@ final class OutputWindow: NSObject, MTKViewDelegate {
     private let mainView: MTKView
     private let preview: PreviewLayer
     private let savedAutoResize: Bool
+    private var savedGravity: CALayerContentsGravity = .resize
 
     static func displayID(_ s: NSScreen) -> CGDirectDisplayID {
         (s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
@@ -59,6 +60,8 @@ final class OutputWindow: NSObject, MTKViewDelegate {
         mainView.enableSetNeedsDisplay = false
         mainView.autoResizeDrawable = false
         output.preview = preview
+        savedGravity = mainView.layer?.contentsGravity ?? .resize
+        mainView.layer?.contentsGravity = .resizeAspect      // preview keeps the output's aspect (letterboxed)
         window.orderFrontRegardless()
         NSLog("RAVE LIVE: output window on %@ (%d x %d px, %d fps)", screenName, Int(view.drawableSize.width), Int(view.drawableSize.height), targetFPS)
     }
@@ -69,6 +72,7 @@ final class OutputWindow: NSObject, MTKViewDelegate {
         output.preview = nil
         window.orderOut(nil)
         mainView.autoResizeDrawable = savedAutoResize
+        mainView.layer?.contentsGravity = savedGravity
         if savedAutoResize { mainView.drawableSize = mainView.convertToBacking(mainView.bounds.size) }
         mainView.isPaused = false
     }
@@ -84,12 +88,26 @@ final class OutputWindow: NSObject, MTKViewDelegate {
 
 /// The main window's Metal layer as a preview target: frames are blitted into its drawables at output size and the
 /// layer scales them to the window.
+/// The preview never blocks the output: the main window sits on another display's vsync, so when its drawables are still
+/// queued the frame is simply not previewed (waiting in nextDrawable() halved the output frame rate).
 final class PreviewLayer: MTKViewLike {
     private weak var view: MTKView?
+    private let lock = NSLock()
+    private var inFlight = 0
+    private(set) var skipped = 0
     init(view: MTKView) { self.view = view }
     func previewDrawable(size: CGSize) -> CAMetalDrawable? {
-        guard let v = view, !v.isHidden, let layer = v.layer as? CAMetalLayer else { return nil }
+        guard ProcessInfo.processInfo.environment["RAVE_NO_PREVIEW"] == nil,
+              let v = view, !v.isHidden, let layer = v.layer as? CAMetalLayer else { return nil }
+        lock.lock(); let busy = inFlight >= 1; lock.unlock()
+        if busy { skipped += 1; return nil }
         if layer.drawableSize != size { layer.drawableSize = size }
-        return layer.nextDrawable()
+        guard let d = layer.nextDrawable() else { return nil }
+        lock.lock(); inFlight += 1; lock.unlock()
+        d.addPresentedHandler { [weak self] _ in
+            guard let self else { return }
+            self.lock.lock(); self.inFlight -= 1; self.lock.unlock()
+        }
+        return d
     }
 }

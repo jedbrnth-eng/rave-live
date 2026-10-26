@@ -17,7 +17,7 @@ final class VJRig: NSObject, NSMenuDelegate {
     private(set) var outputWindow: OutputWindow?
     private(set) var midi: MidiControl!
     private let hudView = OverlayPanel()
-    private let cheatView = OverlayPanel()
+    private let cheatView = OverlayPanel(alpha: 0.82)
     private var learnPanel: MidiLearnPanel?
     private var timer: Timer?
     private var clockOwnsTempo = false
@@ -55,13 +55,17 @@ final class VJRig: NSObject, NSMenuDelegate {
             app.window.contentView?.addSubview(v, positioned: .above, relativeTo: nil)
         }
         cheatView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
-        cheatView.setText(Self.cheatSheet, fontSize: 13)
+        cheatView.setColumns(Self.cheatSheet, fontSize: 13)
         layoutOverlays()
         NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: app.window.contentView, queue: .main) { [weak self] _ in self?.layoutOverlays() }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             self?.screensChanged(NSScreen.screens)
         }
 
+        for (i, s) in NSScreen.screens.enumerated() {
+            let px = s.convertRectToBacking(s.frame).size
+            log("screen \(i): \(s.localizedName) \(Int(px.width))x\(Int(px.height)) max \(s.maximumFramesPerSecond) Hz" + (s == app.window.screen ? " (main window)" : ""))
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
         if args.contains("--syphon") { setSyphon(true) }
         if args.contains("--hud") { setHUD(1) }
@@ -238,6 +242,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         case .autoCycle where press: r.visuals?.autoCycle.toggle()
         default: return
         }
+        if t.continuous && !t.pressed && !t.released && logURL == nil { return }   // a turning knob would flood the metrics events
         let v = r.visuals.map { VisualsRenderer.presetNames[$0.preset % VisualsRenderer.count] } ?? "-"
         log(String(format: "midi: %@ value %.2f%@ -> mode %@ · preset %@ · intensity %@ · brightness %.2f · blackout %@ · strobe %@",
                    a.rawValue, t.value, t.pressed ? " press" : (t.released ? " release" : ""), r.mode.title, v, r.intensity.title,
@@ -313,7 +318,7 @@ final class VJRig: NSObject, NSMenuDelegate {
             ("Mode", modeLine), ("Preset", presetLine),
             ("BPM", String(format: "%.1f  %@  · beat %d/4", s.bpm, bpmSrc, Int(r.beatClockIndex) % 4 + 1)),
             ("Intensity", r.intensity.title + (flags.isEmpty ? "" : "  · " + flags.joined(separator: " · "))),
-            ("Audio", "\(s.source) · " + (s.playing ? "LIVE" : "quiet")),
+            ("Audio", (CommandLine.arguments.contains("--demo") ? "demo (synthetic)" : s.source) + " · " + (s.playing ? "LIVE" : "quiet")),
             ("Syphon", syphon), ("MIDI", midiLine), ("Output", outLine),
         ]
         let text = "RAVE LIVE · CONTROL  (H hides, ? shortcuts)\n" + rows.map { $0.0.padding(toLength: 10, withPad: " ", startingAt: 0) + $0.1 }.joined(separator: "\n")
@@ -330,23 +335,44 @@ final class VJRig: NSObject, NSMenuDelegate {
         cheatView.frame = NSRect(x: (b.width - cs.width) / 2, y: (b.height - cs.height) / 2, width: cs.width, height: cs.height)
     }
 
-    static let cheatSheet = """
-    RAVE LIVE · KEYBOARD SHORTCUTS                       (? or Esc closes)
+    /// Two columns; plain key names so the monospaced columns line up (⌘/⇧/arrow glyphs are wider than a cell).
+    static let cheatSheet = [
+        """
+        RAVE LIVE · KEYBOARD SHORTCUTS
 
-    MODES & PRESETS                       SHOW CONTROL
-    V          next mode                  I          intensity Chill/Normal/Wild
-    ⌘1 … ⌘4    SHOW / Stage / Classic / AURORA   B          blackout
-    ]  [       next / previous preset     S          strobe on/off
-    1 … 8      preset (Classic) or look   ⇧S         lift the 3 flashes/s limit
-    A          auto-cycle presets         T          tap tempo
-    C / ⌘K     camera hands (AURORA)      ← →        BPM −/+ 0.1 (⇧ = 1)
-                                          ,  .       beat nudge −/+ 10 ms
-    VIEW & OUTPUT                         M          system audio ↔ mic
-    F / ⌘F     fullscreen   Esc  exit
-    H          Control HUD (performer only, never on Syphon/output)
-    ?          this sheet
-    ⌘L         MIDI Learn…   Output menu: Syphon, Send to Display
-    """
+        MODES & PRESETS
+        V           next mode
+        Cmd 1-4     SHOW / Stage / Classic / AURORA
+        ]  [        next / previous preset
+        1 - 8       preset (Classic) or Stage look
+        A           auto-cycle presets on/off
+        C, Cmd K    camera hands & body (AURORA)
+
+        VIEW & OUTPUT
+        F, Cmd F    fullscreen      Esc  exit
+        H           Control HUD (never on Syphon/output)
+        ?           this sheet (? or Esc closes)
+        Cmd L       MIDI Learn…
+        Output menu Syphon, Send to Display
+        """,
+        """
+        
+
+        SHOW CONTROL
+        I           intensity Chill/Normal/Wild
+        B           blackout
+        S           strobe on/off
+        Shift S     lift the 3 flashes/s limit
+        T           tap tempo
+        Left/Right  BPM -/+ 0.1 (Shift: 1)
+        ,  .        beat nudge -/+ 10 ms
+        M           system audio <-> mic
+
+        MIDI
+        Controls menu: Learn, clock sync,
+        import/export mappings (JSON)
+        """,
+    ]
 
     // MARK: MIDI learn panel
 
@@ -388,7 +414,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         case "shot": captureWindow(name: val, dir: snapDir)
         case "outshot": output?.onCapture = { img in Self.writePNG(img, to: snapDir.appendingPathComponent(val + ".png")) }
         case "learnshot":
-            if let v = learnPanel?.window.contentView { Self.writePNG(Self.render(view: v), to: snapDir.appendingPathComponent(val + ".png")) }
+            if let w = learnPanel?.window, let v = w.contentView { Self.writePNG(Self.render(view: v, background: w.backgroundColor), to: snapDir.appendingPathComponent(val + ".png")) }
         default: log("script: unknown \(cmd)")
         }
     }
@@ -403,7 +429,14 @@ final class VJRig: NSObject, NSMenuDelegate {
             guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
             ctx.scaleBy(x: scale, y: scale)
-            ctx.draw(frame, in: view.frame)
+            var r = view.frame
+            if self.outputWindow != nil {         // preview layer letterboxes the output (contentsGravity .resizeAspect)
+                let fa = CGFloat(frame.width) / CGFloat(frame.height), va = r.width / r.height
+                if fa > va { let h = r.width / fa; r = CGRect(x: r.minX, y: r.midY - h / 2, width: r.width, height: h) }
+                else { let w = r.height * fa; r = CGRect(x: r.midX - w / 2, y: r.minY, width: w, height: r.height) }
+                ctx.setFillColor(NSColor.black.cgColor); ctx.fill(view.frame)
+            }
+            ctx.draw(frame, in: r)
             for sub in cv.subviews where sub !== view && !sub.isHidden {
                 ctx.draw(Self.render(view: sub), in: sub.frame)
             }
@@ -411,10 +444,17 @@ final class VJRig: NSObject, NSMenuDelegate {
         }
     }
 
-    static func render(view v: NSView) -> CGImage {
+    static func render(view v: NSView, background: NSColor? = nil) -> CGImage {
         let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds)!
         v.cacheDisplay(in: v.bounds, to: rep)
-        return rep.cgImage!
+        guard let bg = background, let ctx = CGContext(data: nil, width: rep.pixelsWide, height: rep.pixelsHigh, bitsPerComponent: 8, bytesPerRow: 0,
+                                                        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return rep.cgImage! }
+        var fill = NSColor.black.cgColor
+        v.effectiveAppearance.performAsCurrentDrawingAppearance { fill = bg.usingColorSpace(.deviceRGB)?.cgColor ?? fill }
+        let r = CGRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh)
+        ctx.setFillColor(fill); ctx.fill(r)            // panels are transparent in the cache; give them the window colour
+        ctx.draw(rep.cgImage!, in: r)
+        return ctx.makeImage() ?? rep.cgImage!
     }
 
     static func writePNG(_ img: CGImage, to url: URL) {
@@ -423,28 +463,37 @@ final class VJRig: NSObject, NSMenuDelegate {
     }
 }
 
-/// Rounded translucent text box (Control HUD, cheat sheet).
+/// Rounded translucent text box (Control HUD, cheat sheet), one or more monospaced columns.
 final class OverlayPanel: NSView {
-    private let label = NSTextField(labelWithString: "")
-    override init(frame: NSRect) {
-        super.init(frame: frame)
+    private let stack = NSStackView()
+    init(alpha: CGFloat = 0.62) {
+        super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0, alpha: 0.62).cgColor
+        layer?.backgroundColor = NSColor(white: 0, alpha: alpha).cgColor
         layer?.cornerRadius = 10
         layer?.borderColor = NSColor(white: 1, alpha: 0.18).cgColor
         layer?.borderWidth = 1
-        label.textColor = NSColor(white: 1, alpha: 0.92)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
+        stack.orientation = .horizontal; stack.alignment = .top; stack.spacing = 28
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14), label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            label.topAnchor.constraint(equalTo: topAnchor, constant: 10), label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14), stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 10), stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
         ])
     }
     required init?(coder: NSCoder) { fatalError() }
-    func setText(_ s: String, fontSize: CGFloat) {
-        label.font = .monospacedSystemFont(ofSize: fontSize, weight: .medium)
-        label.stringValue = s
+    func setText(_ s: String, fontSize: CGFloat) { setColumns([s], fontSize: fontSize) }
+    func setColumns(_ cols: [String], fontSize: CGFloat) {
+        while stack.arrangedSubviews.count < cols.count {
+            let l = NSTextField(labelWithString: "")
+            l.textColor = NSColor(white: 1, alpha: 0.92)
+            stack.addArrangedSubview(l)
+        }
+        for (i, v) in stack.arrangedSubviews.enumerated() {
+            guard let l = v as? NSTextField else { continue }
+            l.font = .monospacedSystemFont(ofSize: fontSize, weight: .medium)
+            l.stringValue = i < cols.count ? cols[i] : ""
+        }
     }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }      // clicks go through to the visual
 }

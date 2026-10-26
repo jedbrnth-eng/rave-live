@@ -14,5 +14,9 @@
   damped 2D wave equation (Pond), curl-of-potential advection (Ink Water), Vogel/golden-angle phyllotaxis (Flower),
   box-grid distance-field marching with a cell-exit bound (Neon City), ridged heightfield marching (Terrain),
   radial firework shells (Fireworks). Concept frames for the presets were AI-generated reference images (used only as a visual reference, not shipped).
+- **Syphon-Framework** (bangnoise / Tom Butterworth & vade / Anton Marini; Metal server by Maxime Touroute & Philippe Chaurand,
+  BSD-3-Clause) — https://github.com/Syphon/Syphon-Framework — optional Syphon output. Built from source commit
+  f4761677a45b8034a3c2069ec0f3d2553da81fba by `scripts/build_syphon.sh` (not vendored in git); the licence text ships inside the
+  bundled framework (`Syphon.framework/Resources/License.txt`). BSD-3-Clause is GPL-3.0 compatible.
 - Checked and not used (licence): aubio (GPL-3), BTrack (GPL-3), Essentia (AGPL-3), madmom (licence unclear),
   BeatNet (CC-BY-4.0, Python real-time downbeat model; considered, Beat This! measured better as referee).
