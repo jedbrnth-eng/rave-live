@@ -9,21 +9,22 @@ The difference from plain MilkDrop/projectM: **preset changes follow the music's
   Never mid-bar.
 - **Drops get a hard cut**, on the drop itself, to a preset from the high-energy categories.
 - **Intensity follows the build**: during a build-up the image creeps in and gets more saturated, kicks give a small
-  punch, and projectM's own beat sensitivity rises with the build and the drop (capped: 0.8–1.3 on Normal, up to 2.4
+  punch, and projectM's own beat sensitivity rises with the build and the drop (capped: 0.8–1.3 on Normal, up to 1.9
   on Wild, so presets don't spasm).
 - **Smooth on Normal**: projectM renders at most ~75 frames per second (presets are made for ~60; at 120 Hz they used
   to run at double speed), and on Normal / Chill each frame eases toward the next, so one-frame flicker becomes a quick
-  fade. Wild shows projectM's frames as they are. See docs/SMOOTHNESS.md.
+  fade. Wild eases less (75 %), so it stays punchier. See docs/SMOOTHNESS.md.
 - Without a tempo lock yet (silence, free-form music) it falls back to a change every 24 s.
 
 ## Getting presets
 
 **Built in:** about 150 presets from projectM's
 [cream of the crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) pack ship inside the app, so
-MILKDROP plays right away. They were picked by a sweep of ~400 candidates from every category: each loads without
+MILKDROP plays right away. They were picked by a sweep of ~650 candidates from every category: each loads without
 errors, isn't black or blown out, renders a frame in under 16 ms here, and passes the smoothness limits of
-docs/SMOOTHNESS.md (at most 8 off-beat pops a minute); then at most a few per sub-category and per author, so the set
-is varied. The list is `Resources/MilkDrop/bundled.txt` (pack commit + SHA-256 of every file);
+docs/SMOOTHNESS.md (at most one off-beat pop in its 8 s test); then at most a few per sub-category and per author,
+so the set is varied. Every candidate thumbnail was looked at (dark, flat or harsh ones out), and two that spiked in
+long SHOW runs were dropped. The list is `Resources/MilkDrop/bundled.txt` (pack commit + SHA-256 of every file);
 `scripts/fetch_milkdrop_presets.sh` fetches exactly those files and `make_app.sh` copies them into the app with the
 pack's LICENSE.md and an AUTHORS.txt.
 

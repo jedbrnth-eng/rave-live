@@ -64,8 +64,8 @@ any change the peak must stay in the first bins (on or just after the beat) and 
 5. **Strobe on Normal.** Still limited to 3 flashes/s by the same limiter, but each flash eases in and out (70 % peak)
    instead of a 45 ms full-white frame. Wild keeps the hard strobe.
 6. **MilkDrop.** projectM's beat sensitivity went up to 3.5 during builds (presets spasmed); it is now 0.8-1.3 on Normal
-   (Wild up to 2.4). projectM rendered a frame for every display frame, so presets ran at double speed on 120 Hz
-   screens; it now renders at most ~75 frames/s. On Normal and Chill each shown frame eases 60 % (45 %) toward the new
+   (Wild up to 1.9). projectM rendered a frame for every display frame, so presets ran at double speed on 120 Hz
+   screens; it now renders at most ~75 frames/s. On Normal and Chill each shown frame eases 60 % (45 %; Wild 75 %) toward the new
    projectM frame, which turns a preset's one-frame flicker into a quick fade. projectM's own hard cuts stay off; only
    the director cuts, on drops.
 7. **Single presets.** Wormhole's rings shimmered where they get denser than a pixel; Crystals, Nebula and Plasma

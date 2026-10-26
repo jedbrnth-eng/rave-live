@@ -69,12 +69,12 @@ final class MilkDropRenderer: @unchecked Sendable {
     /// Show intensity (0 Chill, 1 Normal, 2 Wild), set by the Renderer every frame.
     var intensity = 1
     /// Share of the new frame per displayed frame (1 = no smoothing). Normal eases one-frame flicker; Wild stays crisp.
-    static func temporalBlend(intensity: Int) -> Float { [0.45, 0.6, 0.85][max(0, min(2, intensity))] }
+    static func temporalBlend(intensity: Int) -> Float { [0.45, 0.6, 0.75][max(0, min(2, intensity))] }
     /// projectM's beat sensitivity drives how hard presets react to its own beat detection. Uncapped (the old 1 + 1.5 x build
-    /// + drop, up to 3.5) many presets spasm on every transient; Normal now stays at 0.8-1.3, Wild may reach 2.4.
+    /// + drop, up to 3.5) many presets spasm on every transient; Normal now stays at 0.8-1.3, Wild may reach 1.9.
     static func beatSensitivity(intensity: Int, build: Float, drop: Float) -> Float {
         let i = max(0, min(2, intensity))
-        let base: [Float] = [0.6, 0.8, 1.0], b: [Float] = [0.15, 0.3, 0.8], d: [Float] = [0.1, 0.2, 0.6]
+        let base: [Float] = [0.6, 0.8, 1.0], b: [Float] = [0.15, 0.3, 0.5], d: [Float] = [0.1, 0.2, 0.4]
         return base[i] + b[i] * max(0, min(1, build)) + d[i] * max(0, min(1, drop))
     }
     /// Called on the GL thread when a preset was loaded / skipped (event text for the metrics log).
