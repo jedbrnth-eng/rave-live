@@ -321,7 +321,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         if (output?.brightness ?? 1) < 0.999 { flags.append(String(format: "brightness %.0f%%", (output?.brightness ?? 1) * 100)) }
         if !r.strobeEnabled { flags.append("strobe off") } else if r.strobeOverride { flags.append("⚠️ STROBE LIMIT OFF") }
         let rows: [(String, String)] = [
-            ("Mode", modeLine), ("Preset", presetLine),
+            ("Mode", modeLine), ("Preset", presetLine.count > 34 ? presetLine.prefix(33) + "…" : presetLine),   // long MilkDrop names would cover the mode switcher
             ("BPM", String(format: "%.1f  %@  · beat %d/4", s.bpm, bpmSrc, Int(r.beatClockIndex) % 4 + 1)),
             ("Intensity", r.intensity.title + (flags.isEmpty ? "" : "  · " + flags.joined(separator: " · "))),
             ("Audio", (CommandLine.arguments.contains("--demo") ? "demo (synthetic)" : s.source) + " · " + (s.playing ? "LIVE" : "quiet")),
