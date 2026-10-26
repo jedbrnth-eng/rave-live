@@ -80,10 +80,19 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 | Mode | What you get |
 |---|---|
-| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals and AURORA every 32 beats on a bar line, with 7 beat-locked transitions. Drops get a hard cut. |
+| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals, AURORA and MILKDROP every 32 beats on a bar line, with 7 beat-locked transitions. Drops get a hard cut. |
 | **Stage** | A procedural club stage: LED wall looks, moving heads, lasers, haze, flame jets, fireballs and a crowd that reacts. A show director picks looks per phrase and tracks builds and drops. |
-| **Classic Visuals** | 33 presets, from feedback classics (Tunnel, MilkWarp, Kaleido) to Synthwave, Galaxy, Neon City, Terrain, reaction-diffusion Coral, a rippling Pond, Fireworks and touchable Silk aurora curtains. Presets 23–32 react to your mouse or hands, and every preset pulses on the shared beat clock. |
+| **Classic Visuals** | 48 presets, from feedback classics (Tunnel, MilkWarp, Kaleido) to Synthwave, Galaxy, Neon City, Terrain, reaction-diffusion Coral, Fireworks, Julia, Game of Life, Disco Ball, Laser Show and a scratchable Vinyl. Many react to your mouse or hands, and every preset pulses on the shared beat clock. Write your own in **Shader Lab** (drop a `.metal` file in a folder; it hot-reloads) and tweak any preset with the **Tweak panel** (`Shift`+`T`), saved as `.ravelook` files. |
 | **AURORA** | A GPU fluid simulation with about a million particles and bloom. Stir it with the mouse, or turn on the camera and paint it with your hands and body. |
+| **MILKDROP** | Plays the ~9,800 community MilkDrop presets through [projectM](https://github.com/projectM-visualizer/projectm), with preset changes locked to the beat grid: blends start on a phrase downbeat, drops get a hard cut. Searchable browser (`P`), favourites and ratings. The preset pack is a one-click download (View → Get MilkDrop Presets…). [docs/MILKDROP.md](docs/MILKDROP.md) |
+
+### For VJs
+
+- **Syphon output** of the final frame in every mode (Resolume, VDMX, OBS, MadMapper…): Output → Syphon Server.
+- **Projector output**: Output → Send to Display runs a clean fullscreen output on any screen; the laptop window becomes a preview with the controls.
+- **MIDI**: MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, brightness, strobe, blackout, tap…), and MIDI clock sync.
+- **Control HUD** (`H`) and a **keyboard cheat sheet** (`?`) that never appear on Syphon or the output display.
+- Details: [docs/VJ.md](docs/VJ.md). Writing shaders: [docs/SHADERS.md](docs/SHADERS.md). Sharing looks and shaders: [community/](community/README.md).
 
 <table>
   <tr>
@@ -100,10 +109,15 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 <sub>All images are unedited frames rendered by the app (version 0.4, demo track).</sub>
 
+### New in 0.5
+
+<!-- Screenshots for 0.5 go here (MILKDROP, presets 33–47, Shader Lab, Tweak panel, Control HUD). Keep each JPEG small; no videos in git. -->
+<sub>Screenshots of MILKDROP, the new presets, Shader Lab and the VJ tools are coming.</sub>
+
 ### Every visual
 
 <details>
-<summary>Contact sheet of all 35 looks</summary>
+<summary>Contact sheet of the 0.4 looks</summary>
 
 <p align="center">
   <img src="docs/visuals-grid.jpg" alt="Contact sheet of Stage, all 33 Classic Visuals presets and AURORA, each labelled with its name" width="860">
@@ -115,11 +129,12 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 | Key | Action |
 |---|---|
-| `⌘1` … `⌘4` or `V` | SHOW / Stage / Classic Visuals / AURORA (or cycle) |
-| `1`–`8`, `[` `]` | Pick a preset (Classic Visuals); `1`–`4` pick the stage in Stage mode |
+| `⌘1` … `⌘5` or `V` | SHOW / Stage / Classic Visuals / AURORA / MILKDROP (or cycle) |
+| `1`–`8`, `[` `]` | Pick a preset (Classic Visuals); `1`–`4` pick the stage in Stage mode; `[` `]` step MilkDrop presets in MILKDROP |
 | `A` | Auto-cycle presets on/off |
 | `I` | Intensity: Chill / Normal / Wild |
 | `T` | Tap tempo |
+| `Shift`+`T` | Tweak panel (Classic Visuals); `⌘S` / `⌘O` save / open a look |
 | `←` `→` (`Shift` for bigger steps) | Nudge the beat phase |
 | `,` `.` | Move the visuals 10 ms earlier / later (speaker latency) |
 | `S` / `Shift`+`S` | Strobes on/off / lift the 3-per-second limit (asks first) |
@@ -127,7 +142,10 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 | `C` or `⌘K` | Camera hands and body (AURORA) |
 | `M` | Switch between system audio and your last input device (pick devices in the **Audio** menu) |
 | `F` or `⌘F` | Fullscreen |
-| `H` | Show or hide the status bar |
+| `P` or `⌘P` | MilkDrop preset browser; in MILKDROP: `R` random, `L` lock, `Shift`+`F` favourite, `1`–`5` rate |
+| `H` | Control HUD (press again to hide all text) |
+| `?` | Keyboard cheat sheet |
+| `⌘L` | MIDI Learn |
 
 <p align="center">
   <img src="docs/screenshots/app-window.jpg" alt="The app window with the mode switcher at the top left and the live status bar at the bottom showing BPM, confidence, fps and latency" width="860">
@@ -189,6 +207,13 @@ open "build/RAVE LIVE.app"
 ```
 
 `make_app.sh` signs with your "Apple Development" identity if you have one, and ad-hoc otherwise. With ad-hoc signing macOS asks for the audio permission again after each rebuild. The app is not notarized.
+
+Optional extras, built from pinned sources into `vendor/` (gitignored) and bundled by `make_app.sh` when present; the app builds and runs without them:
+
+```bash
+scripts/build_syphon.sh          # Syphon output (BSD-3-Clause)
+scripts/build_projectm.sh        # MILKDROP engine, libprojectM (LGPL-2.1)
+```
 
 Try it with no music playing:
 

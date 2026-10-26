@@ -22,8 +22,6 @@
   smooth iteration count (Inigo Quilez's published formulation), Conway's Game of Life (1970), times-table "string art"
   (Mathologer-style modular multiplication circle), goniometer / XY vectorscope plotting, cell-exit box marching (as Neon City).
   Shader Lab's `palette()` helper is Inigo Quilez's cosine palette formula. The example shaders in `community/shaders/` are CC0-1.0.
-- Checked and not used (licence): aubio (GPL-3), BTrack (GPL-3), Essentia (AGPL-3), madmom (licence unclear),
-  BeatNet (CC-BY-4.0, Python real-time downbeat model; considered, Beat This! measured better as referee).
 - **projectM** (projectM team, LGPL-2.1-or-later) — https://github.com/projectM-visualizer/projectm — the MilkDrop engine
   behind MILKDROP mode. Version 4.1.8, built from the release source by `scripts/build_projectm.sh` with one small patch
   (`scripts/projectm-patches/0001-render-frame-to-fbo.patch`, same licence: render into a caller-supplied framebuffer).
@@ -34,3 +32,5 @@
 - **MilkDrop presets** — not bundled. "Get MilkDrop presets…" downloads projectM's "cream of the crop" pack
   (https://github.com/projectM-visualizer/presets-cream-of-the-crop) on the user's click. Most presets were released
   without a licence; projectM treats them as public domain and removes presets on the author's request.
+- Checked and not used (licence): aubio (GPL-3), BTrack (GPL-3), Essentia (AGPL-3), madmom (licence unclear),
+  BeatNet (CC-BY-4.0, Python real-time downbeat model; considered, Beat This! measured better as referee).

@@ -1,8 +1,30 @@
 # Changelog
 
-## Unreleased
+## [0.5.0] - Unreleased
 
+### Added
+- **Intel Macs and macOS 12 Monterey.** One universal app (Apple silicon + Intel) for macOS 12 and later. System audio needs macOS 13; on macOS 12 pick an input in the Audio menu (BlackHole works for system audio; see docs/COMPATIBILITY.md).
+- **Audio menu:** System Audio, Default Input and every input device by name (mic, interface, DJ mixer, loopback driver); remembered, follows hot-plugging. `M` switches between system audio and the last input.
+- **Quality tiers** (View → Quality: Auto / Low / Medium / High): Intel and AMD graphics get fewer AURORA particles, a lower render scale, lighter bloom and a lighter MilkDrop mesh. Apple silicon keeps the full look.
+- **MILKDROP mode:** the community MilkDrop presets through projectM, with preset changes on the beat grid (blends on phrase downbeats, hard cut on drops, more zoom and saturation during builds). Preset pack download (asks first), your own `.milk` folder, a searchable browser (`P`), favourites (`Shift`+`F`), ratings (`1`–`5`), lock (`L`), and broken presets are skipped. SHOW mode now includes MILKDROP.
+- **15 new Classic presets (33–47):** Datamosh, Julia, Rain Glass, Kick Cubes, String Art, Fireflies, Life, Subwoofer, Moire, XY Scope, Dancefloor, Disco Ball, Laser Show, Gravity Grid and Vinyl. Several react to the mouse or hands.
+- **Shader Lab:** drop a `.metal` file into the Shaders folder (Visuals → Open Shader Folder…) and it plays as a Classic preset, reloads on save, and shows compile errors with your line number while the last working version keeps playing. Four examples and a template; guide in docs/SHADERS.md.
+- **Tweak panel** (`Shift`+`T` in Classic Visuals): speed, hue, palette, density, feedback, symmetry and beat response per preset, saved as `.ravelook` files (`⌘S` / `⌘O`, double-click to open). A `community/` folder for sharing looks and shaders.
+- **Syphon output** (Output → Syphon Server "RAVE LIVE", or `--syphon`): the final frame of every mode for Resolume, VDMX, OBS, MadMapper.
+- **Send to Display:** a clean fullscreen output on a projector or second screen at its own resolution and refresh; the main window becomes a preview with the controls, and takes over again if the screen is unplugged.
+- **MIDI:** MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, master brightness, strobe through the 3-flashes-per-second limiter, blackout, tap, nudge, BPM, auto-cycle; preset and auto-cycle also drive MILKDROP), mappings saved as JSON with import/export, and MIDI clock (24 ppqn) tempo sync.
+- **Control HUD** (`H`) and **keyboard cheat sheet** (`?`). Neither, nor the Tweak panel or Shader Lab errors, ever appears on Syphon or the output display.
+- Docs: docs/COMPATIBILITY.md, docs/MILKDROP.md, docs/VJ.md, docs/SHADERS.md.
+
+### Changed
 - License changed from MIT to GPL-3.0 for all new work. Versions released before this change stay available under MIT.
+- `F` is fullscreen in every mode.
+- Input devices are captured with 512-frame buffers (lower latency, works with input-only devices).
+- Snapshots also work on discrete GPUs.
+- `scripts/make_app.sh` builds the universal app and bundles Syphon and libprojectM when `scripts/build_syphon.sh` / `scripts/build_projectm.sh` have been run; the app builds and runs without them. CI adds an Intel job and a headless smoke run.
+
+### Fixed
+- Opening an input device while the microphone permission prompt was still open froze the app on macOS 12.
 
 ## [0.4.0] - 2026-10-22
 
