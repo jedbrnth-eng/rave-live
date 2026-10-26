@@ -26,12 +26,23 @@ jobs:
         run: swift test
       - name: Probe against synthetic drum patterns
         run: .build/release/rave-probe synth
-      - name: Build the app bundle (ad-hoc signed)
+      - name: Build the universal app bundle (ad-hoc signed)
         run: |
           scripts/make_app.sh
-          test -x "build/RAVE LIVE.app/Contents/MacOS/RaveLive"
-          plutil -lint "build/RAVE LIVE.app/Contents/Info.plist"
-          test -f "build/RAVE LIVE.app/Contents/Resources/AppIcon.icns"
+          scripts/check_app.sh
+      - name: Headless smoke run (skips if this runner has no GPU)
+        run: scripts/smoke_test.sh
+      - name: Keep the smoke-run snapshot
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-arm64
+          path: |
+            build/smoke/*.png
+            build/smoke/log.txt
+            build/smoke/metrics.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Build the installer disk image (and verify its contents)
         run: scripts/make_dmg.sh
       - name: Installer script is valid shell
@@ -44,3 +55,41 @@ jobs:
           if git grep -nIE '/Users/[A-Za-z]' -- . ':!.github/workflows/ci.yml'; then echo "::error::absolute home paths found"; exit 1; fi
       - name: Public-readiness check (no personal data)
         run: ./scripts/check_public_ready.sh
+
+  intel:
+    name: Intel Mac (x86_64)
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Machine
+        run: |
+          uname -m
+          sw_vers
+          swift --version
+          system_profiler SPDisplaysDataType | grep -E "Chipset|Metal|VRAM" || true
+      - name: Build all targets (release, x86_64)
+        run: swift build -c release
+      - name: Tempo-tracking tests
+        run: swift test
+      - name: Probe against synthetic drum patterns
+        run: .build/release/rave-probe synth
+      - name: Build the universal app bundle
+        run: |
+          scripts/make_app.sh
+          scripts/check_app.sh
+      - name: Headless smoke run (skips if this runner has no GPU)
+        run: scripts/smoke_test.sh
+      - name: Keep the smoke-run snapshot
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-x86_64
+          path: |
+            build/smoke/*.png
+            build/smoke/log.txt
+            build/smoke/metrics.json
+          if-no-files-found: ignore
+          retention-days: 14

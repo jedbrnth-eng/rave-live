@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/actions/workflows/ci.yml"><img src="https://github.com/jedbrnth-eng/rave-live/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white" alt="macOS 12+">
   <img src="https://img.shields.io/badge/Swift-5.10%2B-F05138?logo=swift&logoColor=white" alt="Swift 5.10+">
   <img src="https://img.shields.io/badge/GPU-Metal-555555" alt="Metal">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0 license"></a>
@@ -40,7 +40,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/releases/latest/download/RAVE-LIVE.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20RAVE%20LIVE%20for%20Mac-Free-ff2d95?style=for-the-badge&logo=apple&logoColor=white" alt="Download RAVE LIVE for Mac, free" height="56"></a><br>
-  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ · about 6 MB</sub>
+  <sub>Free · Apple silicon and Intel · macOS 12+ · about 7 MB</sub>
 </p>
 
 ## Download (no Terminal needed)
@@ -50,13 +50,21 @@
 3. Open RAVE LIVE from Applications. macOS will say it can't verify the app, because RAVE LIVE isn't notarized by Apple yet. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to RAVE LIVE, then confirm. You only do this once.
 4. Allow **Screen & System Audio Recording** when macOS asks. It is how RAVE LIVE hears what your Mac is playing; nothing is recorded.
 
+### Requirements
+
+- **Any Mac with macOS 12 Monterey or later**: Apple silicon or Intel (one universal app).
+- **System audio** (Spotify, YouTube, Apple Music…) needs **macOS 13 Ventura or later**. On macOS 12, pick a microphone,
+  audio interface or DJ mixer in the **Audio** menu, or install the free [BlackHole](https://github.com/ExistentialAudio/BlackHole)
+  loopback driver and pick it there to visualize system audio. Step by step: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+- **Graphics**: any Metal GPU. Quality adapts to the GPU (Intel and AMD graphics get lighter settings; change it in **View → Quality**).
+
 Prefer one command? Paste this into Terminal. It downloads the latest release, puts RAVE LIVE in Applications and opens it (it also clears macOS's download flag, so there is no Open Anyway step):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/rave-live/main/install.sh | bash
 ```
 
-<sub>Want to read the script first? It's [install.sh](install.sh), about 50 lines. The app is open source, so you can read every line it runs. Intel Macs aren't supported yet; you can [build from source](#build-from-source) instead.</sub>
+<sub>Want to read the script first? It's [install.sh](install.sh), about 50 lines. The app is open source, so you can read every line it runs.</sub>
 
 ## Photosensitivity warning
 
@@ -117,7 +125,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 | `S` / `Shift`+`S` | Strobes on/off / lift the 3-per-second limit (asks first) |
 | `B` | Blackout |
 | `C` or `⌘K` | Camera hands and body (AURORA) |
-| `M` | Switch between system audio and microphone / line-in |
+| `M` | Switch between system audio and your last input device (pick devices in the **Audio** menu) |
 | `F` or `⌘F` | Fullscreen |
 | `H` | Show or hide the status bar |
 
@@ -129,7 +137,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 ```
 system audio (ScreenCaptureKit) ─┐
-mic / line-in (AVAudioEngine) ───┴─► LiveAnalyzer ─► TempoTracker ─► ShowDirector ─► Metal renderers
+any input device (CoreAudio) ────┴─► LiveAnalyzer ─► TempoTracker ─► ShowDirector ─► Metal renderers
                                      FFT bands,       tempo, beat      phrases,        Stage · Classic
                                      onsets, kick/    phase, bar       build/drop      Visuals · AURORA
                                      snare/hat        line             detection       + transitions
@@ -163,14 +171,14 @@ RAVE LIVE has no account, analytics or telemetry, and the app makes no network r
 | Permission | Why |
 |---|---|
 | **Screen Recording** | macOS requires it to read the audio your Mac is playing. RAVE LIVE does not record your screen. |
-| **Microphone** | Only if you switch to mic or line-in (`M`), for turntables, a mixer or when system audio is unavailable. |
+| **Microphone** | Only if you pick an input device in the Audio menu (mic, interface, DJ mixer, loopback driver), or on macOS 12. |
 | **Camera** | Only if you turn on hands and body tracking in AURORA. Frames are analysed on your Mac and never saved or sent. |
 
 The optional Beat This! referee is a separate Python install. The `beat_this` package downloads its own model checkpoint from its authors the first time it runs.
 
 ## Build from source
 
-Needs macOS 14 or later and Xcode (the full app, because the icon is compiled with `actool`).
+Needs Xcode 15.3 or later (the full app, because the icon is compiled with `actool`), which needs macOS 13.5 or later. The app it builds is universal (Apple silicon + Intel) and runs on macOS 12 or later; `RAVE_ARCHS=arm64 scripts/make_app.sh` builds just one slice for quicker iterations.
 
 ```bash
 git clone https://github.com/jedbrnth-eng/rave-live.git
