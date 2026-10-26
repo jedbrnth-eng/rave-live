@@ -47,6 +47,18 @@ final class QualityController: NSObject {
 
     var tier: QualityTier { QualityTier(rawValue: choice) ?? detected.0 }
 
+    /// The slice that is running: "arm64", "x86_64", or "x86_64 (Rosetta)".
+    static let cpuArch: String = {
+        #if arch(x86_64)
+        var translated: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        let rosetta = sysctlbyname("sysctl.proc_translated", &translated, &size, nil, 0) == 0 && translated == 1
+        return rosetta ? "x86_64 (Rosetta)" : "x86_64"
+        #else
+        return "arm64"
+        #endif
+    }()
+
     /// Call before creating the Renderer. `override` is the `--quality` argument (not saved).
     func setUp(view: MTKView, override: String?) {
         self.view = view
@@ -56,7 +68,8 @@ final class QualityController: NSObject {
         choice = (pick == "auto" || QualityTier(rawValue: pick) != nil) ? pick : "auto"
         QualityTier.active = tier
         if !view.autoResizeDrawable { fixedSize = view.drawableSize }
-        NSLog("RAVE LIVE: quality %@ (%@; detected %@ for %@)", tier.rawValue, choice, detected.0.rawValue, detected.1)
+        NSLog("RAVE LIVE: quality %@ (%@; detected %@ for %@) · %@ · macOS %@", tier.rawValue, choice, detected.0.rawValue, detected.1,
+              Self.cpuArch, ProcessInfo.processInfo.operatingSystemVersionString)
     }
 
     /// Call once the Renderer exists.
@@ -77,7 +90,7 @@ final class QualityController: NSObject {
                 r.aurora = a
             }
             r.aurora?.fullBloom = t.fullBloom
-            r.metrics.event("quality:\(t.rawValue) (\(choice)) particles=\(t.particlesEffective) scale=\(t.renderScale) gpu=\(detected.1)", at: CACurrentMediaTime())
+            r.metrics.event("quality:\(t.rawValue) (\(choice)) particles=\(t.particlesEffective) scale=\(t.renderScale) gpu=\(detected.1) cpu=\(Self.cpuArch)", at: CACurrentMediaTime())
         }
         viewChanged()
         rebuildMenu()

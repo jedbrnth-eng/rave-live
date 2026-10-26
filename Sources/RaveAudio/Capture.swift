@@ -33,8 +33,10 @@ public enum CapturePermission {
 }
 
 /// System audio (ScreenCaptureKit) needs macOS 13; on macOS 12 only input devices are available.
+/// Env RAVE_NO_SYSTEM_AUDIO=1 makes a newer Mac behave like macOS 12 here (for testing the fallback).
 public enum SystemAudio {
     public static var isSupported: Bool {
+        if ProcessInfo.processInfo.environment["RAVE_NO_SYSTEM_AUDIO"] != nil { return false }
         if #available(macOS 13.0, *) { return true }
         return false
     }
@@ -219,22 +221,33 @@ public final class MicCapture: @unchecked Sendable {
     public var onSamples: SampleHandler?
     public private(set) var buffersReceived = 0
     private var engine = AVAudioEngine()
+    private var hal: HALInput?
     public init() {}
     public static func requestPermission() async -> Bool {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
+    /// "granted", "denied", "restricted" or "not determined" (no prompt shown).
+    public static var permissionStatus: String {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return "granted"
+        case .denied: return "denied"
+        case .restricted: return "restricted"
+        default: return "not determined"
+        }
+    }
     /// Starts capturing from `device`, or from the system default input when nil.
     public func start(device: AudioInputDevice? = nil) throws {
-        engine = AVAudioEngine()   // a fresh engine picks up the newly chosen device's format
+        stop()
         buffersReceived = 0
-        let input = engine.inputNode
-        if let device, let unit = input.audioUnit {
-            var id = device.id
-            let err = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
-                                           &id, UInt32(MemoryLayout<AudioDeviceID>.size))
-            if err != noErr { throw NSError(domain: NSOSStatusErrorDomain, code: Int(err),
-                                            userInfo: [NSLocalizedDescriptionKey: "Can't select input \"\(device.name)\" (error \(err))"]) }
+        // Preferred: an input-only AUHAL on the device, 512-frame buffers. (AVAudioEngine taps arrive in ~100 ms
+        // chunks, and pointing its shared input/output AUHAL at an input-only device silently delivers nothing.)
+        if let device = device ?? AudioInputDevice.defaultInput() {
+            let h = HALInput(device: device)
+            h.onBuffer = { [weak self] buf, sr, t in self?.buffersReceived += 1; self?.onSamples?(buf, sr, t) }
+            do { try h.start(); hal = h; return } catch { h.stop(); NSLog("RaveAudio: %@; falling back to AVAudioEngine", error.localizedDescription) }
         }
+        engine = AVAudioEngine()   // fallback: the current default input
+        let input = engine.inputNode
         let fmt = input.outputFormat(forBus: 0)
         guard fmt.sampleRate > 0, fmt.channelCount > 0 else {
             throw NSError(domain: "RaveAudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "No audio input device available"])
@@ -256,7 +269,106 @@ public final class MicCapture: @unchecked Sendable {
         try engine.start()
     }
     public func stop() {
+        hal?.stop(); hal = nil
         guard engine.isRunning else { return }
         engine.inputNode.removeTap(onBus: 0); engine.stop()
+    }
+}
+
+/// Input-only AUHAL on one specific CoreAudio device: Float32 non-interleaved, mixed to mono, host-time stamps.
+private final class HALInput {
+    var onBuffer: SampleHandler?
+    private let device: AudioInputDevice
+    private var unit: AudioUnit?
+    private var channels = 1
+    private var sampleRate = 48000.0
+    private var abl: UnsafeMutableAudioBufferListPointer?
+    private var mono = [Float](repeating: 0, count: 8192)
+    private static let maxFrames = 8192
+
+    init(device: AudioInputDevice) { self.device = device }
+    deinit { stop() }
+
+    private func check(_ err: OSStatus, _ what: String) throws {
+        if err != noErr {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(err),
+                          userInfo: [NSLocalizedDescriptionKey: "Can't open input \"\(device.name)\": \(what) failed (\(err))"])
+        }
+    }
+
+    func start() throws {
+        var desc = AudioComponentDescription(componentType: kAudioUnitType_Output, componentSubType: kAudioUnitSubType_HALOutput,
+                                             componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0)
+        guard let comp = AudioComponentFindNext(nil, &desc) else { try check(-1, "AUHAL lookup"); return }
+        var u: AudioUnit?
+        try check(AudioComponentInstanceNew(comp, &u), "AUHAL")
+        guard let unit = u else { return }
+        self.unit = unit
+        let u32 = UInt32(MemoryLayout<UInt32>.size)
+        var on: UInt32 = 1, off: UInt32 = 0
+        try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, &on, u32), "enable input")
+        try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, &off, u32), "disable output")
+        var id = device.id
+        try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &id,
+                                       UInt32(MemoryLayout<AudioDeviceID>.size)), "select device")
+        var hw = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        try check(AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &hw, &size), "read format")
+        guard hw.mSampleRate > 0, hw.mChannelsPerFrame > 0 else { try check(-1, "device format"); return }
+        sampleRate = hw.mSampleRate
+        channels = Int(hw.mChannelsPerFrame)
+        var fmt = AudioStreamBasicDescription(mSampleRate: hw.mSampleRate, mFormatID: kAudioFormatLinearPCM,
+                                              mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved,
+                                              mBytesPerPacket: 4, mFramesPerPacket: 1, mBytesPerFrame: 4,
+                                              mChannelsPerFrame: hw.mChannelsPerFrame, mBitsPerChannel: 32, mReserved: 0)
+        try check(AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &fmt, size), "set format")
+        var frames: UInt32 = 512   // same buffer size as the default-input path (low latency)
+        _ = AudioUnitSetProperty(unit, kAudioDevicePropertyBufferFrameSize, kAudioUnitScope_Global, 0, &frames, u32)
+        let list = AudioBufferList.allocate(maximumBuffers: channels)
+        for c in 0..<channels {
+            list[c] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(Self.maxFrames * 4),
+                                  mData: UnsafeMutableRawPointer.allocate(byteCount: Self.maxFrames * 4, alignment: 16))
+        }
+        abl = list
+        var cb = AURenderCallbackStruct(inputProc: { ref, flags, ts, bus, n, _ in
+            Unmanaged<HALInput>.fromOpaque(ref).takeUnretainedValue().render(flags, ts, bus, n)
+        }, inputProcRefCon: Unmanaged.passUnretained(self).toOpaque())
+        try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, &cb,
+                                       UInt32(MemoryLayout<AURenderCallbackStruct>.size)), "input callback")
+        try check(AudioUnitInitialize(unit), "initialise")
+        try check(AudioOutputUnitStart(unit), "start")
+    }
+
+    private func render(_ flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>, _ ts: UnsafePointer<AudioTimeStamp>,
+                        _ bus: UInt32, _ n: UInt32) -> OSStatus {
+        guard let unit, let abl, Int(n) <= Self.maxFrames else { return noErr }
+        for c in 0..<abl.count { abl[c].mDataByteSize = n * 4 }
+        let err = AudioUnitRender(unit, flags, ts, bus, n, abl.unsafeMutablePointer)
+        guard err == noErr else { return err }
+        let frames = Int(n)
+        for i in 0..<frames { mono[i] = 0 }
+        for c in 0..<abl.count {
+            guard let d = abl[c].mData?.assumingMemoryBound(to: Float.self) else { continue }
+            for i in 0..<frames { mono[i] += d[i] }
+        }
+        let g = 1 / Float(max(1, abl.count))
+        for i in 0..<frames { mono[i] *= g }
+        let t = AVAudioTime.seconds(forHostTime: ts.pointee.mHostTime)
+        mono.withUnsafeBufferPointer { onBuffer?(UnsafeBufferPointer(rebasing: $0[0..<frames]), sampleRate, t) }
+        return noErr
+    }
+
+    func stop() {
+        if let unit {
+            AudioOutputUnitStop(unit)
+            AudioUnitUninitialize(unit)
+            AudioComponentInstanceDispose(unit)
+        }
+        unit = nil
+        if let abl {
+            for b in abl { b.mData?.deallocate() }
+            free(abl.unsafeMutablePointer)
+        }
+        abl = nil
     }
 }

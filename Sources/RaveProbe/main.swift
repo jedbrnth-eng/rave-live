@@ -78,7 +78,7 @@ case "live":
     // rave-probe live [seconds] [--play file] [--mic]
     let secs = args.count > 2 ? Double(args[2]) ?? 20 : 20
     let playIdx = args.firstIndex(of: "--play")
-    let useMic = args.contains("--mic") || !SystemAudio.isSupported   // macOS 12: input devices only
+    let useMic = args.contains("--mic") || args.contains("--input") || !SystemAudio.isSupported   // macOS 12: input devices only
     if !useMic && !CapturePermission.screenRecordingGranted {
         CapturePermission.requestScreenRecording()
         print("PERMISSION: Screen Recording not granted.\n" + CapturePermission.fixInstructions)
@@ -132,7 +132,8 @@ case "live":
     if useMic {
         _ = await MicCapture.requestPermission()
         mic.onSamples = handler
-        try mic.start()
+        let inIdx = args.firstIndex(of: "--input")
+        try mic.start(device: inIdx.flatMap { args.count > $0 + 1 ? AudioInputDevice.matching(args[$0 + 1]) : nil })
     } else if #available(macOS 13.0, *) {
         let sys = SystemAudioCapture()
         sysRef = sys

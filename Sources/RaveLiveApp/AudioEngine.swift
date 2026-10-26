@@ -97,7 +97,7 @@ final class AudioEngine: @unchecked Sendable {
         loggedFirstAudio = false
         switch src {
         case .system:
-            if #available(macOS 13.0, *) {
+            if #available(macOS 13.0, *), SystemAudio.isSupported {
                 mic.stop()
                 source = .system; sourceLabel = "system"
                 if !CapturePermission.screenRecordingGranted { CapturePermission.requestScreenRecording() }
@@ -120,7 +120,9 @@ final class AudioEngine: @unchecked Sendable {
 
     private func startDevice(_ uid: String?, handler: @escaping SampleHandler) async {
         if #available(macOS 13.0, *), let sys = sysCapture as? SystemAudioCapture { await sys.stop() }
-        _ = await MicCapture.requestPermission()
+        // Don't wait on the permission prompt: the device delivers silence until the user answers.
+        let permission = MicCapture.permissionStatus
+        if permission == "not determined" { Task { _ = await MicCapture.requestPermission() } }
         var device = uid.flatMap { u in AudioInputDevice.all().first { $0.uid == u } }
         var note = ""
         if uid != nil && device == nil { note = "That input device isn't connected; using the default input. " }
@@ -131,8 +133,8 @@ final class AudioEngine: @unchecked Sendable {
         mic.onSamples = handler
         do {
             try mic.start(device: device)
-            NSLog("RAVE LIVE: listening to input \"%@\"", device?.name ?? "default")
-            onStatus?(note)
+            NSLog("RAVE LIVE: listening to input \"%@\" (microphone permission %@)", device?.name ?? "default", permission)
+            onStatus?(note + (permission == "denied" ? "Microphone access is off: System Settings → Privacy & Security → Microphone → RAVE LIVE." : ""))
         } catch { onStatus?(note + "Input failed: \(error.localizedDescription)") }
     }
 

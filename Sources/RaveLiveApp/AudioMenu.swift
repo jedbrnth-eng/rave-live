@@ -34,10 +34,34 @@ final class AudioMenu: NSObject, NSMenuDelegate {
         item.submenu = menu
         audio.onDevicesChanged = { [weak self] in self?.rebuild() }
         rebuild()
+        if let i = CommandLine.arguments.firstIndex(of: "--audio-menu-shot"), CommandLine.arguments.count > i + 1 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.shoot(to: CommandLine.arguments[i + 1]) }
+        }
         return item
     }
 
-    /// Switch source and remember it (menu and the M key).
+    /// Test hook (`--audio-menu-shot <png>`): pops the Audio menu up over the window and renders this app's
+    /// menu window into a PNG in-process (no screen capture, no permission needed).
+    private func shoot(to path: String) {
+        guard let view = NSApp.mainWindow?.contentView ?? NSApp.windows.first?.contentView else { return }
+        // The menu tracks in its own run loop mode, so use a common-modes timer rather than GCD.
+        let timer = Timer(timeInterval: 1.0, repeats: false) { [weak self] _ in
+            defer { self?.menu.cancelTracking() }
+            let wins = NSApp.windows.filter { $0.isVisible && $0.level.rawValue > NSWindow.Level.normal.rawValue }
+            NSLog("RAVE LIVE: menu shot candidates: %@", wins.map { "\(type(of: $0)) \(Int($0.frame.width))x\(Int($0.frame.height))" }.joined(separator: ", "))
+            guard let w = wins.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }),
+                  let root = w.contentView?.superview ?? w.contentView,
+                  let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds) else { NSLog("RAVE LIVE: menu shot: no menu window"); return }
+            root.cacheDisplay(in: root.bounds, to: rep)
+            do {
+                try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+                NSLog("RAVE LIVE: menu shot saved to %@", path)
+            } catch { NSLog("RAVE LIVE: menu shot failed: %@", error.localizedDescription) }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        menu.popUp(positioning: menu.items.first, at: NSPoint(x: 60, y: view.bounds.height - 60), in: view)
+    }
+
     func select(_ src: InputSource) {
         InputSource.saved = src
         guard let audio else { return }
