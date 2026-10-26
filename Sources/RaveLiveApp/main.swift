@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var view: StageView!
     var renderer: Renderer!
     let audio = AudioEngine()
+    let vj = VJRig()
     let hud = NSTextField(labelWithString: "")
     let status = NSTextField(wrappingLabelWithString: "")
     lazy var metricsURL: URL = {
@@ -110,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             r.pointerEvent(pos: pos, down: down, click: click)
         }
         buildMenu()
+        vj.attach(app: self)
         modeControl.segmentCount = Renderer.Mode.allCases.count
         for m in Renderer.Mode.allCases { modeControl.setLabel(m.title, forSegment: m.rawValue); modeControl.setWidth(110, forSegment: m.rawValue) }
         modeControl.target = self; modeControl.action = #selector(modeClicked(_:))
@@ -222,11 +224,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cam = NSMenuItem(title: "Camera Hands & Body (AURORA)", action: #selector(menuCamera(_:)), keyEquivalent: "k"); cam.target = self; vm.addItem(cam)
         let fs = NSMenuItem(title: "Fullscreen", action: #selector(menuFullscreen(_:)), keyEquivalent: "f"); fs.target = self; vm.addItem(fs)
         viewItem.submenu = vm
+        vj.addMenus(to: main)
         NSApp.mainMenu = main
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ n: Notification) { renderer?.metrics.dump(to: metricsURL); audio.stopReferee() }
+    func applicationWillTerminate(_ n: Notification) { vj.shutdown(); renderer?.metrics.dump(to: metricsURL); audio.stopReferee() }
 
     private func photosensitivityWarningIfNeeded(skip: Bool, then: @escaping () -> Void) {
         let key = "acceptedPhotosensitivityWarning"
@@ -241,6 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func key(_ e: NSEvent) {
         let r = renderer!
+        if vj.handleKey(e) { return }
         let ch = e.charactersIgnoringModifiers?.lowercased() ?? ""
         switch (ch, e.modifierFlags.contains(.shift)) {
         case ("s", true):

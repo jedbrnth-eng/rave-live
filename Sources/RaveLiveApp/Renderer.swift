@@ -23,6 +23,9 @@ final class Renderer: NSObject, MTKViewDelegate {
     var blackout = false
     var stage: Float = 0
     var hudVisible = true
+    var manualStrobe = false          // MIDI strobe pad held; goes through the same flash limiter
+    var frameOutput: FrameOutput?     // VJ output stage: brightness, Syphon, output-display preview
+    var beatClockIndex: Float { beatIdx }
 
     // Show state
     private var t0 = CACurrentMediaTime()
@@ -215,7 +218,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         // --- strobe + blinder hits share one photosensitivity limiter (<= 3 flashes/s by default)
         let minGap = strobeOverride ? 0.08 : 1.0 / 3.0
         // strobe: Wild = drops + very loud moments; Normal = drops only; Chill = never
-        let wantFlash = strobeEnabled && s.playing && intensity != .chill && (d.drop > 0.5 || (intensity == .wild && e > 0.9)) && snareEnv > 0.95
+        let wantFlash = strobeEnabled && (manualStrobe || (s.playing && intensity != .chill && (d.drop > 0.5 || (intensity == .wild && e > 0.9)) && snareEnv > 0.95))
         let blinderHit = director.takeFlash()
         var blinder = d.blinder
         if (wantFlash || blinderHit) && now - lastFlash >= minGap {
@@ -298,6 +301,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         let elapsed = now - t0
         let snapNow = !snapTimes.isEmpty && elapsed >= snapTimes[0]
         if snapNow { snapTimes.removeFirst() }
+        frameOutput?.process(cb: cb, texture: drawable.texture)
         cb.present(drawable)
         cb.commit()
         if snapNow {
