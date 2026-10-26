@@ -40,7 +40,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/releases/latest/download/RAVE-LIVE.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20RAVE%20LIVE%20for%20Mac-Free-ff2d95?style=for-the-badge&logo=apple&logoColor=white" alt="Download RAVE LIVE for Mac, free" height="56"></a><br>
-  <sub>Free · Apple silicon and Intel · macOS 12+ · about 8 MB</sub>
+  <sub>Free · Apple silicon and Intel · macOS 12+ · about 9 MB</sub>
 </p>
 
 ## Download (no Terminal needed)
