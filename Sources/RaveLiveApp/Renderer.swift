@@ -133,6 +133,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         milk = MilkDropRenderer(device: dev, pixelFormat: view.colorPixelFormat, library: MilkDropLibrary())
         super.init()
         milk?.onEvent = { [weak self] e in self?.metrics.event(e, at: CACurrentMediaTime()) }
+        metrics.event(String(format: "renderer:t0 host=%.4f", t0), at: t0)     // lets tests line --smoothlog times up with other host-clock logs
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}

@@ -18,6 +18,12 @@ final class MilkDropRenderer: @unchecked Sendable {
     let lib = MilkDropLib.shared
     let library: MilkDropLibrary
     private let comp: MTLRenderPipelineState
+    private let copy: MTLRenderPipelineState
+    /// Our last composited frames: each new frame is eased toward the new projectM frame (`temporalBlend`), so a preset
+    /// that flickers frame to frame or strobes reads as a quick fade instead of a spasm. Cleared when MILKDROP wasn't drawn.
+    private var hist: [MTLTexture] = []
+    private var histCur = 0, histLastUse = -100.0
+    private var lastGLRequest = 0.0
     private let glQueue = DispatchQueue(label: "rave.milkdrop.gl", qos: .userInteractive)
 
     // GL thread only
@@ -58,6 +64,8 @@ final class MilkDropRenderer: @unchecked Sendable {
     var director = MilkDropDirector()
     /// Show intensity (0 Chill, 1 Normal, 2 Wild), set by the Renderer every frame.
     var intensity = 1
+    /// Share of the new frame per displayed frame (1 = no smoothing). Normal eases one-frame flicker; Wild stays crisp.
+    static func temporalBlend(intensity: Int) -> Float { [0.45, 0.6, 0.85][max(0, min(2, intensity))] }
     /// projectM's beat sensitivity drives how hard presets react to its own beat detection. Uncapped (the old 1 + 1.5 x build
     /// + drop, up to 3.5) many presets spasm on every transient; Normal now stays at 0.8-1.3, Wild may reach 2.4.
     static func beatSensitivity(intensity: Int, build: Float, drop: Float) -> Float {
@@ -84,6 +92,8 @@ final class MilkDropRenderer: @unchecked Sendable {
             d.vertexFunction = l.makeFunction(name: "mvert"); d.fragmentFunction = l.makeFunction(name: "mfrag")
             d.colorAttachments[0].pixelFormat = pixelFormat
             comp = try device.makeRenderPipelineState(descriptor: d)
+            d.fragmentFunction = l.makeFunction(name: "mcopy")
+            copy = try device.makeRenderPipelineState(descriptor: d)
         } catch { NSLog("MilkDrop shader error: \(error)"); return nil }
     }
 
@@ -138,16 +148,49 @@ final class MilkDropRenderer: @unchecked Sendable {
     func encode(cb: MTLCommandBuffer, rpd: MTLRenderPassDescriptor, size: CGSize, u: [Float], playing: Bool) {
         if ready { requestFrame(size: size, sensitivity: Self.beatSensitivity(intensity: intensity, build: u[34], drop: u[17]), playing: playing) }
         lock.lock(); let tex = published; lock.unlock()
+        // composite into our own history texture (eased toward the new frame), then show it
+        let w = max(16, Int(size.width)), h = max(16, Int(size.height)), now = CACurrentMediaTime()
+        var fresh = now - histLastUse > 0.25
+        if hist.first?.width != w || hist.first?.height != h {
+            let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: rpd.colorAttachments[0].texture?.pixelFormat ?? .bgra8Unorm, width: w, height: h, mipmapped: false)
+            d.usage = [.renderTarget, .shaderRead]; d.storageMode = .private
+            hist = (0..<2).compactMap { _ in device.makeTexture(descriptor: d) }
+            fresh = true
+        }
+        histLastUse = now
+        guard hist.count == 2, hist[0].pixelFormat == rpd.colorAttachments[0].texture?.pixelFormat else {
+            encodeComposite(cb: cb, rpd: rpd, tex: tex, prev: nil, blend: 1, u: u, size: size); return
+        }
+        let prev = hist[histCur], dst = hist[1 - histCur]
+        histCur = 1 - histCur
+        let hp = MTLRenderPassDescriptor()
+        hp.colorAttachments[0].texture = dst; hp.colorAttachments[0].loadAction = .dontCare; hp.colorAttachments[0].storeAction = .store
+        encodeComposite(cb: cb, rpd: hp, tex: tex, prev: fresh ? nil : prev, blend: Self.temporalBlend(intensity: intensity), u: u, size: size)
         guard let enc = cb.makeRenderCommandEncoder(descriptor: rpd) else { return }
-        var mu: [Float] = [tex != nil ? 1 : 0, u[2], u[9], u[34], u[17], u[33], u[16], u[15], Float(size.width / max(1, size.height))]
+        enc.setRenderPipelineState(copy); enc.setFragmentTexture(dst, index: 0)
+        enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        enc.endEncoding()
+    }
+
+    private func encodeComposite(cb: MTLCommandBuffer, rpd: MTLRenderPassDescriptor, tex: MTLTexture?, prev: MTLTexture?, blend: Float, u: [Float], size: CGSize) {
+        guard let enc = cb.makeRenderCommandEncoder(descriptor: rpd) else { return }
+        // blackout and the blinder bypass the easing (they must act on the frame they're asked for)
+        let b: Float = prev == nil || u[15] > 0.5 ? 1 : blend
+        var mu: [Float] = [tex != nil ? 1 : 0, u[2], u[9], u[34], u[17], u[33], u[16], u[15], Float(size.width / max(1, size.height)), b]
         enc.setRenderPipelineState(comp)
         if let tex { enc.setFragmentTexture(tex, index: 0) }
+        if let prev { enc.setFragmentTexture(prev, index: 1) }
         enc.setFragmentBytes(&mu, length: mu.count * 4, index: 0)
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         enc.endEncoding()
     }
 
     private func requestFrame(size: CGSize, sensitivity: Float, playing: Bool) {
+        // MilkDrop presets step per frame and were made for ~60 fps: on 120 Hz displays render every other frame
+        // (they ran at double speed); at 72 fps every frame (even cadence, 20 % quicker than 60)
+        let now = CACurrentMediaTime()
+        if now - lastGLRequest < 1.0 / 75 - 0.002 { return }
+        lastGLRequest = now
         lock.lock()
         if busy { lock.unlock(); return }     // GL still on the previous frame: show the last one, never wait
         busy = true
@@ -419,8 +462,12 @@ vertex MO mvert(uint vid [[vertex_id]]) {
     float2 p = float2((vid << 1) & 2, vid & 2);
     MO o; o.pos = float4(p * 2 - 1, 0, 1); o.uv = float2(p.x, 1 - p.y); return o;
 }
-// u: 0 has frame, 1 time, 2 kick, 3 build, 4 drop, 5 blinder, 6 fade, 7 blackout, 8 aspect
-fragment float4 mfrag(MO in [[stage_in]], texture2d<float> t [[texture(0)]], constant float* u [[buffer(0)]]) {
+fragment float4 mcopy(MO in [[stage_in]], texture2d<float> t [[texture(0)]]) {
+    constexpr sampler s(filter::nearest, address::clamp_to_edge);
+    return float4(t.sample(s, in.uv).rgb, 1);
+}
+// u: 0 has frame, 1 time, 2 kick, 3 build, 4 drop, 5 blinder, 6 fade, 7 blackout, 8 aspect, 9 temporal blend (1 = none; prev = texture 1)
+fragment float4 mfrag(MO in [[stage_in]], texture2d<float> t [[texture(0)]], texture2d<float> prev [[texture(1)]], constant float* u [[buffer(0)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     float2 uv = in.uv;
     // beat-locked punch: a small zoom on the kick, a slow creep in during a build
@@ -440,6 +487,14 @@ fragment float4 mfrag(MO in [[stage_in]], texture2d<float> t [[texture(0)]], con
     c += u[5] * 0.3;                                        // blinder (already passed the strobe limiter)
     c *= mix(0.35, 1.0, u[6]);
     if (u[7] > 0.5) c = float3(0);
-    return float4(max(c, 0.0), 1);
+    c = max(c, 0.0);
+    if (u[9] < 0.999) {
+        constexpr sampler sp(filter::nearest, address::clamp_to_edge);
+        float3 p = prev.sample(sp, in.uv).rgb;
+        // ease toward the new frame
+        float k = u[9];
+        c = mix(p, c, k);
+    }
+    return float4(c, 1);
 }
 """

@@ -9,8 +9,9 @@ usage: smooth_report.py LOG [LOG...] [--json OUT] [--by preset|scene|trans] [--s
 Per group (default: per scene+preset outside transitions, plus one group per transition type):
   frames, fps, flick p95/p99, resid p95/p99, dmean p99, motion p95, jumps (count and per minute),
   glitches (transition frames above the glitch threshold), beat contrast, frame interval p50/p99.
-A "jump" is a frame whose motion-compensated change (resid) or whole-frame brightness change (dmean) is above the
-threshold while it is NOT in the beat window (phase 0..0.12, where accents belong) and not within 1 s of a drop.
+A "jump" is a visible pop: a run of frames whose motion-compensated change (resid) or whole-frame brightness change
+(dmean) is above the threshold, starting outside the beat window (phase 0..0.12, where accents belong) and not within
+1 s of a drop. Consecutive over-threshold frames count as one jump.
 """
 import json
 import math
@@ -83,14 +84,15 @@ def stats(rows, drops):
         return None
     flick = [r["flick"] for r in rows]; resid = [r["resid"] for r in rows]; dmean = [r["dmean"] for r in rows]
     motion = [r["motion"] for r in rows]; dts = [r["dt"] for r in rows]
-    jumps = 0
+    # a jump = one visible pop: a run of consecutive over-threshold frames counts once (an eased flash spreads
+    # over 2-3 frames but is still one event); frames in the beat window or just after a drop don't count
+    jumps, inside = 0, False
     for r in rows:
-        if r["phase"] < BEAT_WINDOW and r["locked"]:
-            continue
-        if any(0 <= r["t"] - d < DROP_GRACE for d in drops):
-            continue
-        if r["resid"] > RESID_JUMP or r["dmean"] > DMEAN_JUMP:
+        over = r["resid"] > RESID_JUMP or r["dmean"] > DMEAN_JUMP
+        excused = (r["phase"] < BEAT_WINDOW and r["locked"]) or any(0 <= r["t"] - d < DROP_GRACE for d in drops)
+        if over and not excused and not inside:
             jumps += 1
+        inside = over
     dur = sum(dts)
     c, peak, _ = beat_contrast(rows)
     return {
