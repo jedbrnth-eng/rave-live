@@ -139,7 +139,9 @@ final class UserShaderLibrary {
             guard parts.count >= 4, let line = Int(parts[0]) else { continue }
             let kind = parts[2].trimmingCharacters(in: .whitespaces)
             guard kind == "error" else { continue }
-            out.append("line \(line): \(parts[3].trimmingCharacters(in: .whitespaces))")
+            let msg = "line \(line): \(parts[3].trimmingCharacters(in: .whitespaces))"
+            if out.contains(msg) { continue }          // the Metal log repeats some errors
+            out.append(msg)
             if line >= 1 && line <= src.count { out.append("    \(line) | " + src[line - 1].trimmingCharacters(in: .whitespaces)) }
             if out.count >= 8 { break }
         }

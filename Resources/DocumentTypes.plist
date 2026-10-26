@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into Info.plist by scripts/make_app.sh: .ravelook look presets open in RAVE LIVE on double-click. -->
+<plist version="1.0"><dict>
+<key>CFBundleDocumentTypes</key><array><dict>
+  <key>CFBundleTypeName</key><string>RAVE LIVE Look</string>
+  <key>CFBundleTypeRole</key><string>Viewer</string>
+  <key>LSHandlerRank</key><string>Owner</string>
+  <key>LSItemContentTypes</key><array><string>io.github.jedbrnth-eng.ravelive.look</string></array>
+</dict></array>
+<key>UTExportedTypeDeclarations</key><array><dict>
+  <key>UTTypeIdentifier</key><string>io.github.jedbrnth-eng.ravelive.look</string>
+  <key>UTTypeDescription</key><string>RAVE LIVE Look</string>
+  <key>UTTypeConformsTo</key><array><string>public.json</string></array>
+  <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>ravelook</string></array></dict>
+</dict></array>
+</dict></plist>

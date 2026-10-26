@@ -48,6 +48,9 @@ cat > "$APP/Contents/Info.plist" <<'PL'
 <key>NSScreenCaptureUsageDescription</key><string>RAVE LIVE reads the audio your Mac is playing so the visuals react to the beat. It does not record your screen.</string>
 </dict></plist>
 PL
+# Shader Lab examples (copied to the user's Shaders folder on first launch) + .ravelook document type
+mkdir -p "$APP/Contents/Resources/Shaders" && cp community/shaders/*.metal community/shaders/README.txt "$APP/Contents/Resources/Shaders/"
+/usr/libexec/PlistBuddy -c "Merge Resources/DocumentTypes.plist" "$APP/Contents/Info.plist" >/dev/null
 VERSION="$(tr -d '[:space:]' < VERSION)"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$VERSION" "$APP/Contents/Info.plist"

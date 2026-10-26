@@ -190,22 +190,22 @@ final class PresetLab: NSObject {
         if let bad = failing.first {
             if errorBox == nil { errorBox = TextOverlay(device: device, pixelFormat: pixelFormat) }
             let t = NSMutableAttributedString()
-            let title = NSFont.systemFont(ofSize: 24 * s, weight: .bold), mono = NSFont.monospacedSystemFont(ofSize: 19 * s, weight: .medium)
+            let title = NSFont.systemFont(ofSize: 34 * s, weight: .bold), mono = NSFont.monospacedSystemFont(ofSize: 27 * s, weight: .medium)
             t.append(NSAttributedString(string: "SHADER LAB · \(bad.name).metal didn't compile\n", attributes: [.font: title, .foregroundColor: NSColor(red: 1, green: 0.45, blue: 0.4, alpha: 1)]))
             for l in bad.errorLines {
                 let isSrc = l.hasPrefix("    ")
                 t.append(NSAttributedString(string: l + "\n", attributes: [.font: mono, .foregroundColor: isSrc ? NSColor(white: 0.75, alpha: 1) : NSColor.white]))
             }
             let keep = bad.pipeline != nil ? "Still showing the last version that worked. " : ""
-            t.append(NSAttributedString(string: keep + "Fix it and save: it reloads by itself.", attributes: [.font: NSFont.systemFont(ofSize: 17 * s), .foregroundColor: NSColor(white: 0.7, alpha: 1)]))
-            errorBox?.update(t, width: min(W * 0.62, 1300 * Double(s)), accent: NSColor(red: 1, green: 0.3, blue: 0.3, alpha: 1))
+            t.append(NSAttributedString(string: keep + "Fix it and save: it reloads by itself.", attributes: [.font: NSFont.systemFont(ofSize: 24 * s), .foregroundColor: NSColor(white: 0.7, alpha: 1)]))
+            errorBox?.update(t, width: min(W * 0.8, 1500 * Double(s)), accent: NSColor(red: 1, green: 0.3, blue: 0.3, alpha: 1))
             errorBox?.draw(e, x: 28 * Double(s), y: H - Double(errorBox?.pixelSize.height ?? 0) - 60 * Double(s))
         }
         guard panelOpen || message.map({ now < $0.until }) == true else { return }
         if panel == nil { panel = TextOverlay(device: device, pixelFormat: pixelFormat) }
         let t = NSMutableAttributedString()
-        let big = NSFont.systemFont(ofSize: 24 * s, weight: .heavy), mono = NSFont.monospacedSystemFont(ofSize: 20 * s, weight: .medium)
-        let small = NSFont.systemFont(ofSize: 15 * s, weight: .regular)
+        let big = NSFont.systemFont(ofSize: 30 * s, weight: .heavy), mono = NSFont.monospacedSystemFont(ofSize: 26 * s, weight: .medium)
+        let small = NSFont.systemFont(ofSize: 19 * s, weight: .regular)
         if panelOpen {
             let tw = tweak(for: v.currentName)
             t.append(NSAttributedString(string: "TWEAK  ·  \(v.currentName)\n", attributes: [.font: big, .foregroundColor: NSColor.white]))
@@ -222,7 +222,7 @@ final class PresetLab: NSObject {
         } else if let m = message {
             t.append(NSAttributedString(string: m.text, attributes: [.font: mono, .foregroundColor: NSColor.white]))
         }
-        panel?.update(t, width: 560 * Double(s), accent: NSColor(red: 0.3, green: 0.95, blue: 0.8, alpha: 1))
+        panel?.update(t, width: 700 * Double(s), accent: NSColor(red: 0.3, green: 0.95, blue: 0.8, alpha: 1))
         panel?.draw(e, x: W - Double(panel?.pixelSize.width ?? 0) - 28 * Double(s), y: 70 * Double(s))
     }
 
@@ -282,6 +282,12 @@ final class PresetLab: NSObject {
                 }
             }
             setTweak(t, for: v.currentName)
+        }
+        if let want = arg("--lab-select") {           // test hook: keep selecting this Shader Lab file (it may appear later)
+            Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+                guard let v = self?.visuals, let i = VisualsRenderer.presetNames.firstIndex(of: "Lab: " + want), v.preset != i else { return }
+                v.preset = i; v.autoCycle = false
+            }
         }
         if let path = arg("--look-roundtrip") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
