@@ -48,12 +48,12 @@ public enum MidiEvent: Equatable {
     }
 }
 
-/// Tempo from MIDI clock (24 pulses per quarter note): least-squares slope over the last 4 beats of ticks,
-/// so per-tick jitter from USB / virtual ports averages out.
+/// Tempo from MIDI clock (24 pulses per quarter note): least-squares slope over the last 8 beats of ticks,
+/// so per-tick jitter from USB / virtual ports and late wake-ups on a busy Mac average out.
 public final class MidiClockEstimator {
     public let window: Int
     private var times: [Double] = []
-    public init(windowTicks: Int = 96) { window = max(8, windowTicks) }
+    public init(windowTicks: Int = 192) { window = max(8, windowTicks) }
 
     public func tick(at t: Double) {
         if let last = times.last, t - last > 0.5 || t <= last { times.removeAll() }   // gap or clock restart
@@ -63,10 +63,10 @@ public final class MidiClockEstimator {
     public func reset() { times.removeAll() }
     public var lastTick: Double? { times.last }
 
-    /// BPM once a full beat of ticks has arrived, else nil.
+    /// BPM once two beats of ticks have arrived, else nil.
     public var bpm: Double? {
         let n = times.count
-        guard n >= 25 else { return nil }
+        guard n >= 49 else { return nil }
         var sx = 0.0, sy = 0.0, sxx = 0.0, sxy = 0.0
         let t0 = times[0]
         for i in 0..<n {

@@ -31,11 +31,11 @@ final class MidiCoreTests: XCTestCase {
         XCTAssertFalse(est.isPresent(now: 10 + 200 * period + 1))
     }
 
-    func testClockNeedsOneBeatAndResetsOnGap() {
+    func testClockNeedsTwoBeatsAndResetsOnGap() {
         let est = MidiClockEstimator()
-        for i in 0..<10 { est.tick(at: Double(i) * 0.02) }
+        for i in 0..<40 { est.tick(at: Double(i) * 0.02) }
         XCTAssertNil(est.bpm)
-        for i in 0..<30 { est.tick(at: 5 + Double(i) * 0.02) }   // 4.8 s gap: old ticks dropped
+        for i in 0..<60 { est.tick(at: 5 + Double(i) * 0.02) }   // 4.8 s gap: old ticks dropped
         XCTAssertEqual(try XCTUnwrap(est.bpm), 125, accuracy: 0.01)
     }
 
