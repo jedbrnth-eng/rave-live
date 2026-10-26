@@ -1,0 +1,9 @@
+{
+  "format" : "ravelook",
+  "version" : 1,
+  "preset" : "Kick Cubes",
+  "name" : "Kick Cubes Kaleido",
+  "author" : "RAVE LIVE",
+  "app" : "RAVE LIVE 0.5",
+  "params" : { "beat" : 1.2, "density" : 1.3, "feedback" : 0, "hueShift" : 0.25, "palette" : 3, "speed" : 1, "symmetry" : 6 }
+}

@@ -10,6 +10,13 @@ import RaveAudio
 final class StageView: MTKView {
     var onKey: ((NSEvent) -> Void)?
     var onMouse: ((NSPoint, NSPoint, Bool, Bool) -> Void)?   // location (0..1, top-left), delta, down, click
+    var onDropFiles: (([URL]) -> Void)?                      // .milk files / folders dropped on the window
+    override func draggingEntered(_ s: NSDraggingInfo) -> NSDragOperation { AppDelegate.milkURLs(s.draggingPasteboard).isEmpty ? [] : .copy }
+    override func performDragOperation(_ s: NSDraggingInfo) -> Bool {
+        let urls = AppDelegate.milkURLs(s.draggingPasteboard)
+        guard !urls.isEmpty else { return false }
+        onDropFiles?(urls); return true
+    }
     override var acceptsFirstResponder: Bool { true }
     override func keyDown(with event: NSEvent) { onKey?(event) }
     private func norm(_ e: NSEvent) -> NSPoint {
@@ -32,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var view: StageView!
     var renderer: Renderer!
     let audio = AudioEngine()
+    let vj = VJRig()
     let hud = NSTextField(labelWithString: "")
     let status = NSTextField(wrappingLabelWithString: "")
     lazy var metricsURL: URL = {
@@ -40,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
     }()
     var dumpTimer: Timer?
+    private var appActivity: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let args = CommandLine.arguments
@@ -63,17 +72,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r_displayInfo = "\(NSScreen.main?.localizedName ?? "?") max \(maxHz) Hz, target \(view.preferredFramesPerSecond) fps"
         view.drawableSize = CGSize(width: w, height: h)
         view.autoResizeDrawable = arg("--width") == nil
+        QualityController.shared.setUp(view: view, override: arg("--quality"))
         guard let r = Renderer(view: view, audio: audio) else {
             let a = NSAlert()
             a.alertStyle = .critical
             a.messageText = "RAVE LIVE can't start the GPU renderer"
-            a.informativeText = "This app needs a Mac with Metal support (macOS 14 or later). Metal could not be initialised on this machine."
+            a.informativeText = "This app needs a Mac with Metal support (macOS 12 or later). Metal could not be initialised on this machine."
             a.runModal()
             NSApp.terminate(nil)
             return
         }
         renderer = r
         view.delegate = r
+        QualityController.shared.attach(r)
         r.forcedLook = arg("--look").flatMap(Float.init); r.forcedBeam = arg("--beam").flatMap(Float.init); r.forcedLaser = arg("--laser").flatMap(Float.init)
         if args.contains("--visuals") { r.mode = .visuals }
         if args.contains("--stage") { r.mode = .stage }
@@ -87,7 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let tr = arg("--trim").flatMap(Double.init) { r.userOffset = tr / 1000 }
         if let pr = arg("--preset").flatMap(Int.init) { r.visuals?.preset = pr; r.visuals?.autoCycle = false }
         if let s = arg("--snap") { r.snapTimes = s.split(separator: ",").compactMap { Double($0) }.sorted() }
+        r.snapTransitions = arg("--snap-transitions").flatMap(Int.init) ?? 0
+        r.showHoldOverride = arg("--show-hold").flatMap(Double.init)
         r.lumLogPath = arg("--lumlog").map { NSString(string: $0).expandingTildeInPath }
+        if let sl = arg("--smoothlog") { r.smooth = SmoothProbe(device: r.device, path: NSString(string: sl).expandingTildeInPath) }
+        setupMilkDrop(args)
         window.contentView!.addSubview(view)
 
         hud.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
@@ -100,21 +115,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.frame = NSRect(x: 40, y: 80, width: 700, height: 200)
         status.autoresizingMask = [.maxYMargin, .maxXMargin]
         window.contentView!.addSubview(status)
-        r.onHUD = { [weak self] s in DispatchQueue.main.async { self?.hud.stringValue = s } }
+        r.onHUD = { [weak self] s in DispatchQueue.main.async { self?.hud.stringValue = s; self?.updateMilkCard() } }
         audio.onStatus = { [weak self] s in DispatchQueue.main.async { self?.status.stringValue = s } }
         view.onKey = { [weak self] e in self?.key(e) }
+        view.registerForDraggedTypes([.fileURL])
+        view.onDropFiles = { [weak self] urls in self?.milkImport(urls) }
         view.onMouse = { [weak self] p, d, down, click in
             guard let r = self?.renderer else { return }
             let pos = SIMD2<Float>(Float(p.x), Float(p.y)), vel = SIMD2<Float>(Float(d.x), Float(d.y)) * 3.0
             r.mousePointer = .init(pos: pos, vel: vel, down: down, burst: click)
             r.pointerEvent(pos: pos, down: down, click: click)
         }
+        // Keep full frame rate when another app is in front (Syphon / projector feeds): no App Nap timer throttling.
+        appActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Rendering live visuals")
+        NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
+            guard let self, let r = self.renderer else { return }
+            r.metrics.event(self.window.occlusionState.contains(.visible) ? "window:visible" : "window:occluded", at: CACurrentMediaTime())
+        }
         buildMenu()
+        vj.attach(app: self)
         modeControl.segmentCount = Renderer.Mode.allCases.count
         for m in Renderer.Mode.allCases { modeControl.setLabel(m.title, forSegment: m.rawValue); modeControl.setWidth(110, forSegment: m.rawValue) }
         modeControl.target = self; modeControl.action = #selector(modeClicked(_:))
         modeControl.selectedSegment = r.mode.rawValue
-        modeControl.frame = NSRect(x: 12, y: window.contentView!.bounds.height - 40, width: 456, height: 28)
+        modeControl.frame = NSRect(x: 12, y: window.contentView!.bounds.height - 40, width: CGFloat(Renderer.Mode.allCases.count * 110 + 6), height: 28)
         modeControl.autoresizingMask = [.minYMargin, .maxXMargin]
         window.contentView!.addSubview(modeControl)
         r.onModeChange = { [weak self] m in DispatchQueue.main.async { self?.modeControl.selectedSegment = m.rawValue } }
@@ -135,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.audio.refereeEnabled = !args.contains("--no-referee")
             self.audio.startReferee()
             if args.contains("--demo") { self.audio.startDemo() }
-            else { Task { await self.audio.start(args.contains("--mic") ? .mic : .system) } }
+            else { let src = AudioMenu.initialSource(args); Task { await self.audio.start(src) } }
         }
         dumpTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -146,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let q = arg("--autoquit").flatMap(Double.init) {
             DispatchQueue.main.asyncAfter(deadline: .now() + q) { [weak self] in
                 guard let self else { return }
-                self.renderer.metrics.dump(to: self.metricsURL); NSApp.terminate(nil)
+                self.renderer.metrics.dump(to: self.metricsURL); self.renderer.smooth?.finish(); NSApp.terminate(nil)
             }
         }
         if args.contains("--fullscreen") { window.toggleFullScreen(nil) }
@@ -196,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if m == .visuals { renderer.visuals?.autoCycle = true }
         modeControl.selectedSegment = m.rawValue
         renderer.metrics.event("mode->" + m.title, at: CACurrentMediaTime())
+        updateMilkCard()
     }
     func toggleCamera() {
         guard let r = renderer else { return }
@@ -221,12 +246,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         vm.addItem(.separator())
         let cam = NSMenuItem(title: "Camera Hands & Body (AURORA)", action: #selector(menuCamera(_:)), keyEquivalent: "k"); cam.target = self; vm.addItem(cam)
         let fs = NSMenuItem(title: "Fullscreen", action: #selector(menuFullscreen(_:)), keyEquivalent: "f"); fs.target = self; vm.addItem(fs)
+        vm.addItem(QualityController.shared.menuItem())
+        addMilkDropMenu(to: vm)
         viewItem.submenu = vm
+        main.addItem(AudioMenu.shared.menuItem(audio: audio))
+        vj.addMenus(to: main)
+        if let lab = renderer?.visuals?.lab { lab.onWantClassic = { [weak self] in if self?.renderer.mode != .visuals { self?.setMode(.visuals) } }; main.addItem(lab.makeMenu()) }   // Visuals menu: Tweak panel, looks, Shader Lab
         NSApp.mainMenu = main
     }
 
+    /// Double-clicked .ravelook files (also at launch, before the renderer exists).
+    func application(_ sender: NSApplication, open urls: [URL]) { PresetLab.pendingOpen += urls; DispatchQueue.main.async { [weak self] in if self?.renderer != nil { self?.setMode(.visuals) } } }
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ n: Notification) { renderer?.metrics.dump(to: metricsURL); audio.stopReferee() }
+    func applicationWillTerminate(_ n: Notification) { vj.shutdown(); renderer?.metrics.dump(to: metricsURL); renderer?.smooth?.finish(); audio.stopReferee() }
 
     private func photosensitivityWarningIfNeeded(skip: Bool, then: @escaping () -> Void) {
         let key = "acceptedPhotosensitivityWarning"
@@ -241,7 +273,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func key(_ e: NSEvent) {
         let r = renderer!
+        if vj.handleKey(e) { return }
+        if milkKey(e) { return }
         let ch = e.charactersIgnoringModifiers?.lowercased() ?? ""
+        if r.visuals?.lab.handleKey(e, classic: r.mode == .visuals) == true { return }   // Shift+T Tweak panel (plain t stays tap tempo)
         switch (ch, e.modifierFlags.contains(.shift)) {
         case ("s", true):
             if !r.strobeOverride {
@@ -254,14 +289,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("s", false): r.strobeEnabled.toggle()
         case ("b", _): r.blackout.toggle()
         case ("f", _): window.toggleFullScreen(nil)
-        case ("h", _): r.hudVisible.toggle(); hud.isHidden = !r.hudVisible
-        case ("m", _): Task { await audio.start(audio.source == .mic ? .system : .mic) }
+        case ("m", _): AudioMenu.shared.toggle()
         case ("t", _): audio.tempo?.tap(at: CACurrentMediaTime())
         case ("i", _): r.intensity = Renderer.Intensity(rawValue: (r.intensity.rawValue + 1) % 3)!
         case (",", _): r.userOffset -= 0.01      // visuals earlier
         case (".", _): r.userOffset += 0.01      // visuals later
         case ("v", _): setMode(Renderer.Mode(rawValue: (r.mode.rawValue + 1) % Renderer.Mode.allCases.count)!)
         case ("c", _): toggleCamera()
+        case ("p", _): milkMenuBrowser(nil)      // MilkDrop browser from any mode (playing a preset switches to MILKDROP)
         case ("a", _): r.visuals?.autoCycle.toggle()
         case ("]", _): if let v = r.visuals { v.preset = (v.preset + 1) % VisualsRenderer.count; v.autoCycle = false }
         case ("[", _): if let v = r.visuals { v.preset = (v.preset + VisualsRenderer.count - 1) % VisualsRenderer.count; v.autoCycle = false }

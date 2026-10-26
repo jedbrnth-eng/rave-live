@@ -20,12 +20,13 @@ final class AuroraRenderer {
     private var mask: MTLTexture
     private let particleBuf: MTLBuffer
     let particleCount: Int
+    var fullBloom = true             // false on the Low quality tier: one blur radius instead of two
     private var simW = 256, simH = 144
     private var t: Float = 0
     private var rng: UInt64 = 0xA11CE
     private var lastBeat: Float = -1
     private var hue: Float = 0.6
-    private var pu = [Float](repeating: 0, count: 48)
+    private var pu = [Float](repeating: 0, count: 52)
 
     // interaction (uv space, y down)
     struct Pointer { var pos: SIMD2<Float>; var vel: SIMD2<Float>; var down: Bool; var burst: Bool }
@@ -257,6 +258,7 @@ final class AuroraRenderer {
             pu[12 + i * 4] = e.x; pu[13 + i * 4] = e.y; pu[14 + i * 4] = e.z; pu[15 + i * 4] = e.w
         }
         pu[44] = Float(bitPattern: UInt32(min(8, emitters.count))); pu[45] = Float(bitPattern: UInt32(particleCount))
+        pu[48] = Float(min(4.0, 1_000_000.0 / Double(max(1, particleCount))))   // fewer particles -> each brighter
         pu[46] = 1.0; pu[47] = Float(max(1.5, size.height / 720 * 2.0))
         enc.setComputePipelineState(pParticles)
         enc.setBuffer(particleBuf, offset: 0, index: 0)
@@ -282,11 +284,11 @@ final class AuroraRenderer {
         // bloom (MPS): half-res copy, two blur radii
         MPSImageBilinearScale(device: device).encode(commandBuffer: cb, sourceTexture: hdr, destinationTexture: half)
         MPSImageGaussianBlur(device: device, sigma: 6).encode(commandBuffer: cb, sourceTexture: half, destinationTexture: bloomA)
-        MPSImageGaussianBlur(device: device, sigma: 22).encode(commandBuffer: cb, sourceTexture: half, destinationTexture: bloomB)
+        if fullBloom { MPSImageGaussianBlur(device: device, sigma: 22).encode(commandBuffer: cb, sourceTexture: half, destinationTexture: bloomB) }
         if let r = cb.makeRenderCommandEncoder(descriptor: rpd) {
             var F = SIMD4<Float>(0.8 + 0.6 * u[17], strobe, blackout ? 1 : 0, fade)
             r.setRenderPipelineState(pFinal)
-            r.setFragmentTexture(hdr, index: 0); r.setFragmentTexture(bloomA, index: 1); r.setFragmentTexture(bloomB, index: 2)
+            r.setFragmentTexture(hdr, index: 0); r.setFragmentTexture(bloomA, index: 1); r.setFragmentTexture(fullBloom ? bloomB : bloomA, index: 2)
             r.setFragmentBytes(&F, length: 16, index: 0)
             var G = SIMD4<Float>(Float(symmetry), aspect, 0, 0)
             r.setFragmentBytes(&G, length: 16, index: 1)

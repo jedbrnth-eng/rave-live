@@ -6,12 +6,12 @@
 
 <p align="center">
   <b>A festival light show that plays along with whatever your Mac is playing.</b><br>
-  Beat-locked stage lights, lasers, LED walls, pyro and 33 visualizers. Native Swift and Metal, no account, no tracking.
+  Beat-locked stage lights, lasers, LED walls, pyro, 48 visualizers and MilkDrop presets built in. Native Swift and Metal, no account, no tracking.
 </p>
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/actions/workflows/ci.yml"><img src="https://github.com/jedbrnth-eng/rave-live/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white" alt="macOS 12+">
   <img src="https://img.shields.io/badge/Swift-5.10%2B-F05138?logo=swift&logoColor=white" alt="Swift 5.10+">
   <img src="https://img.shields.io/badge/GPU-Metal-555555" alt="Metal">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0 license"></a>
@@ -32,7 +32,7 @@
   <sub>Every look in one reel: Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
 </p>
 
-> **Status: pre-release (0.4).** This is the first public build, so expect rough edges. Issues and pull requests are welcome.
+> **Status: pre-release (0.5).** Expect rough edges. Issues and pull requests are welcome.
 
 > **Platform: Mac only, Linux/Windows planned.** RAVE LIVE is written for macOS (Swift, Metal and Apple's audio capture), so it does not run on Linux or Windows yet. A cross-platform version is planned; there is no date. Follow along or help in the issues.
 
@@ -40,7 +40,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/releases/latest/download/RAVE-LIVE.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20RAVE%20LIVE%20for%20Mac-Free-ff2d95?style=for-the-badge&logo=apple&logoColor=white" alt="Download RAVE LIVE for Mac, free" height="56"></a><br>
-  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ · about 6 MB</sub>
+  <sub>Free · Apple silicon and Intel · macOS 12+ · about 9 MB</sub>
 </p>
 
 ## Download (no Terminal needed)
@@ -50,13 +50,21 @@
 3. Open RAVE LIVE from Applications. macOS will say it can't verify the app, because RAVE LIVE isn't notarized by Apple yet. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to RAVE LIVE, then confirm. You only do this once.
 4. Allow **Screen & System Audio Recording** when macOS asks. It is how RAVE LIVE hears what your Mac is playing; nothing is recorded.
 
+### Requirements
+
+- **Any Mac with macOS 12 Monterey or later**: Apple silicon or Intel (one universal app).
+- **System audio** (Spotify, YouTube, Apple Music…) needs **macOS 13 Ventura or later**. On macOS 12, pick a microphone,
+  audio interface or DJ mixer in the **Audio** menu, or install the free [BlackHole](https://github.com/ExistentialAudio/BlackHole)
+  loopback driver and pick it there to visualize system audio. Step by step: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+- **Graphics**: any Metal GPU. Quality adapts to the GPU (Intel and AMD graphics get lighter settings; change it in **View → Quality**).
+
 Prefer one command? Paste this into Terminal. It downloads the latest release, puts RAVE LIVE in Applications and opens it (it also clears macOS's download flag, so there is no Open Anyway step):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/rave-live/main/install.sh | bash
 ```
 
-<sub>Want to read the script first? It's [install.sh](install.sh), about 50 lines. The app is open source, so you can read every line it runs. Intel Macs aren't supported yet; you can [build from source](#build-from-source) instead.</sub>
+<sub>Want to read the script first? It's [install.sh](install.sh), about 50 lines. The app is open source, so you can read every line it runs.</sub>
 
 ## Photosensitivity warning
 
@@ -64,7 +72,7 @@ RAVE LIVE uses flashing lights and strobes. A small share of people can have sei
 
 ## What it does
 
-Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on line-in) and RAVE LIVE turns it into a light show. It finds the tempo, the beat and the bar line in real time, then schedules every light cue on that grid, so builds and drops land where the music puts them.
+Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on line-in) and RAVE LIVE turns it into a light show. It finds the tempo, the beat and the bar line in real time, then schedules every light cue on that grid, so builds and drops land where the music puts them. Hits ease in and out on the beat instead of flickering, and every look is checked for off-beat flashes with a built-in probe ([docs/SMOOTHNESS.md](docs/SMOOTHNESS.md)).
 
 <p align="center">
   <img src="docs/screenshots/stage-drop.jpg" alt="Stage mode at a drop: LED wall, moving heads and flame jets over the crowd" width="860">
@@ -72,10 +80,19 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 | Mode | What you get |
 |---|---|
-| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals and AURORA every 32 beats on a bar line, with 7 beat-locked transitions. Drops get a hard cut. |
+| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals, AURORA and MILKDROP every 32 beats on a bar line, with 7 beat-locked transitions; the next scene starts a bar early offscreen, so it fades in already running. Drops get one clean cut. |
 | **Stage** | A procedural club stage: LED wall looks, moving heads, lasers, haze, flame jets, fireballs and a crowd that reacts. A show director picks looks per phrase and tracks builds and drops. |
-| **Classic Visuals** | 33 presets, from feedback classics (Tunnel, MilkWarp, Kaleido) to Synthwave, Galaxy, Neon City, Terrain, reaction-diffusion Coral, a rippling Pond, Fireworks and touchable Silk aurora curtains. Presets 23–32 react to your mouse or hands, and every preset pulses on the shared beat clock. |
+| **Classic Visuals** | 48 presets, from feedback classics (Tunnel, MilkWarp, Kaleido) to Synthwave, Galaxy, Neon City, Terrain, reaction-diffusion Coral, Fireworks, Julia, Game of Life, Disco Ball, Laser Show and a scratchable Vinyl. Many react to your mouse or hands, and every preset pulses on the shared beat clock. Write your own in **Shader Lab** (drop a `.metal` file in a folder; it hot-reloads) and tweak any preset with the **Tweak panel** (`Shift`+`T`), saved as `.ravelook` files. |
 | **AURORA** | A GPU fluid simulation with about a million particles and bloom. Stir it with the mouse, or turn on the camera and paint it with your hands and body. |
+| **MILKDROP** | Plays community MilkDrop presets through [projectM](https://github.com/projectM-visualizer/projectm), with preset changes locked to the beat grid: blends start on a phrase downbeat, drops get a hard cut. About 150 hand-checked presets are built in, so it works out of the box; the other ~9,800 are one click away (View → Get 9,800 More MilkDrop Presets…), and you can drag `.milk` files or folders onto the window. Searchable browser (`P`) with Bundled / Downloaded / Mine tabs, favourites and ratings. [docs/MILKDROP.md](docs/MILKDROP.md) |
+
+### For VJs
+
+- **Syphon output** of the final frame in every mode (Resolume, VDMX, OBS, MadMapper…): Output → Syphon Server.
+- **Projector output**: Output → Send to Display runs a clean fullscreen output on any screen; the laptop window becomes a preview with the controls.
+- **MIDI**: MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, brightness, strobe, blackout, tap…), and MIDI clock sync.
+- **Control HUD** (`H`) and a **keyboard cheat sheet** (`?`) that never appear on Syphon or the output display.
+- Details: [docs/VJ.md](docs/VJ.md). Writing shaders: [docs/SHADERS.md](docs/SHADERS.md). Sharing looks and shaders: [community/](community/README.md).
 
 <table>
   <tr>
@@ -92,10 +109,21 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 <sub>All images are unedited frames rendered by the app (version 0.4, demo track).</sub>
 
+### New in 0.5
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/milkdrop.webp" alt="MILKDROP mode playing one of the built-in MilkDrop presets: a green and blue textured tunnel"></td>
+    <td><img src="docs/screenshots/kick-cubes.webp" alt="New Classic preset Kick Cubes: a field of teal and green cubes that jump with the kick"></td>
+  </tr>
+</table>
+
+<sub>MILKDROP with a built-in preset, and Kick Cubes, one of the 15 new Classic presets. Unedited frames rendered by the app (version 0.5, demo track, at the drop).</sub>
+
 ### Every visual
 
 <details>
-<summary>Contact sheet of all 35 looks</summary>
+<summary>Contact sheet of the 0.4 looks</summary>
 
 <p align="center">
   <img src="docs/visuals-grid.jpg" alt="Contact sheet of Stage, all 33 Classic Visuals presets and AURORA, each labelled with its name" width="860">
@@ -107,19 +135,23 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 | Key | Action |
 |---|---|
-| `⌘1` … `⌘4` or `V` | SHOW / Stage / Classic Visuals / AURORA (or cycle) |
-| `1`–`8`, `[` `]` | Pick a preset (Classic Visuals); `1`–`4` pick the stage in Stage mode |
+| `⌘1` … `⌘5` or `V` | SHOW / Stage / Classic Visuals / AURORA / MILKDROP (or cycle) |
+| `1`–`8`, `[` `]` | Pick a preset (Classic Visuals); `1`–`4` pick the stage in Stage mode; `[` `]` step MilkDrop presets in MILKDROP |
 | `A` | Auto-cycle presets on/off |
 | `I` | Intensity: Chill / Normal / Wild |
 | `T` | Tap tempo |
+| `Shift`+`T` | Tweak panel (Classic Visuals); `⌘S` / `⌘O` save / open a look |
 | `←` `→` (`Shift` for bigger steps) | Nudge the beat phase |
 | `,` `.` | Move the visuals 10 ms earlier / later (speaker latency) |
 | `S` / `Shift`+`S` | Strobes on/off / lift the 3-per-second limit (asks first) |
 | `B` | Blackout |
 | `C` or `⌘K` | Camera hands and body (AURORA) |
-| `M` | Switch between system audio and microphone / line-in |
+| `M` | Switch between system audio and your last input device (pick devices in the **Audio** menu) |
 | `F` or `⌘F` | Fullscreen |
-| `H` | Show or hide the status bar |
+| `P` or `⌘P` | MilkDrop preset browser; in MILKDROP: `R` random, `L` lock, `Shift`+`F` favourite, `1`–`5` rate |
+| `H` | Control HUD (press again to hide all text) |
+| `?` | Keyboard cheat sheet |
+| `⌘L` | MIDI Learn |
 
 <p align="center">
   <img src="docs/screenshots/app-window.jpg" alt="The app window with the mode switcher at the top left and the live status bar at the bottom showing BPM, confidence, fps and latency" width="860">
@@ -129,7 +161,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 ```
 system audio (ScreenCaptureKit) ─┐
-mic / line-in (AVAudioEngine) ───┴─► LiveAnalyzer ─► TempoTracker ─► ShowDirector ─► Metal renderers
+any input device (CoreAudio) ────┴─► LiveAnalyzer ─► TempoTracker ─► ShowDirector ─► Metal renderers
                                      FFT bands,       tempo, beat      phrases,        Stage · Classic
                                      onsets, kick/    phase, bar       build/drop      Visuals · AURORA
                                      snare/hat        line             detection       + transitions
@@ -163,14 +195,14 @@ RAVE LIVE has no account, analytics or telemetry, and the app makes no network r
 | Permission | Why |
 |---|---|
 | **Screen Recording** | macOS requires it to read the audio your Mac is playing. RAVE LIVE does not record your screen. |
-| **Microphone** | Only if you switch to mic or line-in (`M`), for turntables, a mixer or when system audio is unavailable. |
+| **Microphone** | Only if you pick an input device in the Audio menu (mic, interface, DJ mixer, loopback driver), or on macOS 12. |
 | **Camera** | Only if you turn on hands and body tracking in AURORA. Frames are analysed on your Mac and never saved or sent. |
 
 The optional Beat This! referee is a separate Python install. The `beat_this` package downloads its own model checkpoint from its authors the first time it runs.
 
 ## Build from source
 
-Needs macOS 14 or later and Xcode (the full app, because the icon is compiled with `actool`).
+Needs Xcode 15.3 or later (the full app, because the icon is compiled with `actool`), which needs macOS 13.5 or later. The app it builds is universal (Apple silicon + Intel) and runs on macOS 12 or later; `RAVE_ARCHS=arm64 scripts/make_app.sh` builds just one slice for quicker iterations.
 
 ```bash
 git clone https://github.com/jedbrnth-eng/rave-live.git
@@ -181,6 +213,13 @@ open "build/RAVE LIVE.app"
 ```
 
 `make_app.sh` signs with your "Apple Development" identity if you have one, and ad-hoc otherwise. With ad-hoc signing macOS asks for the audio permission again after each rebuild. The app is not notarized.
+
+Optional extras, built from pinned sources into `vendor/` (gitignored) and bundled by `make_app.sh` when present; the app builds and runs without them:
+
+```bash
+scripts/build_syphon.sh          # Syphon output (BSD-3-Clause)
+scripts/build_projectm.sh        # MILKDROP engine, libprojectM (LGPL-2.1)
+```
 
 Try it with no music playing:
 

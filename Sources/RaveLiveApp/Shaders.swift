@@ -52,6 +52,7 @@ vertex VOut vmain(uint vid [[vertex_id]]) {
 #define BUILD u[34]      // build-up amount
 #define JETMASK u[35]    // which flame jets fire (bits 0..3)
 #define SMOKE u[36]      // lingering smoke after pyro
+#define INTENSITY u[38]  // 0 Chill, 1 Normal, 2 Wild
 
 constant float PI = 3.14159265;
 
@@ -142,10 +143,13 @@ float3 wallContent(float2 c, float t, float tb, constant float *u, float hue) {
         float sweep = pow(fract((a + tb * PI * 0.5) / (2.0 * PI)), 6.0) * smoothstep(0.5, 0.1, r);
         v = max(circ, sweep);
     }
-    // build-up: wall flashes white, faster and faster (gated by BUILD, not a strobe)
+    // build-up: the wall pulses white on the beat, stronger as the build grows. A soft cosine pulse (no on/off), at a
+    // whole-number rate so it stays on the grid: 1 per beat (2.1 Hz at 128 BPM, under the 3/s flash limit), 2 per beat
+    // late in a build on Wild only. (It used to be a hard square wave whose rate slid with BUILD: up to 8.5 Hz, off-grid.)
     if (BUILD > 0.05) {
-        float bl = step(0.5, fract(tb * mix(1.0, 4.0, BUILD)));
-        v = mix(v, bl, BUILD * 0.7);
+        float rate = (INTENSITY > 1.5 && BUILD > 0.6) ? 2.0 : 1.0;
+        float bl = 0.5 + 0.5 * cos(6.28318 * fract(tb * rate));
+        v = mix(v, bl, BUILD * 0.6);
         tint = mix(tint, float3(1.0), BUILD * 0.6);
     }
     return tint * v;
@@ -155,9 +159,9 @@ fragment float4 fmain(VOut in [[stage_in]], constant float *u [[buffer(0)]]) {
     float aspect = RES_X / RES_Y;
     float2 uv = in.uv;
     float2 p = float2((uv.x * 2.0 - 1.0) * aspect, uv.y * 2.0 - 1.0);
-    p += SHAKE * 0.012 * float2(sin(TIME * 91.0), cos(TIME * 77.0));
+    p += SHAKE * 0.012 * float2(sin(TIME * 33.0), cos(TIME * 27.0));     // ~5 Hz thump (was ~14 Hz: read as jitter)
     float t = TIME, live = FADE, e = ENERGY;
-    float tb = BEATIDX + PHASE;
+    float tb = u[37];           // continuous beat clock: never jumps, keeps moving (120 BPM) when there's no tempo lock
     float3 col = float3(0.0);
     float hue = t * 0.03 + floor(BEATIDX / 16.0) * 0.17;
 

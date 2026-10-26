@@ -12,4 +12,4 @@ Prefer one command? Paste this into Terminal:
 curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/rave-live/main/install.sh | bash
 ```
 
-Needs an Apple Silicon Mac (M1 or newer) and macOS 14 Sonoma or later. Please read the photosensitivity warning in the README before using strobes.
+Runs on Apple silicon and Intel Macs with macOS 12 Monterey or later (system audio capture needs macOS 13; on macOS 12 pick an input in the Audio menu, see docs/COMPATIBILITY.md). Please read the photosensitivity warning in the README before using strobes.

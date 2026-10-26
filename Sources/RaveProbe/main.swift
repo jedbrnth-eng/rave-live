@@ -78,7 +78,7 @@ case "live":
     // rave-probe live [seconds] [--play file] [--mic]
     let secs = args.count > 2 ? Double(args[2]) ?? 20 : 20
     let playIdx = args.firstIndex(of: "--play")
-    let useMic = args.contains("--mic")
+    let useMic = args.contains("--mic") || args.contains("--input") || !SystemAudio.isSupported   // macOS 12: input devices only
     if !useMic && !CapturePermission.screenRecordingGranted {
         CapturePermission.requestScreenRecording()
         print("PERMISSION: Screen Recording not granted.\n" + CapturePermission.fixInstructions)
@@ -127,13 +127,16 @@ case "live":
     }
     var player: Process?
     if ProcessInfo.processInfo.environment["RAVE_REFEREE"] != nil { st.referee = BeatReferee() }   // live: async, like the app
-    let sys = SystemAudioCapture()
     let mic = MicCapture()
+    var sysRef: AnyObject?   // SystemAudioCapture (macOS 13+)
     if useMic {
         _ = await MicCapture.requestPermission()
         mic.onSamples = handler
-        try mic.start()
-    } else {
+        let inIdx = args.firstIndex(of: "--input")
+        try mic.start(device: inIdx.flatMap { args.count > $0 + 1 ? AudioInputDevice.matching(args[$0 + 1]) : nil })
+    } else if #available(macOS 13.0, *) {
+        let sys = SystemAudioCapture()
+        sysRef = sys
         sys.onSamples = handler
         sys.onError = { print("capture error: \($0)") }
         do { try await sys.start() } catch { print("START FAILED: \(error)\n" + CapturePermission.fixInstructions); exit(2) }
@@ -189,9 +192,9 @@ case "live":
         if let data = try? JSONSerialization.data(withJSONObject: d) { try? data.write(to: URL(fileURLWithPath: outp)) }
     }
     st.referee?.stop()
-    print("RESULT capture_to_callback_ms p50=\(fmt(pct(0.5),1)) p95=\(fmt(pct(0.95),1)) max=\(fmt(lat.last.map { $0 * 1000 } ?? .nan,1)) buffers=\(useMic ? 0 : sys.buffersReceived) pts_gaps=\(useMic ? 0 : sys.droppedGaps)")
+    print("RESULT capture_to_callback_ms p50=\(fmt(pct(0.5),1)) p95=\(fmt(pct(0.95),1)) max=\(fmt(lat.last.map { $0 * 1000 } ?? .nan,1)) buffers=\(sysStats(sysRef).0) pts_gaps=\(sysStats(sysRef).1)")
     release(st.lock)
-    if !useMic { await sys.stop() } else { mic.stop() }
+    if #available(macOS 13.0, *), let sys = sysRef as? SystemAudioCapture { await sys.stop() } else { mic.stop() }
 
 default:
     print("usage: rave-probe synth | file <path> [truthBPM] [startSec] | live [seconds] [--play file] [--mic]")
@@ -200,3 +203,9 @@ default:
 // Synchronous wrappers: calling NSLock.lock() directly from async code warns (error in Swift 6 mode).
 func acquire(_ l: NSLock) { l.lock() }
 func release(_ l: NSLock) { l.unlock() }
+
+/// (buffers received, PTS gaps) of a SystemAudioCapture, or zeros for mic input / macOS 12.
+func sysStats(_ ref: AnyObject?) -> (Int, Int) {
+    if #available(macOS 13.0, *), let sys = ref as? SystemAudioCapture { return (sys.buffersReceived, sys.droppedGaps) }
+    return (0, 0)
+}

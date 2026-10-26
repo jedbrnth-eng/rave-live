@@ -18,6 +18,7 @@ struct PU {                 // particle uniforms
     float2 simTexel; float2 res;
     float4 emit[8];         // xy = position (uv), z = radius, w = weight (0 = off)
     uint emitCount; uint count; float speedGain; float size;
+    float gain; float pad0, pad1, pad2;   // gain: brightness per particle (quality tiers with fewer particles)
 };
 
 float hash11(float n) { return fract(sin(n * 127.1) * 43758.5453); }
@@ -206,7 +207,7 @@ vertex PV pvert(uint vid [[vertex_id]], const device Particle *ps [[buffer(0)]],
     float fade = smoothstep(0.0, 0.4, p.life) * smoothstep(p.maxLife, p.maxLife - 0.3, p.life);
     float3 c = mix(pal(p.hue), float3(1.0), clamp(speed * 0.25 - 0.4, 0.0, 0.35));
     // 1M additive points: each one must be faint, density makes the light
-    o.col = float4(c * fade * (0.004 + 0.05 * clamp(speed, 0.0, 2.0)) * (1.0 + U.kick * 0.6), 1.0);
+    o.col = float4(c * fade * (0.004 + 0.05 * clamp(speed, 0.0, 2.0)) * (1.0 + U.kick * 0.6) * U.gain, 1.0);
     o.size = U.size * (0.7 + 0.4 * clamp(speed, 0.0, 1.5));
     return o;
 }

@@ -34,6 +34,9 @@ final class ShowDirector {
     private var snareTimes: [Double] = []
     private var lastKickTime = 0.0
     private var buildScore: Float = 0
+    /// Recent peak of the build score (falls 0.25/s): the drop check uses it, so the gap right before a drop (where the
+    /// score itself decays) doesn't cancel the drop. On the demo only the first drop of the session used to be detected.
+    private var buildPeak: Float = 0
     private var lowSince = 0.0
     private(set) var dropTime = -100.0
     private var dropBeat = -1000
@@ -76,13 +79,14 @@ final class ShowDirector {
         let rising = snRecent > max(2.5, snOld * 1.6) || (snRecent > 3 && gapSinceKick > 1.0)
         buildScore += (rising ? 1 : -1.5) * dt * 0.5
         buildScore = min(1, max(0, buildScore))
+        buildPeak = max(buildScore, buildPeak - dt * 0.25)
 
         // ---- drop: (a) energy returns after a breakdown, or (b) a kick lands after a build + gap
         if ratio < 0.6 { if lowSince == 0 { lowSince = now } } else if ratio > 0.9 {
             if lowSince > 0 && now - lowSince > 2 && ratio > 1.15 && now - playingSince > 8 { triggerDrop(i, "drop(breakdown)") }   // not the song simply starting
             lowSince = 0
         }
-        if i.kick && buildScore > 0.35 && gapSinceKick > 0.4 && now - dropTime > 8 { triggerDrop(i, "drop(build)") }
+        if i.kick && buildPeak > 0.35 && gapSinceKick > 0.4 && now - dropTime > 8 { triggerDrop(i, "drop(build)") }
         out.build = buildScore
 
         // ---- after a drop: jets on kicks for 8 beats, sparks 16 beats
@@ -113,7 +117,7 @@ final class ShowDirector {
         out.drop = 1; out.co2 = 1; out.fire = 1; out.jetMask = 15
         fireballStart = i.now
         out.blinder = 1; out.flashRequest = true
-        buildScore = 0
+        buildScore = 0; buildPeak = 0
         // drop look: strongest laser + beam programs
         out.laserProg = Float([0, 2, 3][rand(3)]); out.beamProg = Float([1, 3][rand(2)])
         events.append((i.now, why))
