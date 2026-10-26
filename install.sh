@@ -15,9 +15,9 @@ say() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = "Darwin" ] || die "RAVE LIVE is a Mac app. This installer only runs on macOS."
-[ "$(uname -m)" = "arm64" ] || die "RAVE LIVE needs an Apple Silicon Mac (M1 or newer)."
+# One universal app: Apple silicon and Intel, macOS 12 or newer.
 MAJOR="$(sw_vers -productVersion | cut -d. -f1)"
-[ "$MAJOR" -ge 14 ] || die "RAVE LIVE needs macOS 14 (Sonoma) or newer. You have $(sw_vers -productVersion)."
+[ "$MAJOR" -ge 12 ] || die "RAVE LIVE needs macOS 12 (Monterey) or newer. You have $(sw_vers -productVersion)."
 
 DEST="${RAVE_INSTALL_DIR:-/Applications}"
 if [ ! -w "$DEST" ]; then DEST="$HOME/Applications"; mkdir -p "$DEST"; fi
@@ -47,6 +47,11 @@ else
   say "Done."
 fi
 echo
-echo "RAVE LIVE is in $DEST. Allow 'Screen & System Audio Recording' when macOS asks; nothing is recorded."
+if [ "$MAJOR" -ge 13 ]; then
+  echo "RAVE LIVE is in $DEST. Allow 'Screen & System Audio Recording' when macOS asks; nothing is recorded."
+else
+  echo "RAVE LIVE is in $DEST. On macOS 12 it listens to an input device: pick one in the Audio menu."
+  echo "To visualize system audio, install the free BlackHole driver: https://github.com/jedbrnth-eng/rave-live/blob/main/docs/COMPATIBILITY.md"
+fi
 echo "Please read the photosensitivity warning in the README before using strobes."
 echo "To remove it later: rm -rf \"$DEST/RAVE LIVE.app\""
