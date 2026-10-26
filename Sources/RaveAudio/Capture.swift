@@ -177,7 +177,7 @@ public struct AudioInputDevice: Equatable, Sendable {
         return list.first { $0.name.lowercased() == q } ?? list.first { $0.name.lowercased().contains(q) || $0.uid.lowercased().contains(q) }
     }
 
-    /// Calls `handler` on the main queue whenever devices are added or removed. Keep the returned token alive.
+    /// Calls `handler` on the main queue when devices are added or removed or the default input changes. Keep the token alive.
     public static func observeChanges(_ handler: @escaping @Sendable () -> Void) -> AnyObject {
         DeviceListObserver(handler)
     }
@@ -206,14 +206,17 @@ public struct AudioInputDevice: Equatable, Sendable {
 }
 
 private final class DeviceListObserver {
-    private var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
-                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    private var addrs = [kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultInputDevice].map {
+        AudioObjectPropertyAddress(mSelector: $0, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    }
     private let block: AudioObjectPropertyListenerBlock
     init(_ handler: @escaping @Sendable () -> Void) {
         block = { _, _ in handler() }
-        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, .main, block)
+        for i in addrs.indices { AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addrs[i], .main, block) }
     }
-    deinit { AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, .main, block) }
+    deinit {
+        for i in addrs.indices { AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addrs[i], .main, block) }
+    }
 }
 
 /// Input-device capture: mic, audio interface, DJ mixer, loopback driver (and the only source on macOS 12).

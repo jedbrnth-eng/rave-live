@@ -68,6 +68,7 @@ final class AudioEngine: @unchecked Sendable {
     private(set) var sourceLabel = "system"     // shown in the HUD/metrics
     private var loggedFirstAudio = false
     private var deviceObserver: AnyObject?
+    private var listeningTo: AudioInputDevice?  // the device the current input source resolved to
     /// Called on the main queue when the input device list changes (menu refresh).
     var onDevicesChanged: (() -> Void)?
     private var lastSoundHost: Double = 0
@@ -128,6 +129,7 @@ final class AudioEngine: @unchecked Sendable {
         if uid != nil && device == nil { note = "That input device isn't connected; using the default input. " }
         if device == nil { device = AudioInputDevice.defaultInput() }
         source = .device(uid)
+        listeningTo = device
         sourceLabel = "input:" + (device?.name ?? "default")
         mic.stop()
         mic.onSamples = handler
@@ -138,12 +140,14 @@ final class AudioEngine: @unchecked Sendable {
         } catch { onStatus?(note + "Input failed: \(error.localizedDescription)") }
     }
 
-    /// Hot-plug: refresh menus; if the device we listen to vanished (or the default input changed), restart.
+    /// Hot-plug: refresh menus; restart if the device we listen to vanished, or (Default Input) the default changed.
     private func devicesChanged() {
         onDevicesChanged?()
         guard case .device(let uid) = source else { return }
-        let present = uid.map { u in AudioInputDevice.all().contains { $0.uid == u } } ?? false
-        if uid == nil || !present { Task { await self.start(self.source) } }
+        let devices = AudioInputDevice.all()
+        let stillThere = listeningTo.map { d in devices.contains { $0.id == d.id } } ?? false
+        let wanted = uid.flatMap { u in devices.first { $0.uid == u } } ?? AudioInputDevice.defaultInput()
+        if !stillThere || wanted?.id != listeningTo?.id { Task { await self.start(self.source) } }
     }
 
     /// Demo / test mode: a synthetic EDM arrangement (groove -> build -> gap -> drop) streamed through
