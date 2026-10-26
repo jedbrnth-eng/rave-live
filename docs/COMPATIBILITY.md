@@ -82,3 +82,4 @@ local iterations.
 | `--quality low\|medium\|high\|auto` | Force a quality tier for this run (not saved) |
 | `RAVE_NO_SYSTEM_AUDIO=1` | Behave as on macOS 12: System Audio greyed out, input devices only |
 | `rave-probe live 10 --input "<name>"` | Command-line capture test on one input device |
+| `--quality-switch "low@3,high@6"` | Switch tiers at those seconds, like View → Quality (not saved) |

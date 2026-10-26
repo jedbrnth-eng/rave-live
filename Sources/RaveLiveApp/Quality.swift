@@ -79,6 +79,16 @@ final class QualityController: NSObject {
         NotificationCenter.default.addObserver(self, selector: #selector(viewChanged), name: NSWindow.didChangeBackingPropertiesNotification, object: nil)
         view?.postsFrameChangedNotifications = true
         apply()
+        // Test hook: --quality-switch "low@3,high@6" picks tiers at those seconds, like View > Quality (not saved).
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--quality-switch"), args.count > i + 1 {
+            for item in args[i + 1].split(separator: ",") {
+                let p = item.split(separator: "@")
+                guard p.count == 2, let at = Double(p[1]) else { continue }
+                let c = String(p[0])
+                DispatchQueue.main.asyncAfter(deadline: .now() + at) { [weak self] in self?.choice = c; self?.apply() }
+            }
+        }
     }
 
     private func apply() {
