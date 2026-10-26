@@ -24,6 +24,7 @@
 - `scripts/make_app.sh` builds the universal app and bundles Syphon and libprojectM when `scripts/build_syphon.sh` / `scripts/build_projectm.sh` have been run; the app builds and runs without them. CI adds an Intel job and a headless smoke run.
 
 ### Fixed
+- Frame rate no longer drops to about 5 fps when another app is in front (App Nap): Syphon and projector feeds keep full rate. While RAVE LIVE runs, the Mac doesn't idle-sleep.
 - Opening an input device while the microphone permission prompt was still open froze the app on macOS 12.
 
 ## [0.4.0] - 2026-10-22

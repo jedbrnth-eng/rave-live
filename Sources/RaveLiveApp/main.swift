@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
     }()
     var dumpTimer: Timer?
+    private var appActivity: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let args = CommandLine.arguments
@@ -112,6 +113,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let pos = SIMD2<Float>(Float(p.x), Float(p.y)), vel = SIMD2<Float>(Float(d.x), Float(d.y)) * 3.0
             r.mousePointer = .init(pos: pos, vel: vel, down: down, burst: click)
             r.pointerEvent(pos: pos, down: down, click: click)
+        }
+        // Keep full frame rate when another app is in front (Syphon / projector feeds): no App Nap timer throttling.
+        appActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Rendering live visuals")
+        NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
+            guard let self, let r = self.renderer else { return }
+            r.metrics.event(self.window.occlusionState.contains(.visible) ? "window:visible" : "window:occluded", at: CACurrentMediaTime())
         }
         buildMenu()
         vj.attach(app: self)
