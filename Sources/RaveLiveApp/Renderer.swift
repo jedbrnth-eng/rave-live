@@ -48,7 +48,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     enum Intensity: Int, CaseIterable { case chill, normal, wild
         var title: String { ["Chill", "Normal", "Wild"][rawValue] }
         var pulse: Float { [0.45, 0.7, 1.0][rawValue] }     // beat/kick flash strength
-        var shake: Float { [0.0, 0.4, 1.0][rawValue] }      // camera shake on hits
+        var shake: Float { [0.0, 0.25, 1.0][rawValue] }     // camera shake on hits
         /// Eased hits (docs/SMOOTHNESS.md): attack / release time constants in seconds. Wild stays punchier.
         var kickAR: (Float, Float) { [(0.022, 0.20), (0.018, 0.16), (0.010, 0.12)][rawValue] }
         var beatRelease: Double { [0.17, 0.13, 0.09][rawValue] }
@@ -284,6 +284,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         u[27] = forcedLook ?? d.look; u[28] = forcedBeam ?? d.beamProg; u[29] = forcedLaser ?? d.laserProg
         u[30] = d.fireball; u[31] = d.sparks; u[32] = d.co2; u[33] = blinder; u[34] = d.build
         u[35] = d.jetMask; u[36] = d.smoke
+        u[38] = Float(intensity.rawValue)
         u[37] = Float(clock)     // continuous beat clock (beats): latency-compensated grid when locked, 120 BPM free-run otherwise; never jumps except on drops
 
         guard let rpd = view.currentRenderPassDescriptor, let drawable = view.currentDrawable,

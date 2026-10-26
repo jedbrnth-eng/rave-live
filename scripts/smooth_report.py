@@ -10,7 +10,7 @@ Per group (default: per scene+preset outside transitions, plus one group per tra
   frames, fps, flick p95/p99, resid p95/p99, dmean p99, motion p95, jumps (count and per minute),
   glitches (transition frames above the glitch threshold), beat contrast, frame interval p50/p99.
 A "jump" is a visible pop: a run of frames whose motion-compensated change (resid) or whole-frame brightness change
-(dmean) is above the threshold, starting outside the beat window (phase 0..0.12, where accents belong) and not within
+(dmean) is above the threshold, starting outside the beat window (phase 0.92..0.18 around the beat, where accents belong) and not within
 1 s of a drop. Consecutive over-threshold frames count as one jump.
 """
 import json
@@ -23,7 +23,8 @@ RESID_JUMP = 0.060     # motion-compensated luma change (0..1): above this off t
 DMEAN_JUMP = 0.035     # whole-frame mean luma change in one frame: above this off the beat = a flash
 GLITCH_DMEAN = 0.10    # one-frame brightness swing during a transition that is a glitch, not a blend
 GLITCH_RESID = 0.12    # one-frame structural pop during a transition
-BEAT_WINDOW = 0.12
+BEAT_WINDOW = 0.18     # beat accents may hit from 0.08 beat before the beat (eased attacks start early to peak ON it)
+BEAT_LEAD = 0.08       # to 0.18 after (detected, not predicted, kicks peak ~60-80 ms late): -37..+84 ms at 128 BPM
 DROP_GRACE = 1.0       # seconds after a drop where big hits are intended
 
 
@@ -46,6 +47,10 @@ def load(path, skip):
             try:
                 for k in ("t", "dt", "phase", "luma", "dmean", "flick", "resid", "motion", "peak", "kick", "drop", "build"):
                     r[k] = float(r[k])
+                # per-60 Hz-frame change: a slow frame (busy GPU) shows more change per frame for the same motion
+                sc = 1.0 / max(1.0, min(3.0, r["dt"] * 60))
+                for k in ("dmean", "flick", "resid", "motion"):
+                    r[k] *= sc
                 r["beat"] = int(r["beat"]); r["locked"] = r["locked"] == "1"
             except ValueError:
                 continue
@@ -89,7 +94,7 @@ def stats(rows, drops):
     jumps, inside = 0, False
     for r in rows:
         over = r["resid"] > RESID_JUMP or r["dmean"] > DMEAN_JUMP
-        excused = (r["phase"] < BEAT_WINDOW and r["locked"]) or any(0 <= r["t"] - d < DROP_GRACE for d in drops)
+        excused = ((r["phase"] < BEAT_WINDOW or r["phase"] > 1 - BEAT_LEAD) and r["locked"]) or any(0 <= r["t"] - d < DROP_GRACE for d in drops)
         if over and not excused and not inside:
             jumps += 1
         inside = over
