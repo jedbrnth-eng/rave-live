@@ -43,6 +43,10 @@ final class MilkDropRenderer: @unchecked Sendable {
     // shared, under `lock`
     private let lock = NSLock()
     private var published: MTLTexture?
+    /// Metal frames still reading each IOSurface target (by texture identity). GL never renders into a target that a
+    /// queued Metal frame samples: with 3 targets and GL at display rate it could lap the ring and overwrite the
+    /// texture a frame in flight was showing (seen as one-frame spikes in SHOW transitions).
+    private var inFlight: [ObjectIdentifier: Int] = [:]
     private var busy = false
     private var commands: [Command] = []
     private var pcm: [Float] = []
@@ -147,7 +151,16 @@ final class MilkDropRenderer: @unchecked Sendable {
     /// u = Renderer's uniform table (kick u[9], fade u[16], blackout u[15], blinder u[33], build u[34]).
     func encode(cb: MTLCommandBuffer, rpd: MTLRenderPassDescriptor, size: CGSize, u: [Float], playing: Bool) {
         if ready { requestFrame(size: size, sensitivity: Self.beatSensitivity(intensity: intensity, build: u[34], drop: u[17]), playing: playing) }
-        lock.lock(); let tex = published; lock.unlock()
+        lock.lock(); let tex = published
+        if let tex { inFlight[ObjectIdentifier(tex), default: 0] += 1 }
+        lock.unlock()
+        if let tex {
+            let id = ObjectIdentifier(tex)
+            cb.addCompletedHandler { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock(); self.inFlight[id, default: 1] -= 1; self.lock.unlock()
+            }
+        }
         // composite into our own history texture (eased toward the new frame), then show it
         let w = max(16, Int(size.width)), h = max(16, Int(size.height)), now = CACurrentMediaTime()
         var fresh = now - histLastUse > 0.25
@@ -248,7 +261,7 @@ final class MilkDropRenderer: @unchecked Sendable {
         targets = []
         let props: [String: Any] = [kIOSurfaceWidth as String: w, kIOSurfaceHeight as String: h, kIOSurfaceBytesPerElement as String: 4,
                                     kIOSurfacePixelFormat as String: 0x4247_5241 /* 'BGRA' */]
-        for _ in 0..<3 {
+        for _ in 0..<4 {
             guard let s = IOSurfaceCreate(props as CFDictionary) else { continue }
             var tex: GLuint = 0, fbo: GLuint = 0
             glGenTextures(1, &tex)
@@ -304,8 +317,15 @@ final class MilkDropRenderer: @unchecked Sendable {
         let mesh = QualityTier.active.milkMesh          // View > Quality can change while running
         if mesh != pmMesh { pmMesh = mesh; lib.setMeshSize(pm, mesh.0, mesh.1) }
 
-        let t = targets[nextTarget % targets.count]
-        nextTarget += 1
+        // next target that no queued Metal frame reads and that isn't the one on screen
+        lock.lock()
+        var pick: Target?
+        for k in 0..<targets.count {
+            let c = targets[(nextTarget + k) % targets.count]
+            if c.mtl !== published && inFlight[ObjectIdentifier(c.mtl), default: 0] <= 0 { pick = c; nextTarget += k + 1; break }
+        }
+        lock.unlock()
+        guard let t = pick else { return }        // all busy: skip this GL frame, the last one stays on screen
         let t0 = CACurrentMediaTime()
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), t.fbo)
         glViewport(0, 0, GLsizei(w), GLsizei(h))

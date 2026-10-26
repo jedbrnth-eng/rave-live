@@ -21,8 +21,8 @@ from collections import defaultdict
 # Thresholds (per frame at ~60-72 fps), calibrated in docs/SMOOTHNESS.md.
 RESID_JUMP = 0.060     # motion-compensated luma change (0..1): above this off the beat = a visible pop/flash
 DMEAN_JUMP = 0.035     # whole-frame mean luma change in one frame: above this off the beat = a flash
-GLITCH_DMEAN = 0.10    # one-frame brightness swing during a transition that is a glitch, not a blend
-GLITCH_RESID = 0.12    # one-frame structural pop during a transition
+GLITCH_DMEAN = 0.10    # one-frame brightness excursion (there and back) during a transition: a glitch, not a blend
+GLITCH_RESID = 0.12    # structural pop during a transition, off the beat
 BEAT_WINDOW = 0.18     # beat accents may hit from 0.08 beat before the beat (eased attacks start early to peak ON it)
 BEAT_LEAD = 0.08       # to 0.18 after (detected, not predicted, kicks peak ~60-80 ms late): -37..+84 ms at 128 BPM
 DROP_GRACE = 1.0       # seconds after a drop where big hits are intended
@@ -143,7 +143,20 @@ def transitions(rows):
         out.append(cur)
     for t in out:
         rs = t["rows"]
-        t["glitches"] = [x["t"] for x in rs[1:] if x["dmean"] > GLITCH_DMEAN or x["resid"] > GLITCH_RESID]
+        # a glitch is what a broken transition looks like, not a scene's own beat accent during the blend:
+        #  - a one-frame excursion (black/white flash, a stale or wrong frame): luma jumps > GLITCH_DMEAN and comes
+        #    straight back on the next frame (or the next frame jumps the other way by as much), anywhere in the beat;
+        #  - a structural pop (resid > GLITCH_RESID) outside the beat window (size/aspect pop, wrong texture)
+        t["glitches"] = []
+        for k in range(1, len(rs)):
+            x, prev = rs[k], rs[k - 1]
+            nxt = rs[k + 1] if k + 1 < len(rs) else None
+            up = x["luma"] - prev["luma"]
+            spike = abs(up) > GLITCH_DMEAN and nxt is not None and (nxt["luma"] - x["luma"]) * up < 0 and abs(nxt["luma"] - x["luma"]) > 0.6 * abs(up)
+            on_beat = x["locked"] and (x["phase"] < BEAT_WINDOW or x["phase"] > 1 - BEAT_LEAD)
+            pop = x["resid"] > GLITCH_RESID and not on_beat
+            if spike or pop:
+                t["glitches"].append(x["t"])
         # the drop flash cut (type flash_cut) is one intended hit on its first frame
         if t["type"] == "flash_cut" and t["glitches"] and t["glitches"][0] - t["start"] < 0.05:
             t["glitches"] = t["glitches"][1:]
