@@ -222,9 +222,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cam = NSMenuItem(title: "Camera Hands & Body (AURORA)", action: #selector(menuCamera(_:)), keyEquivalent: "k"); cam.target = self; vm.addItem(cam)
         let fs = NSMenuItem(title: "Fullscreen", action: #selector(menuFullscreen(_:)), keyEquivalent: "f"); fs.target = self; vm.addItem(fs)
         viewItem.submenu = vm
+        if let lab = renderer?.visuals?.lab { lab.onWantClassic = { [weak self] in if self?.renderer.mode != .visuals { self?.setMode(.visuals) } }; main.addItem(lab.makeMenu()) }   // Visuals menu: Tweak panel, looks, Shader Lab
         NSApp.mainMenu = main
     }
 
+    /// Double-clicked .ravelook files (also at launch, before the renderer exists).
+    func application(_ sender: NSApplication, open urls: [URL]) { PresetLab.pendingOpen += urls; DispatchQueue.main.async { [weak self] in if self?.renderer != nil { self?.setMode(.visuals) } } }
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ n: Notification) { renderer?.metrics.dump(to: metricsURL); audio.stopReferee() }
 
@@ -242,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func key(_ e: NSEvent) {
         let r = renderer!
         let ch = e.charactersIgnoringModifiers?.lowercased() ?? ""
+        if r.visuals?.lab.handleKey(e, classic: r.mode == .visuals) == true { return }   // Shift+T Tweak panel (plain t stays tap tempo)
         switch (ch, e.modifierFlags.contains(.shift)) {
         case ("s", true):
             if !r.strobeOverride {

@@ -36,6 +36,14 @@ vertex VOut vvert(uint vid [[vertex_id]]) {
 #define PALIDX u[19]     // palette index 0..6
 #define BCLK u[54]       // continuous beat clock in beats (grid-locked when tempo locked, 120 BPM free-run otherwise)
 #define FRAMES u[20]     // frame-time scale (dt * 60): feedback motion is per-60Hz-frame, not per drawn frame
+// Tweak panel (look presets) + pack-3 helpers, filled by VisualsRenderer.encode
+#define LIFESTEP u[55]   // Life: 1 on the frame a generation ticks (once per beat), else 0
+#define DENS u[56]       // pattern density / scale (1 = default)
+#define TRAILS u[57]     // extra feedback trails 0..0.97 (0 = off)
+#define SYMM u[58]       // mirror symmetry folds (0/1 = off, 2 = mirror, 3..12 = kaleidoscope)
+#define VINYL u[59]      // Vinyl: record angle in turns (beat-locked, scratching offsets it)
+#define ATTRACT u[60]    // Fireflies: smoothed pointer pull 0..1
+#define ATTRACT_POS float2(u[61], u[62])
 
 constant float PI = 3.14159265;
 constexpr sampler fb(address::mirrored_repeat, filter::linear);
@@ -943,6 +951,568 @@ float3 silk(float2 p, constant float *u, float aspect) {
     return col;
 }
 
+// ================= presets 33-47 (visuals pack 3) =================
+// All motion rides the beat clock BCLK; brightness accents use BEAT (peaks at beat phase 0). Techniques re-implemented from
+// scratch (see CREDITS.md): Julia-set smooth iteration count, Conway's Game of Life, times-table string art, cell-exit box marching.
+float easedBeat(float tb, float k) { return floor(tb) + (1.0 - exp(-k * fract(tb))) / (1.0 - exp(-k)); }   // each beat is a soft push
+float segDist(float2 p, float2 a, float2 b) { float2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0); return length(pa - ba * h); }
+
+// ---- 33 datamosh: the previous frame is dragged around by per-block motion vectors that change every beat; a fresh
+// keyframe lands on the beat (partial) and every 2 bars (full), with VHS chroma bleed and a rolling tracking band
+float2 moshDisp(float2 uv, constant float *u) {
+    float tb = BCLK, bi = floor(tb);
+    float2 blk = floor(uv * float2(24.0, 14.0));
+    float h = hash21(blk + bi * 7.31);
+    float2 mv = (hash22(blk * 1.7 + bi * 3.1) - 0.5) * 2.0;
+    float2 pan = float2(sin(bi * 1.3), cos(bi * 0.7)) * 0.0012;
+    float amt = (0.3 + 0.9 * KICK + 0.6 * DROP) * step(0.45, h);
+    float2 d = pan + mv * 0.008 * amt;
+    float row = floor(uv.y * 60.0);
+    d.x += (hash21(float2(row, bi)) - 0.5) * 0.03 * SNARE * step(0.85, hash21(float2(row, bi + 3.0)));   // tearing rows on snares
+    return d;
+}
+float3 moshContent(float2 p, constant float *u, constant float *wave, float aspect) {
+    float t = TIME, tb = BCLK;
+    float x = (p.x / aspect) * 0.5 + 0.5;
+    float barc = floor(x * 7.0 + floor(tb / 4.0));
+    float3 col = pal(HUE + barc / 7.0) * 0.24 * step(-0.55, p.y);                         // colour bars, shifted every bar
+    float lo = floor(x * 14.0);
+    col += pal(HUE + 0.5 + lo / 14.0) * 0.07 * step(p.y, -0.55) * step(fmod(lo, 2.0), 0.5);
+    float a = tb * 0.19635;                                                                  // orb orbits once per 32 beats
+    float2 c = float2(sin(a) * 0.5 * aspect, 0.12 * cos(a * 2.0));
+    float2 d = p - c; float R = 0.34 + 0.03 * BASS, rr = length(d);
+    if (rr < R) {
+        float3 n = float3(d / R, sqrt(max(1.0 - rr * rr / (R * R), 0.0)));
+        float3 L = normalize(float3(-0.5, 0.6, 0.6));
+        col = pal(HUE + 0.3 + n.y * 0.2) * (0.15 + 0.9 * max(dot(n, L), 0.0)) + float3(1.0) * pow(max(dot(reflect(float3(0, 0, -1), n), L), 0.0), 30.0);
+        col *= 0.65 + 0.35 * step(0.5, fract(n.y * 4.0 + tb * 0.25));
+    }
+    float ringR = 0.15 + 1.5 * fract(tb);
+    col += pal(HUE + 0.6) * exp(-abs(length(p) - ringR) * 40.0) * (1.0 - fract(tb)) * (0.5 + 0.8 * BEAT);
+    col += pal(HUE + 0.1) * exp(-scopeDist(p, wave, aspect, 0.22, -0.78) * 140.0) * 0.9;
+    float by = 1.0 - fract(-t * 0.07) * 2.0;                                                 // VHS tracking band
+    col += float3(hash21(floor(p * float2(240.0, 90.0)) + floor(t * 24.0))) * exp(-pow((p.y - by) * 12.0, 2.0)) * 0.22;
+    return col;
+}
+
+// ---- 34 julia: a Julia set whose constant walks round the 0.7885 circle; the pointer bends it, bass breathes the zoom
+float3 juliaSet(float2 p, constant float *u, float aspect) {
+    float t = TIME, tb = BCLK;
+    float2 st = steer(u, aspect);
+    float a = t * 0.035 + VAR * 6.28318 + 0.02 * easedBeat(tb, 6.0);
+    float2 c = 0.7885 * float2(cos(a), sin(a)) + st * float2(0.06, 0.06);
+    float2 z = rot(p, t * 0.02) * (1.2 - 0.06 * BASS);
+    float trap = 1e5, n = 0.0, m2 = 0.0;
+    for (int i = 0; i < 110; i++) {
+        z = float2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+        m2 = dot(z, z);
+        trap = min(trap, abs(length(z) - 0.6));
+        if (m2 > 256.0) break;
+        n += 1.0;
+    }
+    float3 col;
+    if (n >= 110.0) col = pal(HUE + 0.5) * 0.05 * (0.6 + BEAT);
+    else {
+        float sn = n - log2(log2(m2)) + 4.0;
+        float f = clamp(sn / 60.0, 0.0, 1.0);
+        col = pal(HUE + sn * 0.022 + 0.2) * pow(f, 1.4) * 1.5;
+        col += float3(1.0) * pow(f, 5.0) * (0.25 + 0.9 * BEAT);
+    }
+    col += pal(HUE + 0.7) * exp(-trap * 18.0) * 0.18 * (0.6 + KICK);
+    return col;
+}
+
+// ---- 35 rain glass: city bokeh behind rain-streaked glass; drops refract a sharp view, the rest is fogged; a fresh drop
+// splats on every beat, the neon sign pulses on the beat, the pointer wipes the fog (mask lives in the feedback alpha)
+float3 bokehLayer(float2 q, float rad, constant float *u, constant float *spec, float seed) {
+    float3 col = float3(0.0);
+    float2 ci = floor(q / 0.34);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        float2 id = ci + float2(i, j);
+        float h = hash21(id + seed);
+        if (h < 0.5) continue;
+        float2 cc = (id + hash22(id + seed * 1.3)) * 0.34;
+        float d = length(q - cc), r = rad * (0.6 + 0.8 * hash21(id + 7.7 + seed));
+        float disk = smoothstep(r, r * 0.7, d) * (0.6 + 0.4 * smoothstep(r * 0.4, r, d));
+        float s = specAt(spec, hash21(id + 2.2 + seed));
+        col += pal(HUE + h * 0.7 + seed * 0.1) * disk * (0.22 + 0.8 * s) * (0.75 + 0.6 * BEAT * step(0.75, h));
+    }
+    return col;
+}
+float3 rainBackdrop(float2 q, float blur, constant float *u, constant float *spec, float aspect) {
+    float t = TIME;
+    float3 col = mix(float3(0.01, 0.01, 0.03), pal(HUE + 0.6) * 0.07, smoothstep(-1.0, 0.7, q.y));
+    float2 dr = float2(t * 0.015, 0.0);
+    col += bokehLayer(q + dr, mix(0.06, 0.13, blur), u, spec, 0.0) * mix(1.3, 0.55, blur);
+    col += bokehLayer(q * 1.4 + dr * 2.0 + 3.1, mix(0.045, 0.1, blur), u, spec, 5.0) * mix(0.9, 0.4, blur);
+    float2 s = q - float2(-0.5 * aspect, 0.4);
+    float tube = min(abs(length(s * float2(1.0, 1.25)) - 0.2), segDist(s, float2(0.32, -0.12), float2(0.62, -0.12)));
+    float w = mix(0.004, 0.045, blur);
+    col += pal(HUE + 0.9) * (exp(-tube / w) * mix(1.1, 0.5, blur) + exp(-tube * 8.0) * 0.12) * (0.45 + 0.9 * BEAT);
+    return col;
+}
+float3 rainGlass(float2 p, constant float *u, constant float *spec, float aspect, float wiped) {
+    float t = TIME, tb = BCLK;
+    float2 off = float2(0.0); float clear = 0.0, hl = 0.0;
+    float2 g = p / 0.12, ci = floor(g), f = fract(g) - 0.5;                       // beaded droplets
+    float h = hash21(ci + 4.0);
+    float2 dd = f - (hash22(ci) - 0.5) * 0.5;
+    float rr = 0.1 + 0.2 * h * h, dl = length(dd);
+    if (h > 0.6 && dl < rr) { float2 n = dd / rr; off -= n * 0.075; clear = 1.0; hl += smoothstep(0.55, 1.0, dl / rr) * max(0.0, dot(n, float2(-0.6, 0.7))); }
+    for (int L = 0; L < 2; L++) {                                                      // drops sliding down with a clear trail
+        float W = L == 0 ? 0.2 : 0.33, sh = float(L) * 0.37;
+        float cx = floor(p.x / W + sh);
+        float hh = hash21(float2(cx, 3.0 + float(L)));
+        float y = 1.3 - fract(t * (0.05 + 0.08 * hh) + hh * 7.0) * 2.7;
+        float xc = (cx + 0.5 - sh) * W + 0.012 * sin(p.y * 9.0 + hh * 20.0);
+        float2 dh = (p - float2(xc, y)) * float2(1.0, 0.8);
+        float hr = 0.026 + 0.012 * hh, dlh = length(dh);
+        if (dlh < hr) { float2 n = dh / hr; off -= n * 0.1; clear = 1.0; hl += smoothstep(0.5, 1.0, dlh / hr) * max(0.0, dot(n, float2(-0.6, 0.7))); }
+        float tr = p.y - y;
+        if (tr > 0.0 && tr < 0.6) clear = max(clear, smoothstep(0.012, 0.004, abs(p.x - xc)) * (1.0 - tr / 0.6));
+    }
+    float bi = floor(tb);                                                              // a new splat on every beat
+    float2 kd = p - (hash22(float2(bi, 9.1)) - 0.5) * float2(1.7 * aspect, 1.6);
+    float kr = 0.05 * (0.7 + KICK) * (1.0 - exp(-fract(tb) * 25.0)), kl = length(kd);
+    if (kl < kr) { off -= kd / max(kr, 1e-3) * 0.1; clear = 1.0; }
+    float fog = (1.0 - wiped) * (1.0 - clear);
+    float3 sharp = rainBackdrop(p + off, 0.0, u, spec, aspect);
+    float3 soft = rainBackdrop(p, 1.0, u, spec, aspect) * 0.8 + float3(0.02, 0.025, 0.035);
+    return mix(sharp, soft, fog) + float3(1.0) * clamp(hl, 0.0, 1.0) * 0.22;
+}
+
+// ---- 36 kick cubes: a field of glowing cubes seen from above; heights follow the spectrum, half of them jump on each kick,
+// a height wave rolls out from the centre on the beat; the pointer swings the camera (cell-exit marching)
+float cubeH(float2 id, constant float *u, constant float *spec) {
+    float h = hash21(id);
+    float s = specAt(spec, fract(h * 3.7));
+    float wave = 0.5 + 0.5 * sin(length(id) * 0.7 - BCLK * 1.5708);
+    float bounce = KICK * step(0.5, hash21(id + floor(BCLK)));
+    return 0.12 + 0.8 * s * s + 0.25 * wave + 0.65 * bounce;
+}
+float cubesDE(float3 p, float3 rd, constant float *u, constant float *spec) {
+    float2 id = floor(p.xz);
+    float2 q = p.xz - id - 0.5;
+    float h = cubeH(id, u, spec);
+    float d = min(p.y, sdBox3(float3(q.x, p.y - h * 0.5, q.y), float3(0.36, h * 0.5, 0.36)));
+    float tx = rd.x > 0.0 ? (id.x + 1.0 - p.x) / rd.x : (id.x - p.x) / min(rd.x, -1e-4);
+    float tz = rd.z > 0.0 ? (id.y + 1.0 - p.z) / rd.z : (id.y - p.z) / min(rd.z, -1e-4);
+    return min(d, min(tx, tz) + 0.01);
+}
+float3 kickCubes(float2 p, constant float *u, constant float *spec, float aspect) {
+    float t = TIME;
+    float2 st = steer(u, aspect);
+    float ang = t * 0.035 + st.x * 1.2;
+    float3 target = float3(0.0, 0.0, t * 0.12);
+    float3 ro = target + float3(sin(ang) * 5.5, 4.2 + st.y * 2.0, -cos(ang) * 5.5);
+    float3 fw = normalize(target - ro), rt = normalize(cross(float3(0, 1, 0), fw)), up = cross(fw, rt);
+    float3 rd = normalize(fw * 2.4 + rt * p.x + up * p.y);
+    float d = rd.y < 0.0 ? max(0.0, (ro.y - 2.4) / -rd.y) : 0.0; bool hit = false;
+    for (int i = 0; i < 90; i++) {
+        float3 q = ro + rd * d;
+        float h = cubesDE(q, rd, u, spec);
+        if (h < 0.002) { hit = true; break; }
+        d += h;
+        if (d > 40.0 || (q.y > 2.6 && rd.y > 0.0)) break;
+    }
+    float3 col = float3(0.008, 0.004, 0.018) + pal(HUE + 0.6) * 0.03 * smoothstep(-0.2, 0.8, p.y);
+    if (hit) {
+        float3 q = ro + rd * d;
+        float2 id = floor(q.xz);
+        float h = cubeH(id, u, spec);
+        float3 lc = pal(HUE + hash21(id) * 0.35 + h * 0.2);
+        float2 f = abs(q.xz - id - 0.5);
+        if (q.y < 0.003) col = float3(0.008, 0.006, 0.014) + lc * 0.07 * smoothstep(0.5, 0.37, max(f.x, f.y));
+        else if (q.y > h - 0.004) col = lc * (0.45 + 0.8 * h) * (0.6 + 0.6 * BEAT) + float3(1.0) * smoothstep(0.3, 0.36, max(f.x, f.y)) * 0.25;
+        else col = lc * (f.x > f.y ? 0.5 : 0.28) * (0.12 + 0.6 * q.y / max(h, 1e-3)) + lc * exp(-(h - q.y) * 30.0) * 0.5;
+        col = mix(col, pal(HUE + 0.6) * 0.03, 1.0 - exp(-d * 0.035));
+    }
+    return col;
+}
+
+// ---- 37 string art: 120 nails on a circle, nail i strung to nail i*k; k steps up one quarter per bar (eased over the
+// first beat), so the figure morphs cardioid -> nephroid -> ... on the bar grid; the spectrum lights the strings
+float3 stringArt(float2 p, constant float *u, constant float *spec, float aspect) {
+    float t = TIME, tb = BCLK;
+    float2 st = steer(u, aspect);
+    float x = 0.25 * (floor(tb / 4.0) + smoothstep(0.0, 0.25, fract(tb / 4.0))) + VAR * 8.0 + st.x * 0.5;
+    float kk = fmod(x, 16.0);
+    float k = 2.0 + (kk < 8.0 ? kk : 16.0 - kk);
+    const int N = 120;
+    const float R = 0.9;
+    float dA = 6.28318 / float(N), r0 = t * 0.02;
+    float2 A = R * float2(cos(r0), sin(r0)), B = A;
+    float2 rA = float2(cos(dA), sin(dA)), rB = float2(cos(dA * k), sin(dA * k));
+    float3 col = float3(0.0);
+    for (int i = 0; i < N; i++) {
+        float fi = float(i) / float(N);
+        float d = segDist(p, A, B);
+        col += pal(HUE + fi * 0.5) * exp(-d * 280.0) * (0.12 + 0.4 * specAt(spec, fi));
+        A = float2(A.x * rA.x - A.y * rA.y, A.x * rA.y + A.y * rA.x);
+        B = float2(B.x * rB.x - B.y * rB.y, B.x * rB.y + B.y * rB.x);
+    }
+    float an = atan2(p.y, p.x) - r0;
+    float nail = length(p - R * float2(cos(r0 + round(an / dA) * dA), sin(r0 + round(an / dA) * dA)));
+    col += float3(1.0, 0.95, 0.85) * exp(-nail * 220.0) * 0.6;
+    col += pal(HUE + 0.5) * exp(-length(p) * 3.0) * 0.06;
+    return col * (0.7 + 0.5 * BEAT);
+}
+
+// ---- 38 fireflies: a swarm over a night meadow; each blinks on its own clock but they synchronise to the beat as the
+// music gets louder (real fireflies do this); hold the mouse / a hand and they gather and circle around it
+float2 flyPos(float fi, float t, float aspect) {
+    float a = hash21(float2(fi, 1.0)) * 6.28, b = hash21(float2(fi, 2.0)) * 6.28;
+    float sx = 0.05 + 0.07 * hash21(float2(fi, 3.0)), sy = 0.04 + 0.06 * hash21(float2(fi, 4.0));
+    return float2(sin(t * sx + a) * 0.85 * aspect + 0.15 * sin(t * sx * 2.7 + b), -0.1 + 0.5 * sin(t * sy + b) + 0.1 * cos(t * sy * 3.1 + a));
+}
+float3 fireflies(float2 p, constant float *u, float aspect) {
+    float t = TIME, tb = BCLK;
+    float3 col = mix(float3(0.01, 0.018, 0.045), pal(HUE + 0.6) * 0.1, smoothstep(-0.3, 1.0, p.y));
+    col += float3(0.9, 0.95, 1.0) * exp(-length(p - float2(0.75 * aspect, 0.68)) * 30.0) * 0.5 + pal(HUE + 0.6) * exp(-length(p - float2(0.75 * aspect, 0.68)) * 4.0) * 0.06;
+    col += float3(step(0.996, hash21(floor(p * 200.0)))) * 0.35 * smoothstep(0.1, 0.7, p.y);
+    float trees = -0.28 + 0.16 * fbm5(float2(p.x * 2.2, 1.0)) + 0.05 * fbm5(float2(p.x * 9.0, 3.0));
+    col = mix(col, float3(0.006, 0.01, 0.016), step(p.y, trees));
+    float sync = clamp(0.3 + 0.7 * ENERGY + DROP, 0.0, 1.0);
+    float bpz = exp(-fract(tb) * 5.0);
+    for (int i = 0; i < 48; i++) {
+        float fi = float(i);
+        float2 fp = flyPos(fi, t, aspect);
+        float2 orbit = ATTRACT_POS + (0.06 + 0.12 * hash21(float2(fi, 8.0))) * float2(cos(t * (0.5 + 0.6 * hash21(float2(fi, 9.0))) + fi), sin(t * (0.4 + 0.6 * hash21(float2(fi, 10.0))) + fi * 1.3));
+        fp = mix(fp, orbit, ATTRACT * (0.6 + 0.4 * hash21(float2(fi, 11.0))));
+        float own = fract(t * (0.2 + 0.2 * hash21(float2(fi, 5.0))) + hash21(float2(fi, 6.0)));
+        float blink = mix(exp(-own * 4.0), bpz, sync);
+        float d = length(p - fp);
+        float3 fc = mix(float3(0.75, 1.0, 0.35), pal(HUE + fi * 0.02), 0.35);
+        col += fc * (exp(-d * 60.0) * 1.6 + exp(-d * 10.0) * 0.14) * (0.15 + blink);
+    }
+    float hill = -0.62 + 0.06 * sin(p.x * 1.3 + 1.0) + 0.04 * sin(p.x * 3.1);
+    float blades = hill + 0.07 * pow(abs(sin(p.x * 23.0 + 1.3 * sin(p.x * 7.0))), 3.0) + 0.03 * pow(abs(sin(p.x * 61.0)), 4.0);
+    col = mix(col, float3(0.003, 0.006, 0.008), 0.93 * step(p.y, blades));
+    return col;
+}
+
+// ---- 39 life: Conway's Game of Life on a 128x72 board, one generation per beat; births flash on the beat, dead cells glow
+// out slowly; a soup of new cells lands every bar so it never dies out; the pointer draws live cells, clicks drop a blob
+float3 lifeShade(float2 uv, constant float *u, texture2d<float> simt) {
+    float2 sz = float2(simt.get_width(), simt.get_height());
+    float2 g = uv * sz; int2 ci = clamp(int2(g), int2(0), int2(sz) - 1); float2 f = fract(g) - 0.5;
+    float4 c = simt.read(uint2(ci));
+    float cell = smoothstep(0.5, 0.36, max(abs(f.x), abs(f.y)));
+    float3 lc = pal(HUE + c.b * 0.6);
+    float on = c.r > 0.5 ? (0.5 + 0.3 * exp(-dot(f, f) * 6.0) + 0.8 * c.a) : c.g * 0.25;
+    float3 col = float3(0.008, 0.006, 0.02) + lc * cell * on;
+    col += lc * simt.sample(fb, uv).r * 0.12;                         // soft halo from the linear-filtered board
+    col += pal(HUE + 0.5) * 0.015 * (1.0 - cell);
+    return col * (0.85 + 0.3 * BEAT);
+}
+
+// ---- 40 subwoofer: a big woofer cone pumping on the kicks (shaded from a radial height profile), LED ring on the beat,
+// pressure rings pushed out each beat; the pointer moves the light
+float3 subwoofer(float2 p, constant float *u, float aspect) {
+    float t = TIME, tb = BCLK;
+    float ex = clamp(0.7 * KICK + 0.4 * BASS, 0.0, 1.4);
+    float2 st = steer(u, aspect);
+    float3 L = normalize(float3(-0.5 + st.x * 0.9, 0.6 + st.y * 0.6, 0.75));
+    float2 q = p - float2(0.0, -0.02);
+    float r = length(q), an = atan2(q.y, q.x);
+    const float R = 0.76;
+    float nz = vnoise2(p * 60.0) * 0.5 + vnoise2(p * 150.0) * 0.5;
+    float3 col = float3(0.02, 0.018, 0.024) * (0.6 + 0.7 * nz);                      // cabinet tolex
+    for (int i = 0; i < 4; i++) {                                                     // mounting bolts
+        float ba = 0.785 + 1.5708 * float(i);
+        float bd = length(q - (R + 0.14) * float2(cos(ba), sin(ba)));
+        col = mix(col, float3(0.18, 0.18, 0.2) * (0.5 + 0.5 * dot(normalize(float3(q - (R + 0.14) * float2(cos(ba), sin(ba)), 0.02)), L)), smoothstep(0.03, 0.022, bd));
+    }
+    float ledR = R + 0.065;
+    col += pal(HUE + an / 6.28318 * 0.3 + t * 0.02) * exp(-abs(r - ledR) * 80.0) * (0.3 + 1.1 * BEAT);
+    col += pal(HUE) * exp(-abs(r - ledR) * 9.0) * 0.1 * (0.5 + BEAT);
+    float pr = R + 0.1 + fract(tb) * 1.4;
+    col += pal(HUE + 0.5) * exp(-abs(r - pr) * 28.0) * (1.0 - fract(tb)) * 0.3 * (0.3 + KICK) * step(R + 0.1, r);
+    if (r < R + 0.03) {
+        float s = 1.0 + 0.05 * ex;                                                    // cone comes toward us: grows a little
+        float rr = r / s, slope = 0.0;
+        float3 alb; float gloss;
+        if (rr > 0.72) { alb = float3(0.22, 0.22, 0.24); gloss = 60.0; slope = (rr - 0.75) * 2.0; }                 // metal frame lip
+        else if (rr > 0.58) {                                                          // rubber surround (half torus)
+            float x = (rr - 0.65) / 0.07, z = sqrt(max(1.0 - x * x, 0.02));
+            slope = -x / z * (0.6 + 0.5 * ex); alb = float3(0.025, 0.025, 0.03); gloss = 12.0;
+        } else if (rr > 0.18) {                                                        // paper cone with ribs; kick ripples run outward
+            slope = 0.3 - 0.12 * ex + 0.08 * sin(rr * 70.0 - tb * 12.566) * KICK;
+            alb = mix(float3(0.03, 0.03, 0.035), pal(HUE + 0.15) * 0.12, 0.5) * (0.85 + 0.15 * sin(an * 48.0));
+            gloss = 8.0;
+        } else {                                                                       // dust cap dome
+            float x = rr / 0.18; slope = -x / sqrt(max(1.0 - x * x, 0.05)) * 0.5;
+            alb = pal(HUE + 0.1) * 0.35; gloss = 40.0;
+        }
+        float3 n = normalize(float3(-slope * q / max(r, 1e-4), 1.0));
+        float dif = max(dot(n, L), 0.0);
+        float spc = pow(max(dot(reflect(-L, n), float3(0, 0, 1)), 0.0), gloss);
+        float3 c = alb * (0.15 + 1.2 * dif) + float3(1.0) * spc * (gloss > 30.0 ? 0.8 : 0.25);
+        c += pal(HUE + 0.1) * exp(-abs(rr - 0.18) * 90.0) * (0.25 + 0.8 * BEAT);    // cap seam light
+        col = mix(col, c, smoothstep(R + 0.03, R + 0.02, r));
+    }
+    return col;
+}
+
+// ---- 41 moire: two families of thin rings plus a slow straight grating; where they cross, moire fringes swim; rings step
+// outward a quarter period per beat; the pointer drags the second ring centre
+float3 moire(float2 p, constant float *u, float aspect) {
+    float t = TIME, eb = easedBeat(BCLK, 6.0);
+    float2 c1 = float2(0.35 * sin(t * 0.05), 0.25 * cos(t * 0.04));
+    float2 c2 = float2(-0.35 * sin(t * 0.045 + 1.0), -0.2 * cos(t * 0.06 + 2.0));
+    for (int i = 0; i < 3; i++) { float k = clamp(ptrStr(u, i) * 2.0 - 0.3, 0.0, 1.0); c2 = mix(c2, ptrPos(u, i), k); }
+    float f = 6.0 + 2.0 * VAR;
+    float l1 = pow(0.5 + 0.5 * cos(length(p - c1) * f * 6.28318 - eb * 1.5708), 10.0);
+    float l2 = pow(0.5 + 0.5 * cos(length(p - c2) * f * 6.28318 - eb * 0.7854), 10.0);
+    float2 lp = rot(p, t * 0.015 + 0.6);
+    float l3 = pow(0.5 + 0.5 * cos(lp.x * f * 6.28318), 8.0);
+    float3 col = pal(HUE) * l1 * 0.45 + pal(HUE + 0.5) * l2 * 0.45;
+    col += mix(pal(HUE + 0.25), float3(1.0), 0.3) * l1 * l2 * (1.1 + 1.4 * BEAT);
+    col += pal(HUE + 0.75) * l3 * (l1 + l2) * 0.3;
+    col *= smoothstep(2.0, 0.4, length(p * float2(0.7, 1.0)));
+    return col * (0.6 + 0.3 * BEAT);
+}
+
+// ---- 42 xy scope: phase-space vectorscope of the real waveform (x = s[n], y = s[n + lag], rotated 45 degrees like a
+// goniometer), green phosphor with afterglow (feedback), graticule + scanlines in the composite pass
+float3 xyScope(float2 p, constant float *u, constant float *wave, float aspect) {
+    float t = TIME;
+    float2 st = steer(u, aspect);
+    int lag = 7 + int(VAR * 18.0) + int(clamp(st.x * 0.5 + 0.5, 0.0, 1.0) * 24.0 * step(0.01, abs(st.x)));
+    float sc = 2.4 + 0.8 * ENERGY;
+    float2 q = rot(p, t * 0.04);
+    float d = 1e5; float2 pr = float2(0.0);
+    for (int i = 0; i < 126; i++) {
+        int j = i * 3;
+        float x = wave[j], y = wave[min(j + lag, 511)];
+        float2 c = float2(x + y, y - x) * 0.7071 * sc;
+        if (i > 0) d = min(d, segDist(q, pr, c));
+        pr = c;
+    }
+    float3 ph = mix(float3(0.3, 1.0, 0.55), pal(HUE + 0.3), 0.35);
+    return ph * (exp(-d * 320.0) * 1.3 + exp(-d * 35.0) * 0.08) * (0.6 + 0.7 * BEAT);
+}
+
+// ---- 43 dancefloor: a lit glass-tile disco floor in perspective; the tile pattern changes every 4 bars (checker flip,
+// ripple, column chase, spectrum equaliser), all on the beat; moving-head beams in the haze; the pointer lights footsteps
+float tileLight(float2 id, constant float *u, constant float *spec) {
+    float tb = BCLK, bp = fract(tb), bi = floor(tb);
+    int pat = int(fmod(floor(tb / 16.0) + floor(VAR * 4.0), 4.0));
+    float env = exp(-bp * 3.5);
+    float v;
+    if (pat == 0) v = step(0.5, fmod(abs(id.x + id.y + bi), 2.0)) * env;
+    else if (pat == 1) { float rr = length(id + 0.5 - float2(0.0, 6.0)); v = exp(-abs(rr - bp * 9.0) * 1.2) * (1.0 - 0.5 * bp); }
+    else if (pat == 2) v = step(fmod(id.x - bi + 400.0, 4.0), 0.5) * env;
+    else { float s = specAt(spec, fract(abs(id.x) / 9.0)); v = step(fmod(id.y + 400.0, 10.0), s * 9.0) * (0.5 + 0.5 * env); }
+    return 0.1 + v;
+}
+float3 dancefloor(float2 p, constant float *u, constant float *spec, float aspect) {
+    float t = TIME, tb = BCLK;
+    float3 ro = float3(0.0, 1.6, -4.0);
+    float3 rd = normalize(float3(p.x, p.y - 0.38, 1.5));
+    float3 col = float3(0.008, 0.005, 0.02);
+    for (int j = 0; j < 4; j++) {                                                   // moving-head beams in the haze
+        float fj = float(j);
+        float2 o = float2((fj - 1.5) * 0.6 * aspect * 0.6, 1.05);
+        float ang = -1.5708 + 0.45 * sin(tb * 0.0982 + fj * 1.7);
+        float2 dir = float2(cos(ang), sin(ang)), rel = p - o;
+        float along = dot(rel, dir), across = abs(rel.x * dir.y - rel.y * dir.x);
+        col += pal(HUE + 0.15 * fj + 0.3) * exp(-across / (0.01 + along * 0.05)) * step(0.0, along) * 0.12 * (0.6 + 0.4 * BEAT);
+    }
+    if (rd.y < -0.001) {
+        float dist = -ro.y / rd.y;
+        float2 xz = ro.xz + rd.xz * dist;
+        float2 id = floor(xz), f = fract(xz) - 0.5;
+        float lv = tileLight(id, u, spec);
+        for (int i = 0; i < 3; i++) {                                               // footsteps under the pointer
+            float s = ptrStr(u, i); if (s <= 0.0) continue;
+            float2 pp = ptrPos(u, i); float3 prd = normalize(float3(pp.x, pp.y - 0.38, 1.5));
+            if (prd.y < -0.01) { float2 pxz = ro.xz + prd.xz * (-ro.y / prd.y); lv += 1.2 * s * step(length(floor(pxz) - id), 1.1); }
+        }
+        float mask = smoothstep(0.5, 0.44, max(abs(f.x), abs(f.y)));
+        float3 tc = pal(HUE + hash21(id) * 0.3 + floor(tb / 4.0) * 0.1);
+        float3 c = tc * mask * lv * (0.6 + 0.6 * exp(-dot(f, f) * 5.0)) + float3(0.01) * (1.0 - mask);
+        c += float3(1.0) * pow(max(0.0, 1.0 - abs(f.x + f.y) * 4.0), 8.0) * mask * 0.05;   // glass glint
+        col = mix(c, col, 1.0 - exp(-dist * 0.06));
+        col += tc * lv * 0.03;
+    } else col += pal(HUE + 0.3) * exp(-abs(p.y - 0.38) * 6.0) * 0.06;
+    return col;
+}
+
+// ---- 44 disco ball: a mirror-tile ball turning once every 32 beats, facets catch a key light (the pointer aims it); the
+// reflected spots wheel round the dark room in lock-step with the ball
+float3 discoBall(float2 p, constant float *u, float aspect) {
+    float tb = BCLK;
+    float spin = tb * 0.19635;                                                       // one turn per 32 beats
+    float2 st = steer(u, aspect);
+    float3 col = float3(0.004, 0.003, 0.012);
+    float3 rq = rotY(spin) * rotX(0.35) * normalize(float3(p, 1.4));
+    float th = acos(clamp(rq.y, -1.0, 1.0)), ph = atan2(rq.z, rq.x);
+    const float NL = 18.0;
+    float li = floor(th / PI * NL);
+    float nlon = max(1.0, floor(sin((li + 0.5) / NL * PI) * NL * 2.0));
+    float lo = floor((ph / 6.28318 + 0.5) * nlon);
+    float2 cc = float2((li + 0.5) / NL * PI, ((lo + 0.5) / nlon - 0.5) * 6.28318);
+    float3 sd = float3(sin(cc.x) * cos(cc.y), cos(cc.x), sin(cc.x) * sin(cc.y));
+    float h = hash21(float2(li, lo));
+    float spot = smoothstep(0.04, 0.022, length(rq - sd)) * step(0.5, h);
+    col += mix(float3(1.0), pal(HUE + h), 0.55) * spot * (0.3 + 0.55 * BEAT);
+    float2 bc = float2(0.0, 0.18); float R = 0.4;
+    float2 d = p - bc; float r = length(d);
+    col += pal(HUE + 0.2) * exp(-r * 3.0) * 0.06;
+    col += float3(0.25) * smoothstep(0.004, 0.0, abs(p.x)) * step(bc.y + R * 0.9, p.y);   // hanging wire
+    if (r < R) {
+        float3 n = float3(d / R, -sqrt(max(1.0 - r * r / (R * R), 0.0)));
+        float3 nb = rotY(spin) * n;
+        float bt = acos(clamp(nb.y, -1.0, 1.0)), bph = atan2(nb.z, nb.x);
+        const float BL = 16.0;
+        float bli = floor(bt / PI * BL), bfl = fract(bt / PI * BL);
+        float bn = max(1.0, floor(sin((bli + 0.5) / BL * PI) * BL * 2.0));
+        float blof = (bph / 6.28318 + 0.5) * bn, blo = floor(blof);
+        float2 fc = float2((bli + 0.5) / BL * PI, ((blo + 0.5) / bn - 0.5) * 6.28318);
+        float3 nf = rotY(-spin) * float3(sin(fc.x) * cos(fc.y), cos(fc.x), sin(fc.x) * sin(fc.y));
+        float3 rf = reflect(float3(0, 0, 1), nf);
+        float3 L = normalize(float3(-0.6 + st.x, 0.7 + st.y * 0.5, -0.5));
+        float fh = hash21(float2(bli, blo));
+        float glint = pow(max(dot(rf, L), 0.0), 18.0);
+        float grout = smoothstep(0.0, 0.12, min(min(bfl, 1.0 - bfl), min(fract(blof), 1.0 - fract(blof))));
+        float3 c = (pal(HUE + fh * 0.3 + rf.x * 0.2) * (0.15 + 0.3 * fh) + float3(1.0) * glint * (0.8 + 1.2 * BEAT)) * grout;
+        c *= 0.35 + 0.65 * max(dot(n, normalize(float3(-0.4, 0.5, -0.8))), 0.0);
+        col = mix(col, c, smoothstep(R, R - 0.006, r));
+    }
+    return col;
+}
+
+// ---- 45 laser show: club laser fans from the rig over a hazy room and a bouncing crowd; the look changes every 2 bars
+// (breathing fan, sweep, crossing beams from two rigs); beams dip to 55% between beats, never black (no strobing)
+float3 laserShow(float2 p, constant float *u, float aspect) {
+    float t = TIME, tb = BCLK;
+    int mode = int(fmod(floor(tb / 8.0) + floor(VAR * 3.0), 3.0));
+    float2 st = steer(u, aspect);
+    float haze = 0.3 + 0.7 * fbm5(p * 1.3 + float2(t * 0.03, -t * 0.02));
+    float3 col = pal(HUE + 0.6) * 0.02 * haze;
+    float pulse = 0.55 + 0.45 * exp(-fract(tb) * 4.0);
+    for (int s = 0; s < 2; s++) {
+        float2 src = mode == 2 ? float2((s == 0 ? -0.65 : 0.65) * aspect, 1.02) : float2(st.x * aspect * 0.4, 1.02);
+        for (int i = 0; i < 9; i++) {
+            float fi = float(i) - 4.0;
+            float spread = mode == 0 ? 0.1 + 0.08 * sin(tb * 0.19635) : 0.075;
+            float sweep = mode == 1 ? 0.55 * sin(tb * 0.3927) : 0.0;
+            float cross = mode == 2 ? (s == 0 ? 0.45 : -0.45) * (0.6 + 0.4 * sin(tb * 0.3927)) : 0.0;
+            float ang = -1.5708 + fi * spread + sweep + cross;
+            float2 dir = float2(cos(ang), sin(ang)), rel = p - src;
+            float along = dot(rel, dir);
+            if (along < 0.0) continue;
+            float across = abs(rel.x * dir.y - rel.y * dir.x);
+            float w = 0.0018 + along * 0.0022;
+            float3 bc = pal(HUE + float(s) * 0.5 + fi * 0.02);
+            col += bc * (exp(-across / w) * 0.8 + exp(-across / (w * 10.0)) * 0.1) * (0.45 + 0.55 * haze) * pulse;
+        }
+        col += pal(HUE + float(s) * 0.5) * exp(-length(p - src) * 25.0) * 0.6;
+        if (mode != 2) break;
+    }
+    float x = p.x * 5.5, ci = floor(x), f = fract(x) - 0.5;                         // crowd silhouette bouncing on the beat
+    float hh = hash21(float2(ci, 3.0));
+    float bob = 0.025 * exp(-fract(tb + hh * 0.15) * 5.0);
+    float base = -0.8 + bob + 0.05 * hh;
+    float head = length(float2(f * 0.18, p.y - base - 0.06)) - 0.045;
+    float body = max(abs(f) * 0.18 - 0.07, p.y - base);
+    float arm = hh > 0.55 ? max(abs(f * 0.18 - 0.05 * (hh - 0.75)) - 0.012, max(p.y - base - 0.3 - 0.05 * hh, base - p.y)) : 1.0;
+    float crowd = smoothstep(0.004, 0.0, min(min(head, body), arm));
+    col = mix(col, float3(0.0), crowd);
+    return col;
+}
+
+// ---- 46 gravity grid: a neon mesh bent by wandering gravity wells; mouse / hands are heavy wells; a ripple runs out from
+// the centre on every beat; clicks send a shock ring
+float2 gridWarp(float2 p, constant float *u, float aspect) {
+    float t = TIME, tb = BCLK;
+    float2 D = float2(0.0);
+    for (int i = 0; i < 3; i++) {
+        float fi = float(i);
+        float2 d = p - float2(sin(t * 0.08 + fi * 2.1) * 0.8 * aspect, cos(t * 0.065 + fi * 1.7) * 0.6);
+        D -= d * 0.05 * (0.6 + 0.6 * BASS) / (dot(d, d) + 0.05);
+    }
+    for (int i = 0; i < 3; i++) {
+        float s = ptrStr(u, i); if (s <= 0.0) continue;
+        float2 d = p - ptrPos(u, i);
+        D -= d * 0.1 * s / (dot(d, d) + 0.03);
+    }
+    float r = length(p), bp = fract(tb), rp = r - bp * 1.9;
+    D += (p / max(r, 1e-3)) * sin(rp * 16.0) * exp(-rp * rp * 14.0) * (1.0 - bp) * (0.3 + KICK) * 0.045;
+    for (int i = 0; i < 4; i++) {
+        float3 ck = clickAt(u, i); if (ck.z > 2.5) continue;
+        float2 d = p - ck.xy; float rr = length(d) + 1e-4, rc = rr - ck.z * 0.8;
+        D += (d / rr) * sin(rc * 14.0) * exp(-rc * rc * 12.0) * exp(-ck.z * 1.2) * 0.07;
+    }
+    return D;
+}
+float3 gravityGrid(float2 p, constant float *u, float aspect) {
+    float2 D = gridWarp(p, u, aspect);
+    float2 g = (p + D) * 8.0;
+    float2 fw = max(fwidth(g), float2(1e-4));
+    float2 gd = abs(fract(g - 0.5) - 0.5);
+    float line = 1.0 - clamp(min(gd.x / fw.x, gd.y / fw.y) * 0.7, 0.0, 1.0);
+    float glow = exp(-min(gd.x, gd.y) * 14.0);
+    float2 g2 = abs(fract(g * 4.0 - 0.5) - 0.5) / max(fwidth(g * 4.0), float2(1e-4));
+    float sub = 1.0 - clamp(min(g2.x, g2.y) * 0.8, 0.0, 1.0);
+    float m = length(D);
+    float3 c = pal(HUE + m * 1.6 + 0.1);
+    float3 col = c * (line * 0.85 + glow * 0.16) * (0.45 + 2.6 * m) * (0.75 + 0.4 * BEAT);
+    col += pal(HUE + 0.5) * sub * 0.07 * (0.5 + 2.0 * m);
+    col += mix(c, float3(1.0), 0.4) * clamp(m - 0.12, 0.0, 1.0) * 0.6;           // hot well cores
+    return col;
+}
+
+// ---- 47 vinyl: top-down turntable; the record turns a quarter turn per beat (~32 rpm at 128 BPM, so the label stays on
+// the grid), the groove sheen carries the live spectrum, the strobe dots on the platter rim flash on the beat; drag on
+// the record to scratch it (it eases back onto the beat afterwards)
+float3 vinyl(float2 p, constant float *u, constant float *spec, float aspect) {
+    float t = TIME, tb = BCLK;
+    float2 c = float2(-0.15, 0.0);
+    float2 q = p - c;
+    float r = length(q), a = atan2(q.y, q.x);
+    float ra = a + VINYL * 6.28318;
+    float3 col = float3(0.03, 0.03, 0.035) * (0.8 + 0.2 * vnoise2(float2(p.x * 3.0, p.y * 300.0)));    // brushed deck
+    const float RP = 0.95, RR = 0.87;
+    if (r < RP) {
+        if (r > RR) {                                                                  // platter rim with strobe dots
+            col = float3(0.09, 0.09, 0.1) * (0.7 + 0.3 * cos(a * 2.0 - 0.8));
+            float rowi = floor((r - RR) / (RP - RR) * 3.0), rf = fract((r - RR) / (RP - RR) * 3.0);
+            float da = fract(ra * (90.0 + rowi * 10.0) / 6.28318);
+            float dotm = smoothstep(0.32, 0.2, abs(da - 0.5)) * smoothstep(0.45, 0.3, abs(rf - 0.5));
+            float lightA = exp(-pow(sin((a + 2.4) * 0.5), 2.0) * 6.0);
+            col += dotm * mix(float3(1.0, 0.25, 0.12), pal(HUE), 0.3) * lightA * (0.25 + 1.1 * BEAT) + dotm * 0.03;
+        } else {
+            float sp = specAt(spec, clamp((r - 0.33) / 0.53, 0.0, 1.0));
+            float gap = smoothstep(0.004, 0.0, abs(fract((r - 0.33) / 0.106) - 0.5) * 0.106 - 0.049) * step(0.33, r);
+            float groove = 0.6 + 0.4 * sin(r * 420.0 + 2.0 * sin(ra * 3.0) * sp);
+            float lobe = exp(-pow(sin(a - 0.7), 2.0) * 10.0) + 0.15;
+            float3 sheen = mix(float3(0.85, 0.9, 1.0), pal(HUE + r * 0.8), 0.45);
+            col = float3(0.012, 0.012, 0.016) + sheen * lobe * (0.18 + 0.9 * sp) * groove * (1.0 - 0.7 * gap) + float3(0.02) * gap;
+            if (r < 0.3) {                                                             // label: two-tone, so you see it turn
+                float half_ = step(0.0, sin(ra));
+                float3 lab = mix(pal(HUE + 0.1), pal(HUE + 0.55), half_) * (0.45 + 0.35 * BEAT);
+                lab *= 0.8 + 0.2 * smoothstep(0.004, 0.0, abs(r - 0.22));
+                lab += float3(1.0) * smoothstep(0.006, 0.0, abs(r - 0.25)) * step(0.5, fract(ra * 12.0 / 6.28318)) * 0.25;
+                col = mix(col, lab, smoothstep(0.3, 0.295, r));
+                col = mix(col, float3(0.5, 0.5, 0.55) * (0.6 + 0.4 * q.y / 0.015), smoothstep(0.016, 0.012, r));   // spindle
+            }
+        }
+    }
+    float rn = 0.8 - 0.42 * fract(t / 240.0);                                         // tonearm creeps inward over 4 minutes
+    float2 piv = c + float2(1.12, 0.62);
+    float2 nd = c + rn * normalize(float2(0.35, 0.55));
+    float da = segDist(p, piv, nd);
+    float3 arm = float3(0.55, 0.55, 0.6) * (0.6 + 0.4 * smoothstep(0.012, 0.0, da));
+    col = mix(col, col * 0.4, smoothstep(0.03, 0.012, segDist(p - float2(0.02, -0.025), piv, nd)));   // shadow
+    col = mix(col, arm, smoothstep(0.013, 0.009, da));
+    float2 hd = rot(p - nd, -0.6);
+    col = mix(col, float3(0.15, 0.15, 0.17), smoothstep(0.004, 0.0, max(abs(hd.x) - 0.035, abs(hd.y) - 0.022)));   // headshell
+    col = mix(col, float3(0.3, 0.3, 0.33), smoothstep(0.05, 0.045, length(p - piv)));
+    return col;
+}
+
 // ---------- pass 1: warp previous frame + draw new shapes (writes the feedback texture)
 fragment float4 vwarp(VOut in [[stage_in]], constant float *u [[buffer(0)]], constant float *wave [[buffer(1)]],
                       constant float *spec [[buffer(2)]], constant float *peaks [[buffer(3)]],
@@ -972,6 +1542,10 @@ fragment float4 vwarp(VOut in [[stage_in]], constant float *u [[buffer(0)]], con
     else if (P == 23) { zoom = 1.0; decay = 0.9965; disp = inkDisp(p, u); }           // ink in water
     else if (P == 31) { zoom = 1.0; decay = 0.93; disp = float2(0.0, 0.0008); }       // fireworks: trails sink slowly
     else if (P == 32) { zoom = 1.0; decay = 0.4; }                                  // silk: short shimmer trails
+    else if (P == 33) { zoom = 1.0; decay = 0.999; disp = moshDisp(uv, u); }        // datamosh: the old frame IS the picture
+    else if (P == 37) { zoom = 1.0; decay = 0.55; }                                 // string art: soft morph trails
+    else if (P == 38) { zoom = 1.0; decay = 0.86; disp = float2(0.0, 0.0004); }     // fireflies: glow trails (combined with max)
+    else if (P == 42) { zoom = 0.997; decay = 0.86; }                               // xy scope: phosphor afterglow
     else { decay = 0.0; }
 
     float3 old = float3(0.0);
@@ -988,7 +1562,14 @@ fragment float4 vwarp(VOut in [[stage_in]], constant float *u [[buffer(0)]], con
             old = (0.6 * prev.sample(fb, suv).rgb + 0.1 * nb) * pow(decay, fr);
             old = min(hueShift(old, 0.003 * fr), float3(3.0));
         }
+        if (P == 33) {          // VHS chroma bleed: red and blue drift apart a little every frame
+            float o = 0.9 / RES_X;
+            old = float3(prev.sample(fb, suv + float2(o, 0)).r, prev.sample(fb, suv).g, prev.sample(fb, suv - float2(o, 0)).b) * pow(decay, fr);
+        }
     }
+    float alpha = 1.0;
+    float3 prevPlain = prev.sample(fb, uv).rgb;
+    p *= DENS;                  // Tweak "density": zooms the pattern (feedback warp above stays in screen space)
 
     float3 nw = float3(0.0);
     float r = length(p), a = atan2(p.y, p.x);
@@ -1075,6 +1656,25 @@ fragment float4 vwarp(VOut in [[stage_in]], constant float *u [[buffer(0)]], con
     } else if (P == 30) { nw = pondShade(in.uv, u, simt);
     } else if (P == 31) { nw = fireworks(p, u, aspect, clamp(FRAMES, 0.25, 4.0));
     } else if (P == 32) { nw = silk(p, u, aspect);
+    } else if (P == 33) { nw = moshContent(p, u, wave, aspect);
+    } else if (P == 34) { nw = juliaSet(p, u, aspect);
+    } else if (P == 35) {
+        float wiped = prev.sample(fb, uv).a * pow(0.996, clamp(FRAMES, 0.25, 4.0));     // fog creeps back over ~10 s
+        for (int i = 0; i < 3; i++) { float s = ptrStr(u, i); if (s > 0.0) wiped = max(wiped, smoothstep(0.13, 0.06, length(p - ptrPos(u, i))) * min(1.0, s * 1.5)); }
+        alpha = wiped;
+        nw = rainGlass(p, u, spec, aspect, wiped);
+    } else if (P == 36) { nw = kickCubes(p, u, spec, aspect);
+    } else if (P == 37) { nw = stringArt(p, u, spec, aspect);
+    } else if (P == 38) { nw = fireflies(p, u, aspect);
+    } else if (P == 39) { nw = lifeShade(in.uv, u, simt);
+    } else if (P == 40) { nw = subwoofer(p, u, aspect);
+    } else if (P == 41) { nw = moire(p, u, aspect);
+    } else if (P == 42) { nw = xyScope(p, u, wave, aspect);
+    } else if (P == 43) { nw = dancefloor(p, u, spec, aspect);
+    } else if (P == 44) { nw = discoBall(p, u, aspect);
+    } else if (P == 45) { nw = laserShow(p, u, aspect);
+    } else if (P == 46) { nw = gravityGrid(p, u, aspect);
+    } else if (P == 47) { nw = vinyl(p, u, spec, aspect);
     } else {                    // plasma (no feedback)
         float2 q = p * (1.5 + 0.5 * sin(t * 0.1));
         float v = sin(q.x * 3.0 + t) + sin(q.y * 4.0 - t * 1.3) + sin((q.x + q.y) * 2.5 + t * 0.7) + sin(length(q) * 6.0 - t * 2.0 - BASS * 4.0);
@@ -1085,7 +1685,15 @@ fragment float4 vwarp(VOut in [[stage_in]], constant float *u [[buffer(0)]], con
         float2 sk = fwSky(p, aspect);
         outc = outc * (1.0 - sk.x) + float3(0.01, 0.006, 0.016) * sk.x + float3(1.0, 0.7, 0.35) * sk.y * (0.18 + 0.12 * BEAT);
     }
-    return float4(outc, 1.0);
+    if (P == 33) {              // datamosh: fresh content only bleeds in; a partial keyframe on every beat, a full one every 2 bars
+        float fr = clamp(FRAMES, 0.25, 4.0);
+        float key = 1.0 - pow(1.0 - (0.02 + 0.3 * exp(-fract(tb) * 10.0)), fr);
+        if (fract(tb / 8.0) < 0.012) key = 1.0;
+        outc = mix(old, nw, key);
+    }
+    if (P == 38) outc = max(old, nw);                // fireflies: trails fade, the meadow does not accumulate
+    if (TRAILS > 0.001) outc = max(outc, prevPlain * pow(TRAILS, clamp(FRAMES, 0.25, 4.0)));
+    return float4(outc, alpha);
 }
 
 // ---------- pass 2: composite to screen
@@ -1101,10 +1709,29 @@ fragment float4 vcomp(VOut in [[stage_in]], constant float *u [[buffer(0)]], tex
         p = r * float2(cos(a), sin(a));
         uv = float2((p.x / aspect) * 0.5 + 0.5, p.y * 0.5 + 0.5);
     }
+    int S = int(SYMM + 0.5);    // Tweak "symmetry": mirror (2) or an S-fold kaleidoscope (3..12) over any preset
+    if (S == 2) uv.x = 0.5 - abs(uv.x - 0.5);
+    else if (S >= 3) {
+        float2 p = float2((uv.x * 2.0 - 1.0) * aspect, uv.y * 2.0 - 1.0);
+        float a = atan2(p.y, p.x), r = length(p), seg = 2.0 * PI / float(S);
+        a = abs(fmod(a + 20.0 * PI, seg) - seg * 0.5);
+        p = r * float2(cos(a), sin(a));
+        uv = float2((p.x / aspect) * 0.5 + 0.5, p.y * 0.5 + 0.5);
+    }
     float3 c = cur.sample(fb, uv).rgb;
-    if (P == 1) {               // CRT: scanlines + vignette
+    if (P == 1 || P == 33 || P == 42) {   // CRT: scanlines + vignette (scope, datamosh VHS, xy scope)
         c *= 0.8 + 0.2 * sin(uv.y * RES_Y * 1.5);
         float2 v = uv - 0.5; c *= smoothstep(0.85, 0.3, length(v * float2(1.0, 1.2)));
+    }
+    if (P == 42) {              // xy scope graticule (drawn here so the phosphor feedback doesn't accumulate it)
+        float2 p = float2((uv.x * 2.0 - 1.0) * aspect, uv.y * 2.0 - 1.0) * 2.5;
+        float2 gq = abs(fract(p + 0.5) - 0.5);
+        float gl = exp(-min(gq.x, gq.y) * 160.0) * 0.05 + exp(-min(abs(p.x), abs(p.y)) * 90.0) * 0.08;
+        c += float3(0.3, 0.9, 0.5) * gl * step(max(abs(p.x), abs(p.y)), 2.5);
+    }
+    if (P < 0) {                // Shader Lab user shader: shown as written, only fade / strobe / blackout apply
+        c = clamp(c, 0.0, 1.0) * mix(0.5, 1.0, FADE) + STROBE * 1.5;
+        return float4(c * (1.0 - BLACKOUT), 1.0);
     }
     // gentle grid-locked lift for presets whose own motion is slow/accumulating (ink, terrain, flower, pond, fireworks): the picture breathes on the beat
     c *= 1.0 + BEAT * (P == 23 ? 0.12 : P == 26 ? 0.14 : P == 28 ? 0.10 : P == 30 ? 0.16 : P == 31 ? 0.12 : 0.0);
@@ -1124,6 +1751,49 @@ fragment float4 vsim(VOut in [[stage_in]], constant float *u [[buffer(0)]], text
     int P = int(PRESET); float t = TIME;
     if (P == 29) p /= 0.6;                                    // Coral is shown at 60 % crop (coralShade): keep painting/seeding in screen space
     bool reset = u[53] > 0.5;
+    if (P == 39) {              // Life: r alive, g afterglow, b colour, a birth flash; one generation per beat (LIFESTEP)
+        int2 sz = int2(prev.get_width(), prev.get_height());
+        int2 ci = clamp(int2(uv * float2(sz)), int2(0), sz - 1);
+        float4 c0 = prev.read(uint2(ci));
+        float fr = clamp(FRAMES, 0.25, 4.0);
+        float2 cf = float2(ci);
+        if (reset) {
+            float alive = step(0.7, hash21(cf + VAR * 91.0));
+            return float4(alive, alive, hash21(floor(cf / 16.0) + VAR * 13.0), 0.0);
+        }
+        bool alive = c0.r > 0.5;
+        float hue = c0.b, glow = c0.g * pow(0.965, fr), flash = c0.a * pow(0.88, fr);
+        if (LIFESTEP > 0.5) {
+            int n = 0; float hs = 0.0;
+            for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                float4 s = prev.read(uint2((ci + int2(dx, dy) + sz) % sz));
+                if (s.r > 0.5) { n++; hs += s.b; }
+            }
+            bool next = alive ? (n == 2 || n == 3) : (n == 3);
+            if (next && !alive) { hue = hs / 3.0; flash = 1.0; }
+            alive = next;
+            float bi = floor(BCLK);
+            int soups = DROP > 0.5 ? 3 : (fmod(bi, 4.0) < 0.5 ? 1 : 0);      // a fresh soup every bar (3 on the drop)
+            for (int k = 0; k < soups; k++) {
+                float2 sp = floor(hash22(float2(bi, 4.1 + float(k))) * float2(sz - 14)) + 1.0;
+                if (all(cf >= sp) && all(cf < sp + 12.0) && hash21(cf + bi) > 0.62) { if (!alive) flash = 1.0; alive = true; hue = hash21(float2(bi, 7.0 + float(k))); }
+            }
+        }
+        float2 pq = (float2(ci) + 0.5) / float2(sz);
+        float2 pp = float2((pq.x * 2.0 - 1.0) * aspect, 1.0 - pq.y * 2.0);
+        float cellW = 2.0 / float(sz.y);
+        for (int i = 0; i < 3; i++) {
+            float s = ptrStr(u, i); if (s <= 0.0) continue;
+            if (length(pp - ptrPos(u, i)) < cellW * (0.8 + 0.8 * s)) { if (!alive) flash = 0.8; alive = true; hue = fract(TIME * 0.05 + float(i) * 0.3); }
+        }
+        for (int i = 0; i < 4; i++) {
+            float3 ck = clickAt(u, i);
+            if (ck.z < 0.08 && length(pp - ck.xy) < cellW * 6.0 && hash21(cf + ck.xy * 17.0) > 0.5) { alive = true; flash = 1.0; hue = hash21(ck.xy * 9.0); }
+        }
+        if (alive) glow = 1.0;
+        return float4(alive ? 1.0 : 0.0, glow, hue, flash);
+    }
     float4 c = prev.sample(fb, uv);
     if (P == 29) {
         float a = c.r, b = c.g;
