@@ -84,15 +84,15 @@ final class MilkDropLib {
         version = "\(maj).\(min).\(pat)"
     }
 
-    /// Bundle Frameworks first, then RAVE_PROJECTM_LIB, then a source checkout's vendor/ build (swift run / tests).
+    /// RAVE_PROJECTM_LIB first, then the bundle's Frameworks, then ./vendor/projectm/lib (swift run from a checkout).
     private static func candidates() -> [String] {
         var out: [String] = []
         if let env = ProcessInfo.processInfo.environment["RAVE_PROJECTM_LIB"] { out.append(env) }
         if let fw = Bundle.main.privateFrameworksPath { out.append(fw + "/libprojectM-4.dylib") }
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent()
         out.append(exe.appendingPathComponent("../Frameworks/libprojectM-4.dylib").path)
-        let checkout = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        out.append(checkout.appendingPathComponent("vendor/projectm/lib/libprojectM-4.dylib").path)
+        // `swift run` from a checkout (no #filePath: release binaries must not embed build-machine paths)
+        out.append(FileManager.default.currentDirectoryPath + "/vendor/projectm/lib/libprojectM-4.dylib")
         return out
     }
 }

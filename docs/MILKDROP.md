@@ -60,7 +60,7 @@ same 7 transitions as the other scenes; each visit loads a fresh preset. `--no-s
   and an offscreen context has none.
 - `MilkDropLib.swift` loads the library with `dlopen` at runtime. RAVE LIVE builds and runs without it (CI does): the
   mode then shows an "engine missing" card. Swapping in your own libprojectM build is just replacing the file (LGPL).
-  Search order: `RAVE_PROJECTM_LIB`, the bundle's Frameworks, `<checkout>/vendor/projectm/lib`.
+  Search order: `RAVE_PROJECTM_LIB`, the bundle's Frameworks, `./vendor/projectm/lib` (for `swift run` from a checkout).
 - `MilkDropRenderer.swift`: a CGL OpenGL 4.1 core context on its own serial queue renders projectM into a ring of three
   IOSurfaces (bound to GL rectangle textures + FBOs). The same IOSurfaces are Metal textures (zero copy). The Metal
   render loop never waits for GL: each frame it starts the next GL frame if the GL queue is idle and draws the newest
