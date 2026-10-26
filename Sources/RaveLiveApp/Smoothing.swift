@@ -61,9 +61,9 @@ struct AudioSmoother {
     private var bands = [Damped](repeating: Damped(), count: 5)
     private var energy = Damped()
     private var spectrum = [Float](repeating: 0, count: 128)
-    /// Rise times: bands ~0.11 s, energy ~0.3 s, spectrum attack ~25 ms / release ~140 ms.
-    var bandOmega: Float = 30, energyOmega: Float = 11
-    var specAttack: Float = 0.025, specRelease: Float = 0.14
+    /// Rise times: bands ~0.09 s, energy ~0.3 s, spectrum attack ~12 ms (keeps the kick's punch) / release ~140 ms.
+    var bandOmega: Float = 38, energyOmega: Float = 11
+    var specAttack: Float = 0.012, specRelease: Float = 0.14
 
     mutating func step(_ s: AudioSnapshot, dt: Float) -> AudioSnapshot {
         var o = s

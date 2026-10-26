@@ -102,6 +102,12 @@ final class Renderer: NSObject, MTKViewDelegate {
     // Metrics
     let metrics = Metrics()
     var snapTimes: [Double] = []
+    /// Test: `--snap-transitions N` films the first N SHOW transitions of each type (frames across each one).
+    var snapTransitions = 0
+    private var namedSnaps: [(at: Double, name: String)] = []
+    private var transitionsFilmed: [Int: Int] = [:]
+    /// Test: `--show-hold N` holds each SHOW scene N beats instead of 32 (more transitions per minute, same transitions).
+    var showHoldOverride: Double?
     var lumLogPath: String?          // --lumlog <file>: per-frame "elapsed phase beatIdx meanLuma kick" for beat-lock proofs
     private var lumBuf = "elapsed phase beatIdx luma kick\n", lumFlushed = 0.0
     var smooth: SmoothProbe?         // --smoothlog <file>: per-frame flicker / motion of the final frame (SmoothProbe)
@@ -354,8 +360,10 @@ final class Renderer: NSObject, MTKViewDelegate {
         }
 
         let elapsed = now - t0
-        let snapNow = !snapTimes.isEmpty && elapsed >= snapTimes[0]
-        if snapNow { snapTimes.removeFirst() }
+        var snapName: String?
+        if !snapTimes.isEmpty && elapsed >= snapTimes[0] { snapTimes.removeFirst(); snapName = String(format: "snap_%05.1f.png", elapsed) }
+        if let i = namedSnaps.firstIndex(where: { elapsed >= $0.at }) { snapName = namedSnaps.remove(at: i).name }
+        let snapNow = snapName != nil
         // Discrete GPUs (Intel Macs with AMD): drawables are managed, so copy GPU -> CPU before getBytes.
         if (snapNow || lumLogPath != nil) && drawable.texture.storageMode == .managed, let b = cb.makeBlitCommandEncoder() {
             b.synchronize(resource: drawable.texture); b.endEncoding()
@@ -372,7 +380,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         cb.commit()
         if snapNow {
             cb.waitUntilCompleted()
-            saveSnapshot(drawable.texture, name: String(format: "snap_%05.1f.png", elapsed))
+            saveSnapshot(drawable.texture, name: snapName ?? "snap.png")
         }
         if let path = lumLogPath {          // beat-lock probe (test only): mean frame luminance next to the beat phase this frame was drawn with
             cb.waitUntilCompleted()
@@ -539,6 +547,12 @@ final class Renderer: NSObject, MTKViewDelegate {
 
     private func startTransition(to: Mode, type: Int, beats: Double, at beat: Double, ctx: SceneCtx) {
         transition = Transition(from: showScene, to: to, type: type, startBeat: beat, beats: beats)
+        if snapTransitions > 0, transitionsFilmed[type, default: 0] < snapTransitions {
+            let n = transitionsFilmed[type, default: 0]; transitionsFilmed[type] = n + 1
+            let el = ctx.now - t0, dur = beats * 60 / max(60, ctx.s.bpm > 0 ? ctx.s.bpm : 120)
+            let tag = Self.transitionNames[type].replacingOccurrences(of: " ", with: "_")
+            for k in 0...8 { namedSnaps.append((el + dur * Double(k) / 7 - dur / 7, String(format: "tr_%@_%d_%d.png", tag, n, k))) }
+        }
         metrics.event("show:\(showScene.title)->\(to.title) [\(Self.transitionNames[type]) \(Int(beats))b]" + (to == .visuals ? " " + VisualsRenderer.presetNames[visuals?.preset ?? 0] + " pal\(visuals?.paletteIndex ?? 0)" : to == .aurora ? " sym\(aurora?.symmetry ?? 0)" : ""), at: ctx.now)
         showScene = to
         sceneBeats = 0
@@ -577,7 +591,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         guard bar != lastBar else { return }
         lastBar = bar
         // loud music changes every 16 beats, calm every 32
-        let hold: Double = intensity == .wild && energy > 0.6 ? 16 : (intensity == .chill ? 64 : 32)
+        let hold: Double = showHoldOverride ?? (intensity == .wild && energy > 0.6 ? 16 : (intensity == .chill ? 64 : 32))
         // one bar before the change: pick the next scene and start it offscreen
         if upcoming == nil && sceneBeats >= hold - 4 - 0.01 {
             let pick = nextSlot(energy: energy)

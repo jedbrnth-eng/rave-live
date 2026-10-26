@@ -98,6 +98,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let tr = arg("--trim").flatMap(Double.init) { r.userOffset = tr / 1000 }
         if let pr = arg("--preset").flatMap(Int.init) { r.visuals?.preset = pr; r.visuals?.autoCycle = false }
         if let s = arg("--snap") { r.snapTimes = s.split(separator: ",").compactMap { Double($0) }.sorted() }
+        r.snapTransitions = arg("--snap-transitions").flatMap(Int.init) ?? 0
+        r.showHoldOverride = arg("--show-hold").flatMap(Double.init)
         r.lumLogPath = arg("--lumlog").map { NSString(string: $0).expandingTildeInPath }
         if let sl = arg("--smoothlog") { r.smooth = SmoothProbe(device: r.device, path: NSString(string: sl).expandingTildeInPath) }
         setupMilkDrop(args)
