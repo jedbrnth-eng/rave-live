@@ -123,4 +123,14 @@ final class SmoothingTests: XCTestCase {
         let d = c.step(target: 100, phase: 0.1, adoptNow: true)
         XCTAssertEqual(d.beat, 100)
     }
+
+    /// projectM's beat sensitivity stays calm on Normal even at a drop during a build; Wild may go higher.
+    func testMilkDropSensitivityAndEasing() {
+        XCTAssertLessThanOrEqual(MilkDropRenderer.beatSensitivity(intensity: 1, build: 1, drop: 1), 1.3 + 1e-6)
+        XCTAssertGreaterThan(MilkDropRenderer.beatSensitivity(intensity: 2, build: 1, drop: 1), 2)
+        XCTAssertLessThan(MilkDropRenderer.beatSensitivity(intensity: 0, build: 0, drop: 0), MilkDropRenderer.beatSensitivity(intensity: 1, build: 0, drop: 0))
+        XCTAssertEqual(MilkDropRenderer.beatSensitivity(intensity: 1, build: 5, drop: -3), MilkDropRenderer.beatSensitivity(intensity: 1, build: 1, drop: 0))
+        XCTAssertLessThan(MilkDropRenderer.temporalBlend(intensity: 1), 1)
+        XCTAssertGreaterThan(MilkDropRenderer.temporalBlend(intensity: 2), MilkDropRenderer.temporalBlend(intensity: 1))
+    }
 }

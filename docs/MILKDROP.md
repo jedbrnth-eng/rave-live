@@ -9,22 +9,38 @@ The difference from plain MilkDrop/projectM: **preset changes follow the music's
   Never mid-bar.
 - **Drops get a hard cut**, on the drop itself, to a preset from the high-energy categories.
 - **Intensity follows the build**: during a build-up the image creeps in and gets more saturated, kicks give a small
-  punch, and projectM's own beat sensitivity rises with the build and the drop.
+  punch, and projectM's own beat sensitivity rises with the build and the drop (capped: 0.8–1.3 on Normal, up to 2.4
+  on Wild, so presets don't spasm).
+- **Smooth on Normal**: projectM renders at most ~75 frames per second (presets are made for ~60; at 120 Hz they used
+  to run at double speed), and on Normal / Chill each frame eases toward the next, so one-frame flicker becomes a quick
+  fade. Wild shows projectM's frames as they are. See docs/SMOOTHNESS.md.
 - Without a tempo lock yet (silence, free-form music) it falls back to a change every 24 s.
 
 ## Getting presets
 
-RAVE LIVE doesn't ship presets. In MILKDROP mode with no presets, a card offers:
+**Built in:** about 150 presets from projectM's
+[cream of the crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) pack ship inside the app, so
+MILKDROP plays right away. They were picked by a sweep of ~400 candidates from every category: each loads without
+errors, isn't black or blown out, renders a frame in under 16 ms here, and passes the smoothness limits of
+docs/SMOOTHNESS.md (at most 8 off-beat pops a minute); then at most a few per sub-category and per author, so the set
+is varied. The list is `Resources/MilkDrop/bundled.txt` (pack commit + SHA-256 of every file);
+`scripts/fetch_milkdrop_presets.sh` fetches exactly those files and `make_app.sh` copies them into the app with the
+pack's LICENSE.md and an AUTHORS.txt.
 
-- **Get MilkDrop presets…** downloads projectM's
-  [cream of the crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) pack (about 9,800 presets,
-  a 32 MB download, about 130 MB on disk) into `~/Library/Application Support/RAVE LIVE/MilkDrop/presets`. It asks
-  first and shows the size.
-- **Open preset folder…** opens `~/Library/Application Support/RAVE LIVE/MilkDrop/My Presets`: drop your own `.milk`
-  files there (subfolders are fine), then press Rescan in the preset browser.
+**More:**
 
-Both are also in the View menu. About the presets' licence: most MilkDrop presets were released without one; the
-projectM team treats them as public domain and removes any on the author's request (see the pack's LICENSE.md).
+- **Get 9,800 More Presets…** (View menu and the preset browser) downloads the whole pack (a 32 MB download, about
+  130 MB on disk) into `~/Library/Application Support/RAVE LIVE/MilkDrop/presets`. It asks first and shows the size.
+- **Drag and drop** `.milk` files or folders onto the RAVE LIVE window (or the preset browser): they are copied into
+  `~/Library/Application Support/RAVE LIVE/MilkDrop/My Presets` and the first one plays.
+- **Add MilkDrop Preset Folder…** (View menu, or Add Folder… in the browser) does the same through a file dialog.
+- **Open My MilkDrop Presets Folder…** opens that folder; press Rescan in the browser after changing it by hand.
+
+The browser (`P`) has tabs: All, Bundled, Downloaded, Mine. A built-in preset that is also in the downloaded pack is
+listed once (favourites and ratings are shared). About the presets' licence: most MilkDrop presets were released
+without one; the projectM team treats them as public domain and removes any on the author's request (see the pack's
+LICENSE.md, also in the app). The authors of the built-in presets are listed in CREDITS.md and in AUTHORS.txt in the
+app.
 
 ## Controls (MILKDROP mode)
 
@@ -88,11 +104,13 @@ same 7 transitions as the other scenes; each visit loads a fresh preset. `--no-s
 --milk-download-now             run the "Get presets" download without the confirmation dialog
 --milk-ui-shot <file.png>       save the AppKit overlay (card, HUD) after 4 s; the Metal layer is not included
 env RAVE_MILKDROP_ROOT=<dir>    use <dir> instead of ~/Library/Application Support/RAVE LIVE/MilkDrop
+env RAVE_MILKDROP_BUNDLED=<dir> use <dir> as the built-in set (e.g. vendor/milkdrop-bundled with `swift run`)
 env RAVE_PROJECTM_LIB=<dylib>   load this libprojectM build first
 ```
 
 Events in the metrics JSON: `milk:blend beat=N bar=B phrase=P phase=X locked=1 <name>`, `milk:cut(drop) …`,
-`milk:loaded(<why>) <name> [<load ms>]`, `milk:skip(failed|black) …`.
+`milk:loaded(<why>) <name> [<load ms>]`, `milk:skip(failed|black) …`, `milk:import N`. The sweep's `sweep.tsv` also has
+the mean GL frame time per preset (`gl_ms`).
 
 ## Known limits
 

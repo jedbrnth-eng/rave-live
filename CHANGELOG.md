@@ -14,16 +14,26 @@
 - **Send to Display:** a clean fullscreen output on a projector or second screen at its own resolution and refresh; the main window becomes a preview with the controls, and takes over again if the screen is unplugged.
 - **MIDI:** MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, master brightness, strobe through the 3-flashes-per-second limiter, blackout, tap, nudge, BPM, auto-cycle; preset and auto-cycle also drive MILKDROP), mappings saved as JSON with import/export, and MIDI clock (24 ppqn) tempo sync.
 - **Control HUD** (`H`) and **keyboard cheat sheet** (`?`). Neither, nor the Tweak panel or Shader Lab errors, ever appears on Syphon or the output display.
-- Docs: docs/COMPATIBILITY.md, docs/MILKDROP.md, docs/VJ.md, docs/SHADERS.md.
+- **MilkDrop presets built in:** about 150 curated presets from the projectM "cream of the crop" pack ship with the app, so MILKDROP works out of the box. They were picked to load cleanly, run fast and pass the new smoothness checks, across all categories and dozens of authors. One click gets the other 9,800 (View → Get 9,800 More MilkDrop Presets…). Drag `.milk` files or whole folders onto the window to add your own, or use View → Add MilkDrop Preset Folder…. The browser has All / Bundled / Downloaded / Mine tabs.
+- `--smoothlog` probe and `scripts/smooth_report.py`: per-frame flicker, pops and motion of the final frame, per preset and per transition. Limits and method in docs/SMOOTHNESS.md.
+- Docs: docs/COMPATIBILITY.md, docs/MILKDROP.md, docs/VJ.md, docs/SHADERS.md, docs/SMOOTHNESS.md.
 
 ### Changed
 - License changed from MIT to GPL-3.0 for all new work. Versions released before this change stay available under MIT.
+- **Smoother everywhere, still on the beat.** Kicks, snares and the beat pulse ease in and out instead of switching on for one frame; the beat pulse peaks exactly on the beat. Band levels and the spectrum are smoothed, so full-screen fields no longer shimmer with noisy audio. On Normal the strobe eases in and out (still at most 3 flashes per second); Wild keeps the hard strobe. Stage's build-up wall pulse is a soft pulse once per beat, and the camera shake is slower and gentler. Calmer Wormhole, Crystals, Nebula and Plasma.
+- **Smoother transitions.** SHOW starts the next scene a bar early offscreen, so it fades in already running (no empty or stale first frames); transitions can't jump when the tempo lock changes; the drop cut is one clean cut with a smaller white bloom on Normal. Classic Visuals crossfades between presets instead of cutting.
+- **MILKDROP is calmer:** projectM's beat sensitivity is capped (Normal 0.8–1.3, was up to 3.5), and on Normal and Chill each frame eases toward the next, so twitchy presets don't spasm.
+- Community shaders and looks are licensed GPL-3.0-or-later (community/README.md).
 - `F` is fullscreen in every mode.
 - Input devices are captured with 512-frame buffers (lower latency, works with input-only devices).
 - Snapshots also work on discrete GPUs.
 - `scripts/make_app.sh` builds the universal app and bundles Syphon and libprojectM when `scripts/build_syphon.sh` / `scripts/build_projectm.sh` have been run; the app builds and runs without them. CI adds an Intel job and a headless smoke run.
 
 ### Fixed
+- Beat-locked motion jumped back and forth by 2–3 beats about every beat on four-on-the-floor music: the bar estimate flipped, and the beat counter followed it. Wormhole, Laser Grid, Terrain, Stage patterns and others lurched. The counter now only moves to a new bar alignment after 8 beats of agreement, or on a drop.
+- MilkDrop presets ran at double speed on 120 Hz displays (projectM rendered a frame per display frame); it now renders at most ~75 frames per second.
+- The Stage build-up flashed the LED wall up to 8.5 times per second, off the beat, outside the strobe limiter.
+- SHOW: a scene could transition into itself, and a scene could open on a frame from its previous visit.
 - Frame rate no longer drops to about 5 fps when another app is in front (App Nap): Syphon and projector feeds keep full rate. While RAVE LIVE runs, the Mac doesn't idle-sleep.
 - Opening an input device while the microphone permission prompt was still open froze the app on macOS 12.
 
