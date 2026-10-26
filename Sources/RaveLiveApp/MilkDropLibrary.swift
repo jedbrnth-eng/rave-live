@@ -143,17 +143,19 @@ final class MilkDropLibrary: @unchecked Sendable {
     // MARK: - picking
 
     /// Weighted random pick for automatic changes: skips broken, transition-to-black and 1-star presets,
-    /// favours favourites (x4) and higher ratings, avoids the last 64 picks, and on loud moments prefers loud categories.
+    /// favours favourites (x4) and higher ratings, avoids the last 64 picks (at most half the library), and on loud moments prefers loud categories.
     func pick(loud: Bool) -> Preset? {
         lock.lock(); defer { lock.unlock() }
         guard !presets.isEmpty else { return nil }
-        let favs = Set(store.favorites), avoid = Set(recent)
+        // avoid recent picks, but never more than half the library (small user folders must still rotate)
+        let favs = Set(store.favorites), avoid = Set(recent.suffix(min(64, presets.count / 2)))
         let want = loud ? Self.loudCategories : Self.calmCategories
         var best: Preset?
         var bestScore = -1.0
-        // sample instead of scoring all ~10k presets every phrase
-        for _ in 0..<min(400, presets.count * 2) {
-            let p = presets[Int.random(in: 0..<presets.count, using: &rng)]
+        // sample instead of scoring all ~10k presets every phrase (small libraries: score every preset)
+        let candidates: [Int] = presets.count <= 400 ? Array(0..<presets.count) : (0..<400).map { _ in Int.random(in: 0..<presets.count, using: &rng) }
+        for i in candidates {
+            let p = presets[i]
             if store.broken[p.key] != nil || Self.skipCategories.contains(p.category) || avoid.contains(p.key) { continue }
             let r = store.ratings[p.key] ?? 0
             if r == 1 { continue }

@@ -101,7 +101,7 @@ final class MilkDropRenderer: @unchecked Sendable {
     func direct(beat: Int, phase: Double, beatLocked: Bool, dropStarted: Bool, now: Double, energy: Float, intensity: Int, bpm: Double) -> String? {
         guard ready, sweep == nil else { return nil }
         director.holdBeats = MilkDropDirector.hold(intensity: intensity, energy: energy)
-        let a = director.step(beat: beat, beatLocked: beatLocked, dropStarted: dropStarted, now: now)
+        let a = director.step(beat: beat, phase: phase, beatLocked: beatLocked, dropStarted: dropStarted, now: now)
         guard a != .none else { return nil }
         let blend = MilkDropDirector.blendSeconds(bpm: beatLocked ? bpm : 0)
         guard let name = loadNext(loud: a == .cut || energy > 0.6, smooth: a == .blend, blendSeconds: blend, why: a == .cut ? "cut" : "blend") else { return nil }

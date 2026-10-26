@@ -31,8 +31,12 @@ struct MilkDropDirector {
 
     /// Call once per frame. `beat` is the renderer's musical beat counter (beat 0 of each bar is a downbeat,
     /// aligned so the last drop opened a phrase); `beatLocked` says whether that counter means anything.
-    mutating func step(beat: Int, beatLocked: Bool, dropStarted: Bool, now: Double) -> Action {
+    /// `phase` is how far into `beat` this frame is (0..1): a phrase change only starts on the frame the downbeat begins.
+    mutating func step(beat: Int, phase: Double, beatLocked: Bool, dropStarted: Bool, now: Double) -> Action {
         defer { lastBeat = beat }
+        if lastSwitchTime < -1.0e8 { lastSwitchTime = now }       // the first preset counts as a switch
+        // the renderer re-aligns its counter (bar found, drop opens a phrase): that is not elapsed time, keep the hold intact
+        if beatLocked, lastBeat != Int.min, abs(beat - lastBeat) >= 2, let last = lastSwitchBeat { lastSwitchBeat = last + (beat - lastBeat) }
         if locked { return .none }
         if dropStarted {
             lastSwitchBeat = beat; lastSwitchTime = now
@@ -43,7 +47,7 @@ struct MilkDropDirector {
             return .none
         }
         // only on the frame the counter reaches a phrase downbeat (not on every frame of that beat)
-        guard beat != lastBeat, Self.mod(beat, phraseBeats) == 0 else { return .none }
+        guard beat != lastBeat, Self.mod(beat, phraseBeats) == 0, phase < 0.25 else { return .none }
         if let last = lastSwitchBeat, beat - last < holdBeats, beat >= last { return .none }
         if lastSwitchBeat == nil && now - lastSwitchTime < 4 { return .none }   // just switched while unlocked
         lastSwitchBeat = beat; lastSwitchTime = now
