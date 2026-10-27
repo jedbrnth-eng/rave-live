@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>A festival light show that plays along with whatever your Mac is playing.</b><br>
-  Beat-locked stage lights, lasers, LED walls, pyro, 48 visualizers and MilkDrop presets built in. Native Swift and Metal, no account, no tracking.
+  Beat-locked stage lights, lasers, LED walls, pyro and 48 original visuals, plus 149 MilkDrop presets built in, ~9,800 more one click away, and drag-and-drop for your own. Native Swift and Metal, no account, no tracking.
 </p>
 
 <p align="center">
@@ -28,8 +28,8 @@
 </p>
 
 <p align="center">
-  <img src="docs/visuals-reel.webp" alt="A reel of every RAVE LIVE look in motion: Stage, all 33 Classic Visuals presets and AURORA, about a second each" width="860"><br>
-  <sub>Every look in one reel: Stage, all 33 Classic Visuals presets and AURORA, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
+  <img src="docs/visuals-reel.webp" alt="A reel of RAVE LIVE in motion: Stage, all 48 Classic Visuals presets, AURORA and six built-in MilkDrop presets, about a second each" width="860"><br>
+  <sub>Every look in one reel: Stage, all 48 Classic Visuals presets, AURORA and six of the 149 built-in MilkDrop presets, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
 </p>
 
 > **Status: pre-release (0.5).** Expect rough edges. Issues and pull requests are welcome.
@@ -84,7 +84,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 | **Stage** | A procedural club stage: LED wall looks, moving heads, lasers, haze, flame jets, fireballs and a crowd that reacts. A show director picks looks per phrase and tracks builds and drops. |
 | **Classic Visuals** | 48 presets, from feedback classics (Tunnel, MilkWarp, Kaleido) to Synthwave, Galaxy, Neon City, Terrain, reaction-diffusion Coral, Fireworks, Julia, Game of Life, Disco Ball, Laser Show and a scratchable Vinyl. Many react to your mouse or hands, and every preset pulses on the shared beat clock. Write your own in **Shader Lab** (drop a `.metal` file in a folder; it hot-reloads) and tweak any preset with the **Tweak panel** (`Shift`+`T`), saved as `.ravelook` files. |
 | **AURORA** | A GPU fluid simulation with about a million particles and bloom. Stir it with the mouse, or turn on the camera and paint it with your hands and body. |
-| **MILKDROP** | Plays community MilkDrop presets through [projectM](https://github.com/projectM-visualizer/projectm), with preset changes locked to the beat grid: blends start on a phrase downbeat, drops get a hard cut. About 150 hand-checked presets are built in, so it works out of the box; the other ~9,800 are one click away (View → Get 9,800 More MilkDrop Presets…), and you can drag `.milk` files or folders onto the window. Searchable browser (`P`) with Bundled / Downloaded / Mine tabs, favourites and ratings. [docs/MILKDROP.md](docs/MILKDROP.md) |
+| **MILKDROP** | Plays community MilkDrop presets through [projectM](https://github.com/projectM-visualizer/projectm), with preset changes locked to the beat grid: blends start on a phrase downbeat, drops get a hard cut. 149 hand-checked presets are built in, so it works out of the box; the other ~9,800 are one click away (View → Get 9,800 More MilkDrop Presets…), and you can drag `.milk` files or folders onto the window. Searchable browser (`P`) with Bundled / Downloaded / Mine tabs, favourites and ratings. [docs/MILKDROP.md](docs/MILKDROP.md) |
 
 ### For VJs
 
@@ -126,7 +126,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 <summary>Contact sheet of the 0.4 looks</summary>
 
 <p align="center">
-  <img src="docs/visuals-grid.jpg" alt="Contact sheet of Stage, all 33 Classic Visuals presets and AURORA, each labelled with its name" width="860">
+  <img src="docs/visuals-grid.jpg" alt="Contact sheet of Stage, all 48 Classic Visuals presets, AURORA and six built-in MilkDrop presets, each labelled with its name" width="860">
 </p>
 
 </details>
