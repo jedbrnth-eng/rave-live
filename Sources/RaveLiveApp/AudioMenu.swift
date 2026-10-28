@@ -125,9 +125,25 @@ final class AudioMenu: NSObject, NSMenuDelegate {
 
     @objc private func pick(_ item: NSMenuItem) {
         guard let key = item.representedObject as? String else { return }
+        pick(key: key)
+    }
+
+    /// Same as choosing an entry in the Audio menu (also used by the Settings window).
+    func pick(key: String) {
         let src = InputSource(key: key)
         if case .device(let uid) = src { UserDefaults.standard.set(uid, forKey: "lastInputDevice") }
         select(src)
+    }
+
+    /// The Audio menu's choices as data, for the Settings window.
+    func options() -> [(key: String, title: String, enabled: Bool, current: Bool)] {
+        let current = audio?.source ?? InputSource.saved
+        var out: [(key: String, title: String, enabled: Bool, current: Bool)] = []
+        out.append((InputSource.system.key, SystemAudio.isSupported ? "System Audio" : "System Audio (needs macOS 13)", SystemAudio.isSupported, current == .system))
+        let def = AudioInputDevice.defaultInput()
+        out.append((InputSource.mic.key, "Default Input" + (def.map { " (\($0.name))" } ?? ""), true, current == .mic))
+        for d in AudioInputDevice.all() { out.append((InputSource.device(d.uid).key, d.name, true, current == .device(d.uid))) }
+        return out
     }
 
     @objc private func openHelp() { NSWorkspace.shared.open(Self.compatibilityURL) }

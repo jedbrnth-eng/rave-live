@@ -68,7 +68,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         }
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
         if args.contains("--syphon") { setSyphon(true) }
-        if args.contains("--hud") { setHUD(1) }
+        if args.contains("--hud") { setHUD(1) } else { setOverlay(Prefs.shared.overlay, save: false) }
         if let n = arg("--output-screen").flatMap(Int.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.sendToScreen(n) } }
         if let script = arg("--vjscript") { runScript(script, snapDir: r.snapDir) }
         _ = view
@@ -103,7 +103,11 @@ final class VJRig: NSObject, NSMenuDelegate {
         let stop = NSMenuItem(title: "Stop Output Display", action: #selector(menuStopOutput(_:)), keyEquivalent: "")
         stop.target = self; om.addItem(stop)
         om.addItem(.separator())
-        let hud = NSMenuItem(title: "Control HUD", action: #selector(menuHUD(_:)), keyEquivalent: ""); hud.target = self; om.addItem(hud)
+        let hm = NSMenu(title: "HUD")
+        for l in OverlayLevel.allCases {
+            let it = NSMenuItem(title: l.title, action: #selector(menuHUD(_:)), keyEquivalent: ""); it.tag = l.rawValue; it.target = self; hm.addItem(it)
+        }
+        let hud = NSMenuItem(title: "HUD", action: nil, keyEquivalent: ""); hud.submenu = hm; om.addItem(hud)
         let cs = NSMenuItem(title: "Keyboard Shortcuts", action: #selector(menuCheat(_:)), keyEquivalent: ""); cs.target = self; om.addItem(cs)
         outItem.submenu = om
 
@@ -143,7 +147,7 @@ final class VJRig: NSObject, NSMenuDelegate {
             return SyphonPublisher.available
         case #selector(menuStopOutput(_:)): return outputWindow != nil
         case #selector(menuClock(_:)): item.state = midi.clockSync ? .on : .off; return true
-        case #selector(menuHUD(_:)): item.state = hudView.isHidden ? .off : .on; return true
+        case #selector(menuHUD(_:)): item.state = item.tag == overlay.rawValue ? .on : .off; return true
         case #selector(menuCheat(_:)): item.state = cheatView.isHidden ? .off : .on; return true
         case #selector(menuBrightness(_:)): item.state = Int(((output?.brightness ?? 1) * 100).rounded()) == item.tag ? .on : .off; return true
         default: return true
@@ -153,7 +157,7 @@ final class VJRig: NSObject, NSMenuDelegate {
     @objc func menuSyphon(_ i: NSMenuItem) { setSyphon(output?.syphon == nil) }
     @objc func menuSend(_ i: NSMenuItem) { sendToScreen(i.tag) }
     @objc func menuStopOutput(_ i: NSMenuItem) { stopOutput(reason: "stopped") }
-    @objc func menuHUD(_ i: NSMenuItem) { setHUD(hudView.isHidden ? 1 : 2) }
+    @objc func menuHUD(_ i: NSMenuItem) { setOverlay(OverlayLevel(rawValue: i.tag) ?? .status) }
     @objc func menuCheat(_ i: NSMenuItem) { cheatView.isHidden.toggle() }
     @objc func menuLearn(_ i: NSMenuItem) { openLearnPanel() }
     @objc func menuClock(_ i: NSMenuItem) { midi.clockSync.toggle() }
@@ -257,7 +261,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         let chars = e.characters ?? ""
         if chars == "?" || (e.charactersIgnoringModifiers == "/" && e.modifierFlags.contains(.shift)) { cheatView.isHidden.toggle(); return true }
         if e.keyCode == 53 && !cheatView.isHidden { cheatView.isHidden = true; return true }
-        if chars.lowercased() == "h" && !e.modifierFlags.contains(.command) { setHUD(hudState == 1 ? 2 : 1); return true }
+        if chars.lowercased() == "h" && !e.modifierFlags.contains(.command) { setOverlay(overlay.next); return true }
         return false
     }
 
@@ -267,7 +271,18 @@ final class VJRig: NSObject, NSMenuDelegate {
         hudView.isHidden = state != 1
         r.hudVisible = state != 2
         app.hud.isHidden = state == 2
+        app.modeControl.isHidden = state == 2          // clean picture: no mode bar either (errors in the status text still show)
         updateHUD()
+        app.settings?.refresh()
+    }
+
+    /// Current overlay level (hudState 0 = status, 1 = full, 2 = clean).
+    var overlay: OverlayLevel { hudState == 1 ? .full : (hudState == 2 ? .clean : .status) }
+
+    /// HUD key, Output > HUD and the Settings window. Saved unless `save` is false (launch / test runs).
+    func setOverlay(_ l: OverlayLevel, save: Bool = true) {
+        setHUD(l == .full ? 1 : (l == .clean ? 2 : 0))
+        if save { Prefs.shared.overlay = l }
     }
 
     // MARK: periodic: MIDI clock -> tempo, HUD text
@@ -359,7 +374,8 @@ final class VJRig: NSObject, NSMenuDelegate {
 
         VIEW & OUTPUT
         F, Cmd F    fullscreen      Esc  exit
-        H           Control HUD (never on Syphon/output)
+        H           HUD status / full / off
+        Cmd ,       Settings…
         ?           this sheet (? or Esc closes)
         Cmd L       MIDI Learn…
         Output menu Syphon, Send to Display
@@ -412,6 +428,9 @@ final class VJRig: NSObject, NSMenuDelegate {
         switch kv[0] {
         case "hud": setHUD(1)
         case "nohud": setHUD(2)
+        case "settings": app?.menuSettings(nil)
+        case "settingsshot":
+            if let w = app?.settings?.window, let v = w.contentView { Self.writePNG(Self.render(view: v, background: w.backgroundColor), to: snapDir.appendingPathComponent(val + ".png")) }
         case "cheat": cheatView.isHidden = false
         case "nocheat": cheatView.isHidden = true
         case "learn": openLearnPanel()

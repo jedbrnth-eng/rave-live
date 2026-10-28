@@ -153,6 +153,17 @@ final class QualityController: NSObject {
 
     @objc private func pick(_ item: NSMenuItem) {
         guard let c = item.representedObject as? String else { return }
+        select(c)
+    }
+
+    /// Settings window list: key ("auto" | tier) and title.
+    var options: [(key: String, title: String)] {
+        [("auto", "Auto (\(detected.0.title) for \(detected.1))")] + QualityTier.allCases.map { ($0.rawValue, $0.title) }
+    }
+
+    /// Pick and save a quality ("auto" or a tier raw value), same as View > Quality.
+    func select(_ c: String) {
+        guard c == "auto" || QualityTier(rawValue: c) != nil else { return }
         choice = c
         UserDefaults.standard.set(c, forKey: Self.defaultsKey)
         apply()
