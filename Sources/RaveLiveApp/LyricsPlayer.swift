@@ -309,8 +309,9 @@ final class LyricsOverlayView: NSView {
         wantsLayer = true
         for l in cur + [next] {
             l.alignment = .center
-            l.maximumNumberOfLines = 2
-            l.lineBreakMode = .byTruncatingTail
+            l.maximumNumberOfLines = 2                      // long lines wrap onto a second line, then truncate
+            l.lineBreakMode = .byWordWrapping
+            l.cell?.truncatesLastVisibleLine = true
             l.drawsBackground = false
             l.isBordered = false
             l.alphaValue = 0
@@ -329,7 +330,7 @@ final class LyricsOverlayView: NSView {
         sh.shadowColor = NSColor(calibratedRed: 0.55, green: 0.75, blue: 1, alpha: glowAlpha)
         sh.shadowBlurRadius = glow
         sh.shadowOffset = .zero
-        let p = NSMutableParagraphStyle(); p.alignment = .center; p.lineBreakMode = .byTruncatingTail
+        let p = NSMutableParagraphStyle(); p.alignment = .center; p.lineBreakMode = .byWordWrapping
         return NSAttributedString(string: s, attributes: [.font: NSFont.systemFont(ofSize: px, weight: weight),
                                                           .foregroundColor: NSColor(white: 1, alpha: alpha), .shadow: sh, .paragraphStyle: p])
     }
