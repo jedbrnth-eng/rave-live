@@ -265,6 +265,20 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(net.paths, ["/api/get"])
     }
 
+    func testSearchFallsBackToStrictTitle() async {
+        let search = "[" + Self.recordJSON + "]"
+        let net = FakeNet { req in
+            if req.url?.path == "/api/get" { return (Data("{}".utf8), 404) }
+            return (req.url?.query ?? "").contains("%28Live%29") ? (Data("[]".utf8), 200) : (Data(search.utf8), 200)
+        }
+        let c = LRCLIBClient(host: "https://lrc.example", transport: net.transport(), retryDelay: 0)
+        let r = await c.lookup(title: "Made Up (Live)", artist: "Nobody", album: nil, duration: 200)
+        guard case .synced = r else { return XCTFail("\(r) \(net.paths)") }
+        XCTAssertEqual(net.paths, ["/api/get", "/api/get", "/api/search", "/api/search"])
+        XCTAssertEqual(TrackTitle.clean("Song (HD)", strict: false), "Song")
+        XCTAssertEqual(TrackTitle.clean("Song (Audio)", strict: false), "Song")
+    }
+
     func testCancelledLookupSendsNothingMore() async {
         let net = FakeNet { _ in (Data("{}".utf8), 404) }
         let c = LRCLIBClient(host: "https://lrc.example", transport: net.transport(), retryDelay: 0)

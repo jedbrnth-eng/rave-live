@@ -65,7 +65,7 @@ enum TrackTitle {
     private static func re(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p, options: [.caseInsensitive]) }
     private static let qualifier = #"feat\.?|ft\.?|featuring|with|remix|rmx|edit|mix|version|remaster(ed)?|official|video|audio|lyrics?|clean|explicit|dirty|instrumental|vip|bootleg|flip|mash-?up|rework|refix|radio|extended|original|live|prod\.?|bonus|visuali[sz]er|hq|hd"#
     /// The same list minus words that are often part of a real title ("Stay (With Me)", "(Live Forever)", "(Video Games)").
-    private static let strongQualifier = #"feat\.?|ft\.?|featuring|remix|rmx|edit|mix|remaster(ed)?|official|lyrics?|clean|explicit|dirty|instrumental|vip|bootleg|flip|mash-?up|rework|refix|radio|extended|prod\.?|visuali[sz]er"#
+    private static let strongQualifier = #"feat\.?|ft\.?|featuring|remix|rmx|edit|mix|remaster(ed)?|official|lyrics?|clean|explicit|dirty|instrumental|vip|bootleg|flip|mash-?up|rework|refix|radio|extended|prod\.?|visuali[sz]er|audio|hq|hd"#
     private static let group = re(#"\s*[\(\[\{]([^\(\)\[\]\{\}]*)[\)\]\}]"#)
     private static let qualifierWord = re("\\b(" + qualifier + ")(\\b|\\s|$)")
     private static let strongQualifierWord = re("\\b(" + strongQualifier + ")(\\b|\\s|$)")
@@ -241,7 +241,14 @@ final class LRCLIBClient: @unchecked Sendable {
         }
         if Task.isCancelled { return Lookup(result: .offline, cacheable: false) }
         let cacheable = !getFailed
-        switch await call("/api/search", [("track_name", titles[0]), ("artist_name", TrackTitle.primaryArtist(a))]) {
+        // Search with the lenient title, then the strict one if the lenient search found nothing synced.
+        var reply = await call("/api/search", [("track_name", titles[0]), ("artist_name", TrackTitle.primaryArtist(a))])
+        if titles.count > 1, !Task.isCancelled {
+            var hit = false
+            if case .ok(let d) = reply { hit = Self.pickBest((try? JSONDecoder().decode([LRCLIBRecord].self, from: d)) ?? [], duration: duration) != nil }
+            if !hit, case .ok = reply { reply = await call("/api/search", [("track_name", titles[1]), ("artist_name", TrackTitle.primaryArtist(a))]) }
+        }
+        switch reply {
         case .ok(let data):
             let list = (try? JSONDecoder().decode([LRCLIBRecord].self, from: data)) ?? []
             if let best = Self.pickBest(list, duration: duration) { return Lookup(result: .synced(best), cacheable: cacheable) }

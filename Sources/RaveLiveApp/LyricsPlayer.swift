@@ -178,7 +178,7 @@ final class LyricsController: NSObject {
         guard let d = i.duration, d > 0 else { setState(.noLength); return }
         if let hit = cache.load(key) { log("lyrics: cache hit \(key)"); apply(hit, for: i); return }
         setState(.looking)
-        log("lyrics: lookup \"\(TrackTitle.clean(i.title))\" / \(TrackTitle.cleanArtist(i.artist)) / \(Int(d.rounded())) s")
+        log("lyrics: lookup \"\(TrackTitle.clean(i.title, strict: false))\" / \(TrackTitle.cleanArtist(i.artist)) / \(Int(d.rounded())) s")
         let t0 = CACurrentMediaTime()
         lookupTask?.cancel()
         lookupTask = Task { [client] in
