@@ -22,7 +22,7 @@ if [ ! -d "$SRC/.git" ]; then git clone --quiet "$REPO" "$SRC"; fi
 git -C "$SRC" fetch --quiet --tags origin 2>/dev/null || true
 git -C "$SRC" checkout --quiet --detach "$COMMIT"
 [ "$(git -C "$SRC" rev-parse HEAD)" = "$COMMIT" ] || { echo "mediaremote-adapter checkout is not at $TAG ($COMMIT)"; exit 1; }
-git -C "$SRC" submodule update --init --recursive --quiet 2>/dev/null || true
+git -C "$SRC" submodule update --init --recursive --quiet || { echo "mediaremote-adapter: submodule update failed (network?)"; exit 1; }
 
 rm -rf vendor/mediaremote-adapter-build "$OUT"
 cmake -S "$SRC" -B vendor/mediaremote-adapter-build -DCMAKE_BUILD_TYPE=Release \

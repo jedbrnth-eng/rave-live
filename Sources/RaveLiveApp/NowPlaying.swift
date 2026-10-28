@@ -81,7 +81,10 @@ final class NowPlayingSource {
     enum Command: Int { case play = 0, pause = 1, toggle = 2, next = 4, previous = 5
         var name: String { ["play", "pause", "toggle", "", "next", "previous"][rawValue] } }
 
-    private(set) var status: Status = .off { didSet { if status != oldValue { let s = status; DispatchQueue.main.async { self.onStatus?(s) } } } }
+    /// Written on `queue` only. The main thread reads `mainStatus`, a copy updated on the main queue.
+    private var status: Status = .off { didSet { if status != oldValue { let s = status; DispatchQueue.main.async { self.mainStatus = s; self.onStatus?(s) } } } }
+    /// Main thread only.
+    private(set) var mainStatus: Status = .off
     /// Main queue. nil = no Now Playing app.
     var onChange: ((NowPlayingInfo?) -> Void)?
     var onStatus: ((Status) -> Void)?
@@ -96,10 +99,18 @@ final class NowPlayingSource {
     private var failures = 0
     private var startedAt = Date()
     private var lastInfo: NowPlayingInfo?
+    private var launches = 0
+    /// Bumped by start()/stop(); a restart queued under an older generation is dropped.
+    private var generation = 0
+
+    // test hooks
+    var debugPID: Int32? { queue.sync { process.map { $0.processIdentifier } } }
+    var debugLaunches: Int { queue.sync { launches } }
+    func debugForceFailed() { queue.sync { wanted = true; status = .failed("test") } }
 
     init(adapter: Adapter? = NowPlayingSource.locate()) {
         self.adapter = adapter
-        if adapter == nil { status = .missing }
+        if adapter == nil { status = .missing; mainStatus = .missing }
     }
 
     /// Bundled adapter (Contents/Resources/MediaRemoteAdapter + Contents/Frameworks), or `RAVE_MEDIAREMOTE_DIR`
@@ -120,8 +131,10 @@ final class NowPlayingSource {
 
     func start() {
         queue.async { [self] in
-            guard adapter != nil, !wanted else { return }
-            wanted = true; failures = 0
+            guard adapter != nil else { return }
+            if case .failed = status { wanted = false }            // switching on again after a failure retries
+            guard !wanted else { return }
+            wanted = true; failures = 0; generation += 1
             launch()
         }
     }
@@ -129,7 +142,7 @@ final class NowPlayingSource {
     /// Stops the stream and kills the child (quit, or lyrics and card both switched off).
     func stop() {
         queue.sync { [self] in
-            wanted = false
+            wanted = false; generation += 1
             if let p = process, p.isRunning { p.terminate() }
             process = nil
             if adapter != nil { status = .off }
@@ -137,7 +150,7 @@ final class NowPlayingSource {
     }
 
     private func launch() {
-        guard wanted, let a = adapter else { return }
+        guard wanted, process == nil, let a = adapter else { return }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
         p.arguments = [a.script.path, a.framework.path, "stream", "--micros", "--debounce=50"]
@@ -159,7 +172,7 @@ final class NowPlayingSource {
         }
         do {
             try p.run()
-            process = p; startedAt = Date(); status = .running
+            process = p; startedAt = Date(); status = .running; launches += 1
             log?("nowplaying: adapter started (pid \(p.processIdentifier))")
         } catch {
             log?("nowplaying: adapter failed to start: \(error.localizedDescription)")
@@ -183,7 +196,11 @@ final class NowPlayingSource {
         let wait = Self.backoff(failures: failures)
         failures += 1
         status = .restarting(failures)
-        queue.asyncAfter(deadline: .now() + wait) { [weak self] in self?.launch() }
+        let g = generation
+        queue.asyncAfter(deadline: .now() + wait) { [weak self] in
+            guard let self, self.generation == g else { return }      // stale: stop()/start() ran in between
+            self.launch()
+        }
     }
 
     private func consume(_ d: Data) {

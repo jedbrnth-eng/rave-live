@@ -233,6 +233,70 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(net.paths, ["/api/get", "/api/search"])
     }
 
+    /// A 503 on /api/get means the exact lookup never happened: the result is good to show but not to keep.
+    func testServerErrorOnGetIsNotCacheable() async {
+        let search = "[" + Self.recordJSON + "]"
+        let net = FakeNet { req in req.url?.path == "/api/get" ? (Data("busy".utf8), 503) : (Data(search.utf8), 200) }
+        let c = LRCLIBClient(host: "https://lrc.example", transport: net.transport(), retryDelay: 0)
+        let r = await c.lookupDetailed(title: "Made Up", artist: "Nobody", album: nil, duration: 200)
+        XCTAssertFalse(r.cacheable)
+        let ok = FakeNet { _ in (Data(Self.recordJSON.utf8), 200) }
+        let r2 = await LRCLIBClient(host: "https://lrc.example", transport: ok.transport(), retryDelay: 0)
+            .lookupDetailed(title: "Made Up", artist: "Nobody", album: nil, duration: 201)
+        XCTAssertTrue(r2.cacheable)
+    }
+
+    /// Words like "With", "Live", "Video" can be part of the real title: try the title with them first.
+    func testCleanKeepsAmbiguousWordsInLenientMode() {
+        XCTAssertEqual(TrackTitle.clean("Stay (With Me)", strict: false), "Stay (With Me)")
+        XCTAssertEqual(TrackTitle.clean("Song (Live Forever)", strict: false), "Song (Live Forever)")
+        XCTAssertEqual(TrackTitle.clean("Song (feat. Someone)", strict: false), "Song")
+        XCTAssertEqual(TrackTitle.clean("Song (Official Video)", strict: false), "Song")
+        XCTAssertEqual(TrackTitle.clean("Stay (With Me)"), "Stay")                  // strict (default) unchanged
+    }
+
+    func testGetTriesLenientTitleFirst() async {
+        let net = FakeNet { req in
+            (req.url?.query ?? "").contains("track_name=Stay%20%28With%20Me%29") ? (Data(Self.recordJSON.utf8), 200) : (Data("{}".utf8), 404)
+        }
+        let c = LRCLIBClient(host: "https://lrc.example", transport: net.transport(), retryDelay: 0)
+        let r = await c.lookup(title: "Stay (With Me)", artist: "Nobody", album: nil, duration: 201)
+        guard case .synced = r else { return XCTFail("\(r)") }
+        XCTAssertEqual(net.paths, ["/api/get"])
+    }
+
+    func testCancelledLookupSendsNothingMore() async {
+        let net = FakeNet { _ in (Data("{}".utf8), 404) }
+        let c = LRCLIBClient(host: "https://lrc.example", transport: net.transport(), retryDelay: 0)
+        let t = Task { () -> LRCLIBClient.Lookup in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await c.lookupDetailed(title: "Made Up", artist: "Nobody", album: nil, duration: 200)
+        }
+        let r = await t.value
+        XCTAssertTrue(net.requests.isEmpty, "\(net.paths)")
+        XCTAssertFalse(r.cacheable)
+    }
+
+    /// Only keep a synced match the remix/length gate would actually show; a wrong-length match from search is not stored.
+    func testShouldStore() throws {
+        let rec = try JSONDecoder().decode(LRCLIBRecord.self, from: Data(Self.recordJSON.utf8))
+        XCTAssertTrue(LyricsCache.shouldStore(.synced(rec), cacheable: true, gate: .show))
+        XCTAssertFalse(LyricsCache.shouldStore(.synced(rec), cacheable: true, gate: .lengthDiffers))
+        XCTAssertFalse(LyricsCache.shouldStore(.notFound, cacheable: false, gate: nil))
+        XCTAssertTrue(LyricsCache.shouldStore(.notFound, cacheable: true, gate: nil))
+        XCTAssertFalse(LyricsCache.shouldStore(.offline, cacheable: true, gate: nil))
+    }
+
+    func testPlainOnlyExpiresLikeNotFound() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("rl-lyrics-cache-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let cache = LyricsCache(dir: dir)
+        cache.store(.plainOnly, "p", now: Date().timeIntervalSince1970 - LyricsCache.notFoundTTL - 10)
+        XCTAssertNil(cache.load("p"))
+        cache.store(.plainOnly, "q")
+        XCTAssertEqual(cache.load("q"), .plainOnly)
+    }
+
     // MARK: cache
 
     func testCacheRoundTrip() throws {

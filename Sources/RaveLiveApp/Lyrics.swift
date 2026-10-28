@@ -64,8 +64,11 @@ enum LRC {
 enum TrackTitle {
     private static func re(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p, options: [.caseInsensitive]) }
     private static let qualifier = #"feat\.?|ft\.?|featuring|with|remix|rmx|edit|mix|version|remaster(ed)?|official|video|audio|lyrics?|clean|explicit|dirty|instrumental|vip|bootleg|flip|mash-?up|rework|refix|radio|extended|original|live|prod\.?|bonus|visuali[sz]er|hq|hd"#
+    /// The same list minus words that are often part of a real title ("Stay (With Me)", "(Live Forever)", "(Video Games)").
+    private static let strongQualifier = #"feat\.?|ft\.?|featuring|remix|rmx|edit|mix|remaster(ed)?|official|lyrics?|clean|explicit|dirty|instrumental|vip|bootleg|flip|mash-?up|rework|refix|radio|extended|prod\.?|visuali[sz]er"#
     private static let group = re(#"\s*[\(\[\{]([^\(\)\[\]\{\}]*)[\)\]\}]"#)
     private static let qualifierWord = re("\\b(" + qualifier + ")(\\b|\\s|$)")
+    private static let strongQualifierWord = re("\\b(" + strongQualifier + ")(\\b|\\s|$)")
     private static let idLike = re(#"^\s*[A-Za-z0-9_\-]*\d[A-Za-z0-9_\-]*\s*$"#)
     private static let dashSuffix = re(#"\s+[-–—]\s+[^-–—]*\b(mix|remix|rmx|edit|version|remaster(ed)?|radio|extended|original|live|mono|stereo|vip|bootleg|flip|rework|refix|demo|instrumental|clean|explicit)\b.*$"#)
     private static let featTail = re(#"\s+(feat\.|ft\.|featuring)\s+.*$"#)
@@ -85,13 +88,15 @@ enum TrackTitle {
     }
 
     /// Title for the lyrics lookup: drops (feat. …), (… Remix), [Edit], "- Extended Mix", "- Remastered", bracketed ids.
-    static func clean(_ title: String) -> String {
+    /// `strict: false` keeps bracket groups whose only qualifier words can also be real title words (with, live, video…).
+    static func clean(_ title: String, strict: Bool = true) -> String {
         var s = title
         let ns = s as NSString
         var cut: [NSRange] = []
+        let words = strict ? qualifierWord : strongQualifierWord
         for m in group.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
             let inner = ns.substring(with: m.range(at: 1))
-            if matches(qualifierWord, inner) || matches(idLike, inner) { cut.append(m.range) }
+            if matches(words, inner) || matches(idLike, inner) { cut.append(m.range) }
         }
         for r in cut.reversed() { s = (s as NSString).replacingCharacters(in: r, with: " ") }
         s = replace(dashSuffix, in: s)
@@ -154,7 +159,7 @@ enum LyricsResult: Equatable {
 /// 5xx/429 are retried once with a short backoff; a network error means "offline" straight away.
 final class LRCLIBClient: @unchecked Sendable {
     typealias Transport = @Sendable (URLRequest) async throws -> (Data, Int)
-    static let userAgent = "RAVE LIVE/0.6.0 (https://github.com/jedbrnth-eng/rave-live)"
+    static let userAgent = "RAVE LIVE/\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") (https://github.com/jedbrnth-eng/rave-live)"
     static var defaultHost: String { ProcessInfo.processInfo.environment["RAVE_LRCLIB_HOST"] ?? "https://lrclib.net" }
     let host: String
     private let transport: Transport
@@ -185,6 +190,7 @@ final class LRCLIBClient: @unchecked Sendable {
     private func call(_ path: String, _ q: [(String, String)]) async -> Reply {
         guard let req = request(path, q) else { return .network }
         for attempt in 0..<2 {
+            if Task.isCancelled { return .network }               // lyrics switched off / track changed: send nothing more
             do {
                 let (data, code) = try await transport(req)
                 if (200..<300).contains(code) { return .ok(data) }
@@ -201,32 +207,48 @@ final class LRCLIBClient: @unchecked Sendable {
         return .server
     }
 
+    /// `cacheable` is false when the answer may be a fluke: the exact `/api/get` lookup hit a server error, or the lookup
+    /// was cancelled. Such results are shown but not stored, so one bad minute at LRCLIB doesn't stick to a song.
+    struct Lookup { let result: LyricsResult; let cacheable: Bool }
+
     func lookup(title: String, artist: String, album: String?, duration: Double?) async -> LyricsResult {
-        let t = TrackTitle.clean(title), a = TrackTitle.cleanArtist(artist)
-        var sawPlain = false
+        await lookupDetailed(title: title, artist: artist, album: album, duration: duration).result
+    }
+
+    func lookupDetailed(title: String, artist: String, album: String?, duration: Double?) async -> Lookup {
+        if Task.isCancelled { return Lookup(result: .offline, cacheable: false) }
+        // Lenient title first ("Stay (With Me)"), then the strict one ("Stay") if they differ.
+        let titles = [TrackTitle.clean(title, strict: false), TrackTitle.clean(title)].reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        let a = TrackTitle.cleanArtist(artist)
+        var sawPlain = false, getFailed = false
         if let d = duration, d > 0 {
-            var q = [("track_name", t), ("artist_name", a)]
-            if let al = album?.trimmingCharacters(in: .whitespaces), !al.isEmpty { q.append(("album_name", al)) }
-            q.append(("duration", String(Int(d.rounded()))))
-            switch await call("/api/get", q) {
-            case .ok(let data):
-                if let r = try? JSONDecoder().decode(LRCLIBRecord.self, from: data) {
-                    if r.instrumental { return .instrumental }
-                    if r.hasSynced { return .synced(r) }
-                    sawPlain = r.hasPlain
+            for t in titles {
+                var q = [("track_name", t), ("artist_name", a)]
+                if let al = album?.trimmingCharacters(in: .whitespaces), !al.isEmpty { q.append(("album_name", al)) }
+                q.append(("duration", String(Int(d.rounded()))))
+                switch await call("/api/get", q) {
+                case .ok(let data):
+                    if let r = try? JSONDecoder().decode(LRCLIBRecord.self, from: data) {
+                        if r.instrumental { return Lookup(result: .instrumental, cacheable: true) }
+                        if r.hasSynced { return Lookup(result: .synced(r), cacheable: true) }
+                        sawPlain = sawPlain || r.hasPlain
+                    }
+                case .network: return Lookup(result: .offline, cacheable: false)
+                case .server: getFailed = true
+                case .missing: break
                 }
-            case .network: return .offline
-            case .missing, .server: break
             }
         }
-        switch await call("/api/search", [("track_name", t), ("artist_name", TrackTitle.primaryArtist(a))]) {
+        if Task.isCancelled { return Lookup(result: .offline, cacheable: false) }
+        let cacheable = !getFailed
+        switch await call("/api/search", [("track_name", titles[0]), ("artist_name", TrackTitle.primaryArtist(a))]) {
         case .ok(let data):
             let list = (try? JSONDecoder().decode([LRCLIBRecord].self, from: data)) ?? []
-            if let best = Self.pickBest(list, duration: duration) { return .synced(best) }
-            if list.contains(where: \.instrumental) && !list.contains(where: \.hasPlain) { return .instrumental }
-            return (sawPlain || list.contains(where: \.hasPlain)) ? .plainOnly : .notFound
-        case .missing: return sawPlain ? .plainOnly : .notFound
-        case .server, .network: return sawPlain ? .plainOnly : .offline
+            if let best = Self.pickBest(list, duration: duration) { return Lookup(result: .synced(best), cacheable: cacheable) }
+            if list.contains(where: \.instrumental) && !list.contains(where: \.hasPlain) { return Lookup(result: .instrumental, cacheable: cacheable) }
+            return Lookup(result: (sawPlain || list.contains(where: \.hasPlain)) ? .plainOnly : .notFound, cacheable: cacheable)
+        case .missing: return Lookup(result: sawPlain ? .plainOnly : .notFound, cacheable: cacheable)
+        case .server, .network: return Lookup(result: sawPlain ? .plainOnly : .offline, cacheable: false)
         }
     }
 
@@ -267,17 +289,24 @@ final class LyricsCache {
         switch e.kind {
         case "synced": return e.record.map { .synced($0) }
         case "instrumental": return .instrumental
-        case "plainOnly": return .plainOnly
+        case "plainOnly": return Date().timeIntervalSince1970 - e.saved < Self.notFoundTTL ? .plainOnly : nil   // synced lyrics may get added
         case "notFound": return Date().timeIntervalSince1970 - e.saved < Self.notFoundTTL ? .notFound : nil
         default: return nil
         }
     }
 
-    func store(_ r: LyricsResult, _ key: String) {
+    /// Store only answers that are worth keeping: never a fluke (`cacheable` false) or offline, and a synced match only
+    /// when the remix/length gate would show it (a wrong-length search hit must not pin the song to "other version").
+    static func shouldStore(_ r: LyricsResult, cacheable: Bool, gate: LyricsGate?) -> Bool {
+        guard cacheable, r != .offline else { return false }
+        if case .synced = r { return gate == .show }
+        return true
+    }
+
+    func store(_ r: LyricsResult, _ key: String, now: Double = Date().timeIntervalSince1970) {
         let e: Entry
-        let now = Date().timeIntervalSince1970
         switch r {
-        case .synced(let rec): e = Entry(kind: "synced", record: rec, saved: now)
+        case .synced(let rec): e = Entry(kind: "synced", record: rec, saved: now)   // callers check shouldStore first
         case .instrumental: e = Entry(kind: "instrumental", record: nil, saved: now)
         case .plainOnly: e = Entry(kind: "plainOnly", record: nil, saved: now)
         case .notFound: e = Entry(kind: "notFound", record: nil, saved: now)

@@ -36,6 +36,7 @@ final class LyricsController: NSObject {
     private(set) var state: LyricsState = .off
     private var lines: [LyricLine] = []
     private var lookupKey = ""
+    private var lookupTask: Task<Void, Never>?
     private var shownIndex: Int? = -1
     private var shownPair = ("\u{1}", "\u{1}")
     /// In a long instrumental gap the next line only appears this many seconds before it is sung.
@@ -81,10 +82,12 @@ final class LyricsController: NSObject {
         NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: cv, queue: .main) { [weak self] _ in self?.layout() }
         log("lyrics: adapter \(source.adapter == nil ? "missing" : "found") · lyrics \(lyricsOn ? "on" : "off") · card \(cardOn ? "on" : "off") · offset \(offsetMs) ms · host \(client.host)")
         updateSource()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.tick() }
+        let t = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(t, forMode: .common)                  // keeps lyrics moving while a menu is open or the window resizes
+        timer = t
     }
 
-    func shutdown() { timer?.invalidate(); source.stop() }
+    func shutdown() { timer?.invalidate(); lookupTask?.cancel(); source.stop() }
 
     func log(_ s: String) {
         NSLog("RAVE LIVE %@", s)
@@ -102,7 +105,7 @@ final class LyricsController: NSObject {
     // MARK: settings (Settings window, keys)
 
     var adapterNote: String {
-        switch source.status {
+        switch source.mainStatus {
         case .missing: return "The Now Playing reader isn't included in this build, so lyrics and the player card are off. Build it with scripts/build_mediaremote_adapter.sh, then scripts/make_app.sh."
         case .failed(let why): return "Now Playing is unavailable: \(why). Lyrics and the player card are off."
         case .off: return "Now Playing reader is off (lyrics and the player card are both switched off)."
@@ -117,6 +120,7 @@ final class LyricsController: NSObject {
         lyricsOn = on
         if save { Prefs.shared.lyricsEnabled = on }
         lookupKey = ""; lines = []; shownIndex = -1; shownPair = ("\u{1}", "\u{1}")
+        if !on { lookupTask?.cancel(); lookupTask = nil }       // nothing more goes to lrclib.net once lyrics are off
         updateSource()
         refreshLyrics()
         log("lyrics: \(on ? "on" : "off")")
@@ -148,6 +152,7 @@ final class LyricsController: NSObject {
             if let i { log(String(format: "nowplaying: track \"%@\" — %@ (%@) %.1f s", i.title, i.artist, i.bundleID, i.duration ?? -1)) }
             else { log("nowplaying: nothing playing") }
             wake(); lines = []; shownIndex = -1; lookupKey = ""; shownPair = ("\u{1}", "\u{1}")
+            lookupTask?.cancel(); lookupTask = nil
             refreshLyrics()
         } else if old?.playing != i?.playing {
             log("nowplaying: \(i?.playing == true ? "playing" : "paused") at \(String(format: "%.2f", i?.position(at: Date().timeIntervalSince1970) ?? 0)) s")
@@ -175,12 +180,16 @@ final class LyricsController: NSObject {
         setState(.looking)
         log("lyrics: lookup \"\(TrackTitle.clean(i.title))\" / \(TrackTitle.cleanArtist(i.artist)) / \(Int(d.rounded())) s")
         let t0 = CACurrentMediaTime()
-        Task { [client] in
-            let r = await client.lookup(title: i.title, artist: i.artist, album: i.album, duration: d)
+        lookupTask?.cancel()
+        lookupTask = Task { [client] in
+            let l = await client.lookupDetailed(title: i.title, artist: i.artist, album: i.album, duration: d)
             await MainActor.run { [weak self] in
-                guard let self, self.lookupKey == key else { return }
-                self.log(String(format: "lyrics: lookup done in %.2f s -> %@", CACurrentMediaTime() - t0, Self.describe(r)))
-                self.cache.store(r, key)
+                guard let self, self.lookupKey == key, !Task.isCancelled else { return }
+                let r = l.result
+                self.log(String(format: "lyrics: lookup done in %.2f s -> %@%@", CACurrentMediaTime() - t0, Self.describe(r), l.cacheable ? "" : " (not cached)"))
+                var gate: LyricsGate?
+                if case .synced(let rec) = r { gate = LyricsGate.decide(rawTitle: i.title, trackDuration: i.duration, matchDuration: rec.duration) }
+                if LyricsCache.shouldStore(r, cacheable: l.cacheable, gate: gate) { self.cache.store(r, key) }
                 self.apply(r, for: i)
             }
         }
@@ -307,6 +316,9 @@ final class LyricsOverlayView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        scrim.alphaValue = 0
+        scrim.autoresizingMask = [.width, .height]
+        addSubview(scrim)
         for l in cur + [next] {
             l.alignment = .center
             l.maximumNumberOfLines = 2                      // long lines wrap onto a second line, then truncate
@@ -323,17 +335,20 @@ final class LyricsOverlayView: NSView {
     required init?(coder: NSCoder) { fatalError() }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// Soft dark halo behind the lines so they stay readable over bright visuals. Drawn (not a layer background) so
-    /// window snapshots include it, and feathered to transparent so it reads as shade, not a box.
-    private var scrim: CGFloat = 0
-    override func draw(_ dirtyRect: NSRect) {
-        guard scrim > 0.01, !texts[front].isEmpty else { return }
-        let w = min(bounds.width * 0.9, max(big * 10, bounds.width * 0.6))
-        let r = NSRect(x: (bounds.width - w) / 2, y: 0, width: w, height: bounds.height)   // inside bounds: no clipped edge
-        NSGradient(colors: [NSColor(white: 0, alpha: 0.42 * scrim), NSColor(white: 0, alpha: 0.18 * scrim), NSColor(white: 0, alpha: 0)],
-                   atLocations: [0, 0.55, 1], colorSpace: .deviceRGB)?
-            .draw(in: NSBezierPath(ovalIn: r), relativeCenterPosition: .zero)
+    /// Soft dark halo behind the lines so they stay readable over bright visuals. A drawn subview (so window snapshots
+    /// include it) that fades with the text, feathered to transparent so it reads as shade, not a box.
+    private final class Scrim: NSView {
+        var width: CGFloat = 0
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func draw(_ dirtyRect: NSRect) {
+            let w = min(bounds.width * 0.9, max(width, bounds.width * 0.6))
+            let r = NSRect(x: (bounds.width - w) / 2, y: 0, width: w, height: bounds.height)   // inside bounds: no clipped edge
+            NSGradient(colors: [NSColor(white: 0, alpha: 0.42), NSColor(white: 0, alpha: 0.18), NSColor(white: 0, alpha: 0)],
+                       atLocations: [0, 0.55, 1], colorSpace: .deviceRGB)?
+                .draw(in: NSBezierPath(ovalIn: r), relativeCenterPosition: .zero)
+        }
     }
+    private let scrim = Scrim()
 
     func preferredHeight(for b: NSRect) -> CGFloat { b.height * scale * 3.9 }
 
@@ -353,6 +368,7 @@ final class LyricsOverlayView: NSView {
         let small = big * 0.55
         next.frame = NSRect(x: x, y: 0, width: w, height: small * 1.5)
         for l in cur { l.frame = NSRect(x: x, y: small * 1.5, width: w, height: big * 2.5) }
+        scrim.frame = bounds; scrim.width = big * 10; scrim.needsDisplay = true
         redraw()
     }
 
@@ -374,14 +390,13 @@ final class LyricsOverlayView: NSView {
         redraw()
         new.isHidden = current.isEmpty
         next.isHidden = n.isEmpty
-        scrim = current.isEmpty ? 0 : 1
-        needsDisplay = true
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.4
             ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             new.animator().alphaValue = current.isEmpty ? 0 : 1
             old.animator().alphaValue = 0
             next.animator().alphaValue = n.isEmpty ? 0 : 1
+            scrim.animator().alphaValue = current.isEmpty ? 0 : 1
         }, completionHandler: { [weak self] in
             guard let self else { return }
             if old !== self.cur[self.front] { old.isHidden = true }

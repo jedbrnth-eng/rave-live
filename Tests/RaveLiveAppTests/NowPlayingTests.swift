@@ -104,4 +104,50 @@ final class NowPlayingTests: XCTestCase {
         XCTAssertEqual(NowPlayingSource.backoff(failures: 3), 8)
         XCTAssertEqual(NowPlayingSource.backoff(failures: 10), 30)
     }
+
+    /// A fake adapter: a perl script that just sleeps (framework path is ignored).
+    private func fakeAdapter() throws -> (NowPlayingSource.Adapter, URL) {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("rl-np-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let script = dir.appendingPathComponent("fake.pl")
+        try "sleep 30;\n".write(to: script, atomically: true, encoding: .utf8)
+        return (.init(script: script, framework: dir), dir)
+    }
+
+    private func wait(_ s: Double) { let e = expectation(description: "wait"); DispatchQueue.global().asyncAfter(deadline: .now() + s) { e.fulfill() }; wait(for: [e], timeout: s + 5) }
+
+    /// Adapter dies, the user toggles lyrics off and on during the restart backoff: the stale restart must not start a
+    /// second adapter and orphan the first.
+    func testStaleRestartDoesNotOrphanAProcess() throws {
+        let (a, dir) = try fakeAdapter()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let src = NowPlayingSource(adapter: a)
+        src.start()
+        wait(0.5)
+        let first = try XCTUnwrap(src.debugPID)
+        kill(first, SIGKILL)                      // adapter dies -> restart queued in 1 s
+        wait(0.3)
+        src.stop(); src.start()                   // user toggles during the backoff
+        wait(0.5)
+        let second = try XCTUnwrap(src.debugPID)
+        XCTAssertNotEqual(second, first)
+        wait(1.5)                                 // the stale restart fires here
+        XCTAssertEqual(src.debugPID, second, "a stale restart replaced the running adapter")
+        XCTAssertEqual(src.debugLaunches, 2)
+        src.stop()
+        wait(0.3)
+        XCTAssertNotEqual(kill(second, 0), 0, "adapter still alive after stop()")
+    }
+
+    /// After "failed", switching lyrics on again must try again instead of staying dead.
+    func testStartRetriesAfterFailure() throws {
+        let (a, dir) = try fakeAdapter()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let src = NowPlayingSource(adapter: a)
+        src.debugForceFailed()
+        src.start()
+        wait(0.5)
+        XCTAssertNotNil(src.debugPID)
+        src.stop()
+    }
 }
