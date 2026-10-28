@@ -74,7 +74,9 @@ enum TrackTitle {
     private static let featTail = re(#"\s+(feat\.|ft\.|featuring)\s+.*$"#)
     private static let artistSplit = re(#"\s*(,|;|&|\s+x\s+|\s+vs\.?\s+|\s+/\s+)\s*"#)
     private static let anywhereMarker = re(#"\b(remix|rmx|bootleg|mash-?up|mash up|re-?edit|rework|refix)\b"#)
-    private static let qualifierMarker = re(#"\b(edit|vip|flip|dub|blend)\b"#)
+    private static let qualifierMarker = re(#"\b(edit|vip|flip|dub|blend|sped[\s-]?up|slowed|nightcore|8d)\b"#)
+    /// YouTube's auto-generated "<Artist> - Topic" channels (browser playback reports the channel as the artist).
+    private static let topicChannel = try! NSRegularExpression(pattern: #"\s+-\s+Topic\s*$"#)
     private static let dashPart = re(#"\s+[-–—]\s+(.*)$"#)
     /// Radio / clean / explicit / single edits keep the original arrangement, so they are not remixes.
     /// The ±3 s length check in LyricsGate still rejects any that were cut differently.
@@ -105,7 +107,7 @@ enum TrackTitle {
         return s.isEmpty ? title.trimmingCharacters(in: .whitespaces) : s
     }
 
-    static func cleanArtist(_ a: String) -> String { replace(featTail, in: a).trimmingCharacters(in: .whitespaces) }
+    static func cleanArtist(_ a: String) -> String { replace(featTail, in: replace(topicChannel, in: a)).trimmingCharacters(in: .whitespaces) }
 
     /// First credited artist ("Future, Metro Boomin & Kendrick Lamar" -> "Future") for the search fallback.
     static func primaryArtist(_ a: String) -> String {
@@ -115,8 +117,9 @@ enum TrackTitle {
         return ns.substring(to: m.range.location).trimmingCharacters(in: .whitespaces)
     }
 
-    /// True for remixes, edits, bootlegs, VIPs, flips and mashups. "remix", "bootleg", "mashup", "rework" count anywhere;
-    /// "edit", "VIP", "flip", "dub", "blend" only inside brackets or after " - " (so "Flip Reverse" is not a remix).
+    /// True for remixes, edits, bootlegs, VIPs, flips, mashups and speed versions. "remix", "bootleg", "mashup", "rework"
+    /// count anywhere; "edit", "VIP", "flip", "dub", "blend", "sped up", "slowed", "nightcore", "8D" only inside brackets
+    /// or after " - " (so "Flip Reverse" is not a remix).
     static func hasRemixMarker(_ title: String) -> Bool {
         if matches(anywhereMarker, title) { return true }
         let ns = title as NSString
@@ -282,7 +285,8 @@ final class LyricsCache {
 
     /// Stable file key: FNV-1a of the lower-cased cleaned title, artist and whole-second length.
     static func key(title: String, artist: String, duration: Double?) -> String {
-        let s = "\(TrackTitle.clean(title).lowercased())|\(TrackTitle.cleanArtist(artist).lowercased())|\(Int((duration ?? 0).rounded()))"
+        let d = duration ?? 0
+        let s = "\(TrackTitle.clean(title).lowercased())|\(TrackTitle.cleanArtist(artist).lowercased())|\(d.isFinite && d > 0 && d < 1e7 ? Int(d.rounded()) : 0)"
         var h: UInt64 = 0xcbf29ce484222325
         for b in s.utf8 { h ^= UInt64(b); h = h &* 0x100000001b3 }
         return String(format: "%016llx", h)

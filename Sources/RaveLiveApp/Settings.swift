@@ -212,8 +212,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             let ok = l.source.adapter != nil
             lyricsBox.state = l.lyricsOn ? .on : .off; lyricsBox.isEnabled = ok
             cardBox.state = l.cardOn ? .on : .off; cardBox.isEnabled = ok
-            lyricsSize.selectedSegment = l.size
-            lyricsOffset.doubleValue = Double(l.offsetMs)
+            lyricsSize.selectedSegment = l.size; lyricsSize.isEnabled = ok
+            lyricsOffset.doubleValue = Double(l.offsetMs); lyricsOffset.isEnabled = ok
             lyricsOffsetLabel.stringValue = Self.msText(l.offsetMs)
             nowPlayingNote.stringValue = l.adapterNote
             nowPlayingNote.textColor = ok ? .secondaryLabelColor : .systemOrange
