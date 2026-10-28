@@ -92,6 +92,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 - **Projector output**: Output → Send to Display runs a clean fullscreen output on any screen; the laptop window becomes a preview with the controls.
 - **MIDI**: MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, brightness, strobe, blackout, tap…), and MIDI clock sync.
 - **Control HUD** (`H`) and a **keyboard cheat sheet** (`?`) that never appear on Syphon or the output display.
+- **Settings** (`⌘,`): HUD on/off, startup mode and fullscreen, intensity, strobes, audio source, quality and visual sync offset, all remembered.
 - Details: [docs/VJ.md](docs/VJ.md). Writing shaders: [docs/SHADERS.md](docs/SHADERS.md). Sharing looks and shaders: [community/](community/README.md).
 
 <table>
@@ -149,7 +150,8 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 | `M` | Switch between system audio and your last input device (pick devices in the **Audio** menu) |
 | `F` or `⌘F` | Fullscreen |
 | `P` or `⌘P` | MilkDrop preset browser; in MILKDROP: `R` random, `L` lock, `Shift`+`F` favourite, `1`–`5` rate |
-| `H` | Control HUD (press again to hide all text) |
+| `H` | HUD: status line → full Control HUD → off (clean picture); remembered |
+| `⌘,` | Settings: HUD, startup mode, intensity, strobes, audio, quality, sync offset |
 | `?` | Keyboard cheat sheet |
 | `⌘L` | MIDI Learn |
 

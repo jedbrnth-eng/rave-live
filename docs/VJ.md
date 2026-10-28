@@ -70,9 +70,10 @@ controller and sends CCs, notes and clock (128 BPM, then 100 BPM). Launch the ap
 
 ## Control HUD and cheat sheet
 
-**H** shows the Control HUD (top right): mode, preset, BPM and its source (LOCKED / MIDI CLOCK / TAP / searching),
-intensity, brightness/blackout/strobe state, audio source, Syphon and MIDI status, and where the output goes. Press H
-again to hide it together with the status line. **?** shows the keyboard cheat sheet. Both are performer-only: they are
+**H** cycles the on-screen text: status line + mode bar → full Control HUD (top right: mode, preset, BPM and its source
+(LOCKED / MIDI CLOCK / TAP / searching), intensity, brightness/blackout/strobe state, audio source, Syphon and MIDI
+status, and where the output goes) → off (clean picture, no text or mode bar) → back to the status line. The level you
+pick is remembered; set it in **Settings (⌘,)** or **Output > HUD** too. **?** shows the keyboard cheat sheet. Both are performer-only: they are
 not on Syphon or the output display.
 
 ## Keyboard shortcuts
@@ -100,7 +101,8 @@ not on Syphon or the output display.
 | R | MILKDROP: random preset · open Tweak panel: reset the preset |
 | L | MILKDROP: lock the preset (no automatic changes) |
 | Shift-F | MILKDROP: favourite the preset |
-| H | Control HUD |
+| H | HUD: status → full → off |
+| ⌘, | Settings… |
 | ? | cheat sheet |
 | ⌘L | MIDI Learn… |
 

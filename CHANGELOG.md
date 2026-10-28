@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.1] - 2026-10-29
+
+### Added
+- **Settings window** (RAVE LIVE → Settings…, `⌘,`): HUD level, which mode to open in (or the last one used), open in fullscreen, intensity, strobes, audio source, quality, and a visual sync slider (±250 ms) for Bluetooth speakers. Everything acts immediately and is remembered.
+- **HUD off for a clean picture:** `H` now cycles status line → full Control HUD → off. Off also hides the mode bar, so nothing covers the visuals (permission and error messages still show). Output → HUD has the same three choices. The level is remembered between launches.
+
+### Changed
+- Intensity, strobes on/off, the `,` `.` sync trim and the last mode are remembered between launches. The strobe limit lift (`Shift`+`S`) is never remembered.
+- Command-line flags still win over saved settings, and test runs (`--autoquit`, or `--factory-settings`) ignore saved settings and never save.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added

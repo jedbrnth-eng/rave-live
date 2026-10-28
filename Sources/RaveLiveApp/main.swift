@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
     }()
     var dumpTimer: Timer?
+    var settings: SettingsWindowController?
     private var appActivity: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -103,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.lumLogPath = arg("--lumlog").map { NSString(string: $0).expandingTildeInPath }
         if let sl = arg("--smoothlog") { r.smooth = SmoothProbe(device: r.device, path: NSString(string: sl).expandingTildeInPath) }
         setupMilkDrop(args)
+        applySavedPrefs(args)
         window.contentView!.addSubview(view)
 
         hud.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
@@ -173,7 +175,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.renderer.metrics.dump(to: self.metricsURL); self.renderer.smooth?.finish(); NSApp.terminate(nil)
             }
         }
-        if args.contains("--fullscreen") { window.toggleFullScreen(nil) }
+        if args.contains("--fullscreen") || (Prefs.shared.startFullscreen && arg("--width") == nil) { window.toggleFullScreen(nil) }
+        if args.contains("--settings") { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.menuSettings(nil) } }   // test hook
         // Test harness: inject real key events through the window's responder chain, e.g. --keys "v@3,v@6"
         if let ks = arg("--keys") {
             for item in ks.split(separator: ",") {
@@ -235,6 +238,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem)
         let appMenu = NSMenu()
+        let st = NSMenuItem(title: "Settings…", action: #selector(menuSettings(_:)), keyEquivalent: ","); st.target = self; appMenu.addItem(st)
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit RAVE LIVE", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         let viewItem = NSMenuItem(); main.addItem(viewItem)
@@ -258,7 +263,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Double-clicked .ravelook files (also at launch, before the renderer exists).
     func application(_ sender: NSApplication, open urls: [URL]) { PresetLab.pendingOpen += urls; DispatchQueue.main.async { [weak self] in if self?.renderer != nil { self?.setMode(.visuals) } } }
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ n: Notification) { vj.shutdown(); renderer?.metrics.dump(to: metricsURL); renderer?.smooth?.finish(); audio.stopReferee() }
+    @objc func menuSettings(_ i: NSMenuItem?) {
+        if settings == nil { settings = SettingsWindowController(app: self) }
+        settings?.show()
+    }
+
+    /// Saved Settings at launch. Any mode / intensity / trim flag on the command line wins.
+    private func applySavedPrefs(_ args: [String]) {
+        guard let r = renderer else { return }
+        let p = Prefs.shared
+        if !["--show", "--stage", "--visuals", "--aurora", "--milkdrop"].contains(where: args.contains),
+           let m = Renderer.Mode(rawValue: p.launchMode) { r.mode = m }
+        if !args.contains("--intensity"), let it = Renderer.Intensity(rawValue: p.intensity) { r.intensity = it }
+        if !args.contains("--trim") { r.userOffset = Double(p.offsetMs) / 1000 }
+        r.strobeEnabled = p.strobe
+    }
+
+    /// Keys and MIDI change intensity, strobe and trim too; remember where they ended up.
+    private func savePrefs() {
+        guard let r = renderer else { return }
+        let p = Prefs.shared
+        p.intensity = r.intensity.rawValue; p.strobe = r.strobeEnabled
+        p.offsetMs = Int((r.userOffset * 1000).rounded()); p.lastMode = r.mode.rawValue
+    }
+
+    func applicationWillTerminate(_ n: Notification) { savePrefs(); vj.shutdown(); renderer?.metrics.dump(to: metricsURL); renderer?.smooth?.finish(); audio.stopReferee() }
 
     private func photosensitivityWarningIfNeeded(skip: Bool, then: @escaping () -> Void) {
         let key = "acceptedPhotosensitivityWarning"
@@ -311,6 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             default: break
             }
         }
+        if settings?.window?.isVisible == true { settings?.refresh() }
     }
 }
 
