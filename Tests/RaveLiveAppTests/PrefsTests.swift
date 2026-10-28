@@ -71,6 +71,30 @@ final class PrefsTests: XCTestCase {
         XCTAssertEqual(d.integer(forKey: "overlayLevel"), OverlayLevel.clean.rawValue)
     }
 
+    /// Lyrics send track titles to lrclib.net, so they start OFF; the player card is local only and starts on.
+    func testLyricsPrefs() {
+        let d = fresh()
+        let p = Prefs(defaults: d, frozen: false)
+        XCTAssertFalse(p.lyricsEnabled)
+        XCTAssertTrue(p.playerCard)
+        XCTAssertEqual(p.lyricsSize, 1)
+        XCTAssertEqual(p.lyricsOffsetMs, 0)
+        p.lyricsEnabled = true; p.playerCard = false; p.lyricsSize = 2; p.lyricsOffsetMs = 5000
+        let q = Prefs(defaults: d, frozen: false)
+        XCTAssertTrue(q.lyricsEnabled); XCTAssertFalse(q.playerCard); XCTAssertEqual(q.lyricsSize, 2)
+        XCTAssertEqual(q.lyricsOffsetMs, 1000)                 // clamped to ±1000 ms
+        q.lyricsOffsetMs = -4000
+        XCTAssertEqual(q.lyricsOffsetMs, -1000)
+        q.lyricsSize = 7
+        XCTAssertEqual(q.lyricsSize, 2)
+        q.reset()
+        XCTAssertFalse(q.lyricsEnabled); XCTAssertTrue(q.playerCard); XCTAssertEqual(q.lyricsOffsetMs, 0)
+        let f = Prefs(defaults: d, frozen: true)
+        f.lyricsEnabled = true
+        XCTAssertNil(d.object(forKey: "lyricsEnabled"))       // test runs never write
+        XCTAssertFalse(f.lyricsEnabled)
+    }
+
     func testHKeyCycle() {
         XCTAssertEqual(OverlayLevel.status.next, .full)
         XCTAssertEqual(OverlayLevel.full.next, .clean)

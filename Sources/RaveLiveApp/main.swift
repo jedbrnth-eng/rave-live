@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     var dumpTimer: Timer?
     var settings: SettingsWindowController?
+    var lyrics: LyricsController?
     private var appActivity: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -127,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let pos = SIMD2<Float>(Float(p.x), Float(p.y)), vel = SIMD2<Float>(Float(d.x), Float(d.y)) * 3.0
             r.mousePointer = .init(pos: pos, vel: vel, down: down, burst: click)
             r.pointerEvent(pos: pos, down: down, click: click)
+            self?.lyrics?.wake()                 // the player card shows for a few seconds after the mouse moves
         }
         // Keep full frame rate when another app is in front (Syphon / projector feeds): no App Nap timer throttling.
         appActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Rendering live visuals")
@@ -136,6 +138,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         buildMenu()
         vj.attach(app: self)
+        lyrics = LyricsController(app: self)
+        lyrics?.overlayChanged(vj.overlay)
         modeControl.segmentCount = Renderer.Mode.allCases.count
         for m in Renderer.Mode.allCases { modeControl.setLabel(m.title, forSegment: m.rawValue); modeControl.setWidth(110, forSegment: m.rawValue) }
         modeControl.target = self; modeControl.action = #selector(modeClicked(_:))
@@ -287,7 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         p.offsetMs = Int((r.userOffset * 1000).rounded()); p.lastMode = r.mode.rawValue
     }
 
-    func applicationWillTerminate(_ n: Notification) { savePrefs(); vj.shutdown(); renderer?.metrics.dump(to: metricsURL); renderer?.smooth?.finish(); audio.stopReferee() }
+    func applicationWillTerminate(_ n: Notification) { savePrefs(); lyrics?.shutdown(); vj.shutdown(); renderer?.metrics.dump(to: metricsURL); renderer?.smooth?.finish(); audio.stopReferee() }
 
     private func photosensitivityWarningIfNeeded(skip: Bool, then: @escaping () -> Void) {
         let key = "acceptedPhotosensitivityWarning"
@@ -329,6 +333,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("a", _): r.visuals?.autoCycle.toggle()
         case ("]", _): if let v = r.visuals { v.preset = (v.preset + 1) % VisualsRenderer.count; v.autoCycle = false }
         case ("[", _): if let v = r.visuals { v.preset = (v.preset + VisualsRenderer.count - 1) % VisualsRenderer.count; v.autoCycle = false }
+        case ("y", false):
+            guard let l = lyrics else { break }
+            l.setLyrics(!l.lyricsOn)
+            flashStatus(l.lyricsOn ? (l.source.adapter == nil ? "Lyrics need the Now Playing reader (see Settings)" : "Lyrics on: track titles are looked up on lrclib.net") : "Lyrics off")
+        case ("n", false):
+            guard let l = lyrics else { break }
+            l.setCard(!l.cardOn); flashStatus(l.cardOn ? "Player card on" : "Player card off")
+        case ("-", _), ("_", _), ("=", _), ("+", _):
+            guard let l = lyrics else { break }
+            l.setOffset(l.offsetMs + (ch == "-" || ch == "_" ? -50 : 50))
+            flashStatus(l.offsetMs == 0 ? "Lyrics timing 0 ms" : String(format: "Lyrics timing %+d ms (%@)", l.offsetMs, l.offsetMs > 0 ? "later" : "earlier"))
         case ("1", _), ("2", _), ("3", _), ("4", _), ("5", _), ("6", _), ("7", _), ("8", _):
             let n = Int(ch)! - 1
             if r.mode == .visuals { r.visuals?.preset = n; r.visuals?.autoCycle = false } else if n < 4 { r.stage = Float(n) }
