@@ -116,7 +116,9 @@ final class LyricsTests: XCTestCase {
                    "Song x Other (Mash-Up)", "Song (Jersey Club Edit)", "Song - RMX", "Song (Rework)", "Song (Re-Edit)",
                    "Song Remix", "song (my remix) [clean]", "Song {VIP Mix}"]
         let no = ["Flip Reverse", "Pursuit of Happiness (feat. MGMT & Ratatat)", "Song - Extended Mix", "Editorial", "VIPER",
-                  "Song (Original Mix)", "Remixed Feelings?"]
+                  "Song (Original Mix)", "Remixed Feelings?",
+                  // same arrangement as the original; the ±3 s length check still catches any that differ
+                  "Song (Radio Edit)", "Song - Radio Edit", "Song (Clean Edit)", "Song [Explicit Edit]", "Song (Single Edit)", "Song (Dirty Edit)"]
         for t in yes { XCTAssertTrue(TrackTitle.hasRemixMarker(t), t) }
         for t in no { XCTAssertFalse(TrackTitle.hasRemixMarker(t), t) }
     }

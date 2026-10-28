@@ -73,6 +73,9 @@ enum TrackTitle {
     private static let anywhereMarker = re(#"\b(remix|rmx|bootleg|mash-?up|mash up|re-?edit|rework|refix)\b"#)
     private static let qualifierMarker = re(#"\b(edit|vip|flip|dub|blend)\b"#)
     private static let dashPart = re(#"\s+[-–—]\s+(.*)$"#)
+    /// Radio / clean / explicit / single edits keep the original arrangement, so they are not remixes.
+    /// The ±3 s length check in LyricsGate still rejects any that were cut differently.
+    private static let sameArrangementEdit = re(#"\b(radio|clean|explicit|dirty|single|album)\s+edit\b"#)
 
     private static func replace(_ r: NSRegularExpression, in s: String, with t: String = "") -> String {
         r.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length), withTemplate: t)
@@ -114,7 +117,7 @@ enum TrackTitle {
         let ns = title as NSString
         var parts = group.matches(in: title, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) }
         if let m = dashPart.firstMatch(in: title, range: NSRange(location: 0, length: ns.length)) { parts.append(ns.substring(with: m.range(at: 1))) }
-        return parts.contains { matches(qualifierMarker, $0) }
+        return parts.contains { matches(qualifierMarker, replace(sameArrangementEdit, in: $0)) }
     }
 }
 

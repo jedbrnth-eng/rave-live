@@ -323,6 +323,18 @@ final class LyricsOverlayView: NSView {
     required init?(coder: NSCoder) { fatalError() }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+    /// Soft dark halo behind the lines so they stay readable over bright visuals. Drawn (not a layer background) so
+    /// window snapshots include it, and feathered to transparent so it reads as shade, not a box.
+    private var scrim: CGFloat = 0
+    override func draw(_ dirtyRect: NSRect) {
+        guard scrim > 0.01, !texts[front].isEmpty else { return }
+        let w = min(bounds.width * 0.9, max(big * 10, bounds.width * 0.6))
+        let r = NSRect(x: (bounds.width - w) / 2, y: 0, width: w, height: bounds.height)   // inside bounds: no clipped edge
+        NSGradient(colors: [NSColor(white: 0, alpha: 0.42 * scrim), NSColor(white: 0, alpha: 0.18 * scrim), NSColor(white: 0, alpha: 0)],
+                   atLocations: [0, 0.55, 1], colorSpace: .deviceRGB)?
+            .draw(in: NSBezierPath(ovalIn: r), relativeCenterPosition: .zero)
+    }
+
     func preferredHeight(for b: NSRect) -> CGFloat { b.height * scale * 3.9 }
 
     private func attributed(_ s: String, size px: CGFloat, weight: NSFont.Weight, alpha: CGFloat, glow: CGFloat, glowAlpha: CGFloat) -> NSAttributedString {
@@ -362,6 +374,8 @@ final class LyricsOverlayView: NSView {
         redraw()
         new.isHidden = current.isEmpty
         next.isHidden = n.isEmpty
+        scrim = current.isEmpty ? 0 : 1
+        needsDisplay = true
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.4
             ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
