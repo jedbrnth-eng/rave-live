@@ -27,23 +27,29 @@ jobs:
           fi
       - name: Test
         run: swift test
-      - name: Build the optional engines (Syphon, projectM) and fetch the bundled MilkDrop presets, all pinned
+      - name: Build the optional engines (Syphon, projectM, Now Playing reader) and fetch the bundled MilkDrop presets, all pinned
         run: |
           scripts/build_syphon.sh
           scripts/build_projectm.sh
           scripts/fetch_milkdrop_presets.sh
+          scripts/build_mediaremote_adapter.sh
       - name: Build RAVE LIVE.app (universal, macOS 12+)
         run: |
           scripts/make_app.sh
           scripts/check_app.sh
           # a release must ship both engines, universal and built for macOS 12
-          for f in "build/RAVE LIVE.app/Contents/Frameworks/Syphon.framework/Syphon" "build/RAVE LIVE.app/Contents/Frameworks/libprojectM-4.dylib"; do
+          for f in "build/RAVE LIVE.app/Contents/Frameworks/Syphon.framework/Syphon" "build/RAVE LIVE.app/Contents/Frameworks/libprojectM-4.dylib" \
+                   "build/RAVE LIVE.app/Contents/Frameworks/MediaRemoteAdapter.framework/MediaRemoteAdapter"; do
             lipo -archs "$f" | grep -q x86_64 && lipo -archs "$f" | grep -q arm64 || { echo "::error::$f missing or not universal"; exit 1; }
             for a in arm64 x86_64; do vtool -arch $a -show-build "$f" | grep -q "minos 12.0" || { echo "::error::$f $a is not minos 12.0"; exit 1; }; done
           done
           # MILKDROP must work out of the box: the curated presets are in the bundle
           n=$(find "build/RAVE LIVE.app/Contents/Resources/MilkDrop" -name '*.milk' | wc -l)
           [ "$n" -ge 100 ] || { echo "::error::only $n bundled MilkDrop presets"; exit 1; }
+          # lyrics + player card need the Now Playing reader script and its licence next to it
+          for f in mediaremote-adapter.pl LICENSE.txt; do
+            test -f "build/RAVE LIVE.app/Contents/Resources/MediaRemoteAdapter/$f" || { echo "::error::MediaRemoteAdapter/$f missing"; exit 1; }
+          done
       - name: Package
         run: |
           ditto -c -k --sequesterRsrc --keepParent "build/RAVE LIVE.app" RAVE-LIVE.zip
