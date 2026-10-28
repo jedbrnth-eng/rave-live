@@ -79,6 +79,15 @@ plutil -replace LSMinimumSystemVersion -string "$MIN_MACOS" "$APP/Contents/Info.
 if [ -d vendor/Syphon.framework ]; then
   mkdir -p "$APP/Contents/Frameworks" && cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
 fi
+# Optional Now Playing reader (scripts/build_mediaremote_adapter.sh, BSD-3-Clause): the framework is never linked;
+# RAVE LIVE runs /usr/bin/perl Resources/MediaRemoteAdapter/mediaremote-adapter.pl Frameworks/MediaRemoteAdapter.framework.
+if [ -d vendor/mediaremote-adapter/MediaRemoteAdapter.framework ]; then
+  mkdir -p "$APP/Contents/Frameworks" "$APP/Contents/Resources/MediaRemoteAdapter"
+  cp -R vendor/mediaremote-adapter/MediaRemoteAdapter.framework "$APP/Contents/Frameworks/"
+  cp vendor/mediaremote-adapter/mediaremote-adapter.pl vendor/mediaremote-adapter/LICENSE.txt vendor/mediaremote-adapter/VERSION.txt \
+    "$APP/Contents/Resources/MediaRemoteAdapter/"
+  echo "bundled Now Playing reader: mediaremote-adapter $(cut -d' ' -f1 vendor/mediaremote-adapter/VERSION.txt)"
+else echo "note: no vendor/mediaremote-adapter; lyrics and the player card are unavailable (run scripts/build_mediaremote_adapter.sh)"; fi
 # Sign with a local Apple Development identity when there is one (keeps macOS permission grants
 # stable across rebuilds); otherwise ad-hoc, so anyone can build. Override with RAVE_SIGN_IDENTITY.
 IDENTITY="${RAVE_SIGN_IDENTITY:-}"

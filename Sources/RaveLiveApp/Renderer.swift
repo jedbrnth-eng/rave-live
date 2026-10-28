@@ -26,6 +26,9 @@ final class Renderer: NSObject, MTKViewDelegate {
     var manualStrobe = false          // MIDI strobe pad held; goes through the same flash limiter
     var frameOutput: FrameOutput?     // VJ output stage: brightness, Syphon, output-display preview
     var beatClockIndex: Float { beatIdx }
+    /// Beat phase (0..1) on the heard timeline as of the last frame, and whether the tempo is locked (lyrics breath).
+    var heardBeatPhase: Double { lastBeatPhase }
+    private(set) var beatLocked = false
 
     // Show state
     private var t0 = CACurrentMediaTime()
@@ -206,6 +209,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             beatIdx = Float(stable)
             clock = Double(stable) + phase + clockBase
             lastBeatPhase = phase
+            beatLocked = true
             // groove template: which 8th-note slots of the bar carry a kick, learned from detected kicks.
             // Firing kicks from the template lands them exactly on the heard beat instead of ~50 ms late.
             let eighth = Int(beatIdx) * 2 + Int(floor((phase + kickLead * s.bpm / 60) * 2))
@@ -235,7 +239,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             beatCounter.reset()
             clock += Double(dt) * 2                 // free-runs at 120 BPM, continuing from where the lock left it
         }
-        wasLocked = locked
+        wasLocked = locked; beatLocked = locked
         let predEased = predPulse.step(predictedKick, dt: dt)
         // the template only plays while real kicks are present (breakdowns/builds go quiet instead of ghost-kicking)
         if newKick { lastRealKick = now }

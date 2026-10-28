@@ -76,6 +76,28 @@ status, and where the output goes) → off (clean picture, no text or mode bar) 
 pick is remembered; set it in **Settings (⌘,)** or **Output > HUD** too. **?** shows the keyboard cheat sheet. Both are performer-only: they are
 not on Syphon or the output display.
 
+## Lyrics and the Now Playing card
+
+RAVE LIVE can show synced lyrics for whatever your Mac reports as Now Playing (Spotify, Music, browsers, most players),
+and a small player card bottom left with artwork, title, artist, the source app, progress and previous / play-pause / next.
+
+- **Lyrics are off until you turn them on** (Settings → Lyrics, or **Y**): while on, the playing track's title, artist,
+  album and length are looked up on [lrclib.net](https://lrclib.net), a free lyrics database. Results are cached on your Mac
+  (`~/Library/Application Support/RAVE LIVE/Lyrics`).
+- **Remixes, edits, bootlegs, VIPs, flips and mashups get no lyrics** (and are never looked up): original-song timing
+  doesn't fit them and wrongly timed lyrics look broken. Lyrics also stay off when the track length is more than 3 s
+  away from the LRCLIB match. The card then says "lyrics off: remix/edit" (or "lyrics off: other version" for a length mismatch).
+- The current line sits large and low in the middle, the next line smaller below it; lines crossfade and breathe very
+  gently on the beat (no flashing). Timing follows the audio output latency (Bluetooth, AirPlay); **-** / **=** move the
+  lyrics 50 ms earlier / later, or use the Lyrics timing slider (±1000 ms). Size: Settings → Lyrics size.
+- The card hides a few seconds after the mouse stops moving; **N** turns it off. HUD off (clean picture) hides both.
+- Like the HUD, lyrics and the card are on the main window only, never on Syphon or the output display (a follow-up may
+  add lyrics to the output).
+- Card notes: "lyrics offline" (no network or LRCLIB down; retried after 30 s), "instrumental", "no synced lyrics".
+- Now Playing is read by the bundled [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause)
+  through `/usr/bin/perl`, because macOS only lets Apple-signed processes read it. Builds without it
+  (`scripts/build_mediaremote_adapter.sh`) run as before and Settings explains why lyrics and the card are off.
+
 ## Keyboard shortcuts
 
 | Key | Action |
@@ -105,6 +127,9 @@ not on Syphon or the output display.
 | ⌘, | Settings… |
 | ? | cheat sheet |
 | ⌘L | MIDI Learn… |
+| Y | synced lyrics on/off |
+| N | Now Playing card on/off |
+| - / = | lyrics 50 ms earlier / later |
 
 In MILKDROP mode the MIDI targets *Preset next / previous* step MilkDrop presets and *Auto-cycle* toggles the preset lock.
 
@@ -112,4 +137,9 @@ In MILKDROP mode the MIDI targets *Preset next / previous* step MilkDrop presets
 
 `--syphon`, `--output-screen N`, `--hud`, `--midi-map PATH`, `--midi-log PATH`, `--midi-learn ACTION`, `--no-midi`, and
 `--vjscript "t:cmd,…"` for scripted UI checks (`hud`, `cheat`, `learn`, `output=N`, `stopoutput`, `unplug` (simulated),
-`syphon`, `brightness=0.5`, `shot=NAME` main window incl. overlays, `outshot=NAME` output frame, `learnshot=NAME`).
+`syphon`, `brightness=0.5`, `shot=NAME` main window incl. overlays, `outshot=NAME` output frame, `learnshot=NAME`,
+`card` show the player card, `cardplay` click its play/pause button, `lyricsnow=TAG` log position and lyric line).
+
+Lyrics flags: `--lyrics` / `--no-lyrics`, `--player-card` / `--no-player-card`, `--lyrics-offset MS`, `--lyrics-size 0-2`,
+`--lyrics-log PATH`. Env: `RAVE_LRCLIB_HOST` (another LRCLIB server, or a bad host to test the offline state),
+`RAVE_LYRICS_CACHE` (cache folder), `RAVE_MEDIAREMOTE_DIR` (adapter folder, e.g. `vendor/mediaremote-adapter`).

@@ -272,6 +272,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         r.hudVisible = state != 2
         app.hud.isHidden = state == 2
         app.modeControl.isHidden = state == 2          // clean picture: no mode bar either (errors in the status text still show)
+        app.lyrics?.overlayChanged(overlay)              // clean also hides the lyrics and the player card
         updateHUD()
         app.settings?.refresh()
     }
@@ -379,6 +380,11 @@ final class VJRig: NSObject, NSMenuDelegate {
         ?           this sheet (? or Esc closes)
         Cmd L       MIDI Learn…
         Output menu Syphon, Send to Display
+
+        LYRICS & NOW PLAYING
+        Y           synced lyrics on/off
+        N           player card on/off
+        -  =        lyrics earlier / later 50 ms
         """,
         """
 
@@ -442,7 +448,10 @@ final class VJRig: NSObject, NSMenuDelegate {
         case "unplug":      // simulate the output screen disappearing
             if let o = outputWindow { screensChanged(NSScreen.screens.filter { OutputWindow.displayID($0) != o.displayID }) }
         case "brightness": output?.brightness = Float(val) ?? 1
-        case "shot": captureWindow(name: val, dir: snapDir)
+        case "shot": app?.lyrics?.describeNow("shot " + val); captureWindow(name: val, dir: snapDir)
+        case "card": app?.lyrics?.wake()                 // as if the mouse moved: show the player card
+        case "cardplay": app?.lyrics?.wake(); app?.lyrics?.pressPlayPause()
+        case "lyricsnow": app?.lyrics?.describeNow(val)
         case "outshot": output?.onCapture = { img in Self.writePNG(img, to: snapDir.appendingPathComponent(val + ".png")) }
         case "learnshot":
             if let w = learnPanel?.window, let v = w.contentView { Self.writePNG(Self.render(view: v, background: w.backgroundColor), to: snapDir.appendingPathComponent(val + ".png")) }

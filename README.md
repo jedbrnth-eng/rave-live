@@ -93,6 +93,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 - **MIDI**: MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, brightness, strobe, blackout, tap…), and MIDI clock sync.
 - **Control HUD** (`H`) and a **keyboard cheat sheet** (`?`) that never appear on Syphon or the output display.
 - **Settings** (`⌘,`): HUD on/off, startup mode and fullscreen, intensity, strobes, audio source, quality and visual sync offset, all remembered.
+- **Synced lyrics and a Now Playing card** for whatever your Mac is playing: the current lyric line large and low on screen, a small card with artwork and play/pause/next. Lyrics are off by default (they look the song up on [lrclib.net](https://lrclib.net)); remixes and edits never get wrongly timed lyrics. Main window only. Details in [docs/VJ.md](docs/VJ.md#lyrics-and-the-now-playing-card).
 - Details: [docs/VJ.md](docs/VJ.md). Writing shaders: [docs/SHADERS.md](docs/SHADERS.md). Sharing looks and shaders: [community/](community/README.md).
 
 <table>
@@ -154,6 +155,9 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 | `⌘,` | Settings: HUD, startup mode, intensity, strobes, audio, quality, sync offset |
 | `?` | Keyboard cheat sheet |
 | `⌘L` | MIDI Learn |
+| `Y` | Synced lyrics on/off (looks the song up on lrclib.net) |
+| `N` | Now Playing card on/off |
+| `-` `=` | Lyrics 50 ms earlier / later |
 
 <p align="center">
   <img src="docs/screenshots/app-window.jpg" alt="The app window with the mode switcher at the top left and the live status bar at the bottom showing BPM, confidence, fps and latency" width="860">
@@ -192,13 +196,14 @@ Frame rate is the last few seconds of a 40-second run, and the display caps it a
 
 ## Privacy and permissions
 
-RAVE LIVE has no account, analytics or telemetry, and the app makes no network requests.
+RAVE LIVE has no account, analytics or telemetry. It only goes online when you ask it to: the MilkDrop preset pack download, and synced lyrics (off by default) which send the playing track's title, artist, album and length to [lrclib.net](https://lrclib.net). Remixes and edits are never looked up. Lyrics are cached on your Mac.
 
 | Permission | Why |
 |---|---|
 | **Screen Recording** | macOS requires it to read the audio your Mac is playing. RAVE LIVE does not record your screen. |
 | **Microphone** | Only if you pick an input device in the Audio menu (mic, interface, DJ mixer, loopback driver), or on macOS 12. |
 | **Camera** | Only if you turn on hands and body tracking in AURORA. Frames are analysed on your Mac and never saved or sent. |
+| **Now Playing** | No permission prompt. The player card and lyrics read the system Now Playing info (title, artist, position, artwork) through the bundled mediaremote-adapter; nothing leaves your Mac unless lyrics are on. |
 
 The optional Beat This! referee is a separate Python install. The `beat_this` package downloads its own model checkpoint from its authors the first time it runs.
 
@@ -221,6 +226,7 @@ Optional extras, built from pinned sources into `vendor/` (gitignored) and bundl
 ```bash
 scripts/build_syphon.sh          # Syphon output (BSD-3-Clause)
 scripts/build_projectm.sh        # MILKDROP engine, libprojectM (LGPL-2.1)
+scripts/build_mediaremote_adapter.sh   # Now Playing reader for lyrics + player card (BSD-3-Clause, needs cmake)
 ```
 
 Try it with no music playing:
