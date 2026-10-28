@@ -36,6 +36,19 @@ final class NowPlayingTests: XCTestCase {
         XCTAssertEqual(s.info?.title, "Other"); XCTAssertEqual(s.info?.artist, ""); XCTAssertNil(s.info?.duration)
     }
 
+    /// Seen live: on resume the adapter can send `playing:true` a moment before the new elapsed/timestamp. Extrapolating
+    /// from the old pause timestamp would jump the lyrics ahead by the pause length, so resume from the frozen position.
+    func testResumeWithoutTimestampDoesNotJumpAhead() {
+        var s = NowPlayingStream()
+        _ = s.feed(line(#"{"type":"data","diff":false,"payload":{"title":"T","bundleIdentifier":"b","playing":false,"playbackRate":0,"elapsedTimeMicros":40000000,"timestampEpochMicros":1000000000}}"#), now: 1000)
+        _ = s.feed(line(#"{"type":"data","diff":true,"payload":{"playing":true,"playbackRate":1}}"#), now: 1010)
+        XCTAssertEqual(s.info?.position(at: 1010) ?? -1, 40, accuracy: 1e-6)
+        XCTAssertEqual(s.info?.position(at: 1012) ?? -1, 42, accuracy: 1e-6)
+        // the real timestamp, when it arrives, wins
+        _ = s.feed(line(#"{"type":"data","diff":true,"payload":{"elapsedTimeMicros":40100000,"timestampEpochMicros":1010050000}}"#), now: 1010.06)
+        XCTAssertEqual(s.info?.position(at: 1012) ?? -1, 42.05, accuracy: 1e-6)
+    }
+
     func testEmptyPayloadMeansNothingPlaying() {
         var s = NowPlayingStream()
         _ = s.feed(line(Self.full))

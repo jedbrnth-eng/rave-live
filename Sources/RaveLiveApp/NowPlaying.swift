@@ -36,11 +36,21 @@ struct NowPlayingStream {
     private var payload: [String: Any] = [:]
 
     /// Returns false (state unchanged) for anything that isn't a valid data line.
-    mutating func feed(_ line: Data) -> Bool {
+    mutating func feed(_ line: Data, now: Double = Date().timeIntervalSince1970) -> Bool {
         guard !line.isEmpty, let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
               obj["type"] as? String == "data", let p = obj["payload"] as? [String: Any] else { return false }
         if (obj["diff"] as? Bool) == true {
+            let before = info
             for (k, v) in p { if v is NSNull { payload.removeValue(forKey: k) } else { payload[k] = v } }
+            // A play/pause flip can arrive a moment before the new elapsed/timestamp. Re-anchor at the position we had,
+            // so the clock neither jumps ahead by the pause length (resume) nor snaps back (pause).
+            let newTime = p["timestampEpochMicros"] != nil || p["timestamp"] != nil || p["elapsedTimeMicros"] != nil || p["elapsedTime"] != nil
+            if let b = before, let nowPlaying = p["playing"] as? Bool, nowPlaying != b.playing, !newTime {
+                let pos = b.position(at: now)
+                payload.removeValue(forKey: "timestamp"); payload.removeValue(forKey: "elapsedTime")
+                payload["elapsedTimeMicros"] = NSNumber(value: pos * 1e6)
+                payload["timestampEpochMicros"] = NSNumber(value: now * 1e6)
+            }
         } else {
             payload = p.filter { !($0.value is NSNull) }
         }
