@@ -11,6 +11,7 @@ struct LyricLine: Equatable, Codable { let time: Double; let text: String }
 
 enum LRC {
     private static let timeTag = try! NSRegularExpression(pattern: #"^(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?$"#)
+    private static let wordTag = try! NSRegularExpression(pattern: #"<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>"#)
 
     /// Parses LRC text. Several timestamps on one line give one entry each, `[offset:±ms]` is applied
     /// (positive = lyrics sooner), timed blank lines are kept as "" (they clear the screen), anything else is skipped.
@@ -27,13 +28,17 @@ enum LRC {
                 if let t = time(tag) { times.append(t); continue }
                 if tag.lowercased().hasPrefix("offset:") {
                     let v = tag.dropFirst(7).trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "+", with: "")
-                    if let ms = Double(v) { offsetMs = ms }
+                    if let ms = Double(v), ms.isFinite, abs(ms) <= 60_000 { offsetMs = ms }   // "-inf"/"nan" parse as Doubles
                 }
                 sawOther = true
                 break
             }
             guard !times.isEmpty, !sawOther else { continue }
-            let line = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+            var line = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.contains("<") {                                  // enhanced LRC: drop per-word <mm:ss.xx> tags
+                line = wordTag.stringByReplacingMatches(in: line, range: NSRange(location: 0, length: (line as NSString).length), withTemplate: "")
+                line = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")
+            }
             for t in times { out.append((out.count, LyricLine(time: t, text: line))) }
         }
         let shift = offsetMs / 1000
@@ -168,12 +173,20 @@ final class LRCLIBClient: @unchecked Sendable {
     private let transport: Transport
     private let retryDelay: Double
     let timeout: Double = 6
+    /// Default transport session. `timeout` (per request) is an idle timeout, so a server that trickles a byte every few
+    /// seconds would never time out; the resource cap ends any request after 12 s. Ephemeral: nothing cached on disk.
+    static let session: URLSession = {
+        let c = URLSessionConfiguration.ephemeral
+        c.timeoutIntervalForRequest = 6
+        c.timeoutIntervalForResource = 12
+        return URLSession(configuration: c)
+    }()
 
     init(host: String = LRCLIBClient.defaultHost, transport: Transport? = nil, retryDelay: Double = 0.6) {
         self.host = host.hasSuffix("/") ? String(host.dropLast()) : host
         self.retryDelay = retryDelay
         self.transport = transport ?? { req in
-            let (d, r) = try await URLSession.shared.data(for: req)
+            let (d, r) = try await LRCLIBClient.session.data(for: req)
             return (d, (r as? HTTPURLResponse)?.statusCode ?? 0)
         }
     }

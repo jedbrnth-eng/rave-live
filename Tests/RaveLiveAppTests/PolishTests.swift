@@ -85,4 +85,26 @@ final class PolishTests: XCTestCase {
         _ = LyricsCache.key(title: "T", artist: "A", duration: .infinity)
         _ = LyricsCache.key(title: "T", artist: "A", duration: .nan)
     }
+
+    // MARK: malformed LRC from a crowd-sourced database
+
+    /// `Double("-inf")` and `Double("nan")` parse, so an `[offset:-inf]` tag pushed every line to infinity (no lyrics, ever).
+    func testNonFiniteOffsetTagIsIgnored() {
+        for tag in ["-inf", "inf", "nan", "+infinity", "99999999"] {
+            let l = LRC.parse("[offset:\(tag)]\n[00:01.00]Purple toasters\n[00:02.50]hum at dawn")
+            XCTAssertEqual(l.map(\.time), [1.0, 2.5], tag)
+        }
+    }
+
+    /// Enhanced (A2) LRC carries per-word `<mm:ss.xx>` tags; they must not be drawn as text.
+    func testEnhancedWordTagsAreStripped() {
+        let l = LRC.parse("[00:01.00]<00:01.00>Purple <00:01.40>toasters <00:01.90>hum")
+        XCTAssertEqual(l.first?.text, "Purple toasters hum")
+    }
+
+    /// A server that trickles bytes never trips the per-request idle timeout; the whole request needs a hard cap,
+    /// or the card says "finding lyrics…" forever.
+    func testLRCLIBRequestsHaveAResourceTimeout() {
+        XCTAssertLessThanOrEqual(LRCLIBClient.session.configuration.timeoutIntervalForResource, 15)
+    }
 }
