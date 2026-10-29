@@ -475,6 +475,12 @@ final class VJRig: NSObject, NSMenuDelegate {
         case "card": app?.lyrics?.wake()                 // as if the mouse moved: show the player card
         case "cardplay": app?.lyrics?.wake(); app?.lyrics?.pressPlayPause()
         case "lyricsnow": app?.lyrics?.describeNow(val)
+        case "lineshot":       // lineshot=name@0.1: a window shot this long after the next lyric line change (crossfade check)
+            let p = val.split(separator: "@").map(String.init)
+            let delay = p.count > 1 ? Double(p[1]) ?? 0.1 : 0.1
+            app?.lyrics?.onNextLineChange = { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { self?.app?.lyrics?.describeNow("shot " + p[0]); self?.captureWindow(name: p[0], dir: snapDir) }
+            }
         case "outshot": output?.onCapture = { img in Self.writePNG(img, to: snapDir.appendingPathComponent(val + ".png")) }
         case "learnshot":
             if let w = learnPanel?.window, let v = w.contentView { Self.writePNG(Self.render(view: v, background: w.backgroundColor), to: snapDir.appendingPathComponent(val + ".png")) }

@@ -79,6 +79,8 @@ final class LyricsController: NSObject {
     let card = PlayerCardView()
     let hintLabel = LyricsHintView()
     private var timer: Timer?
+    /// Test hook (`lineshot=`): runs once at the next change to a new non-empty line.
+    var onNextLineChange: (() -> Void)?
     private(set) var info: NowPlayingInfo?
     private(set) var state: LyricsState = .off
     private var lines: [LyricLine] = []
@@ -492,8 +494,10 @@ final class LyricsController: NSObject {
         var nextText = nextIdx < lines.count ? lines[nextIdx].text : ""
         if cur.isEmpty && nextIdx < lines.count && lines[nextIdx].time - heard > Self.nextLineLead { nextText = "" }
         if cur != shownPair.0 || nextText != shownPair.1 {
+            let changed = cur != shownPair.0 && !cur.isEmpty
             shownPair = (cur, nextText)
             overlay.show(current: cur, next: nextText)
+            if changed, let f = onNextLineChange { onNextLineChange = nil; f() }
         }
         // gentle breath on the beat: cosine of the heard beat phase, peaking on the beat; nothing when the tempo is unlocked
         var breath = 0.0
@@ -553,9 +557,6 @@ final class LyricsOverlayView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        scrim.alphaValue = 0
-        scrim.autoresizingMask = [.width, .height]
-        addSubview(scrim)
         for l in cur + [next] {
             l.alignment = .center
             l.maximumNumberOfLines = 2                      // long lines wrap onto a second line, then truncate
@@ -572,31 +573,20 @@ final class LyricsOverlayView: NSView {
     required init?(coder: NSCoder) { fatalError() }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// Soft dark halo behind the lines so they stay readable over bright visuals. A drawn subview (so window snapshots
-    /// include it) that fades with the text, feathered to transparent so it reads as shade, not a box.
-    private final class Scrim: NSView {
-        var width: CGFloat = 0
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-        override func draw(_ dirtyRect: NSRect) {
-            let w = min(bounds.width * 0.9, max(width, bounds.width * 0.6))
-            let r = NSRect(x: (bounds.width - w) / 2, y: 0, width: w, height: bounds.height)   // inside bounds: no clipped edge
-            NSGradient(colors: [NSColor(white: 0, alpha: 0.42), NSColor(white: 0, alpha: 0.18), NSColor(white: 0, alpha: 0)],
-                       atLocations: [0, 0.55, 1], colorSpace: .deviceRGB)?
-                .draw(in: NSBezierPath(ovalIn: r), relativeCenterPosition: .zero)
-        }
-    }
-    private let scrim = Scrim()
-
     func preferredHeight(for b: NSRect) -> CGFloat { b.height * scale * 3.9 }
 
-    private func attributed(_ s: String, size px: CGFloat, weight: NSFont.Weight, alpha: CGFloat, glow: CGFloat, glowAlpha: CGFloat) -> NSAttributedString {
+    /// Readable over any visual without a shape behind the text (Jed 10-29: no dark oval): every glyph gets a thin dark
+    /// outline and a tight dark shadow, so white text holds on white-ish frames and the picture shows between the words.
+    static func attributed(_ s: String, size px: CGFloat, weight: NSFont.Weight, alpha: CGFloat) -> NSAttributedString {
         let sh = NSShadow()
-        sh.shadowColor = NSColor(calibratedRed: 0.55, green: 0.75, blue: 1, alpha: glowAlpha)
-        sh.shadowBlurRadius = glow
-        sh.shadowOffset = .zero
+        sh.shadowColor = NSColor(white: 0, alpha: 0.75 * alpha)
+        sh.shadowBlurRadius = max(2, px * 0.07)
+        sh.shadowOffset = NSSize(width: 0, height: -max(1, px * 0.02))
         let p = NSMutableParagraphStyle(); p.alignment = .center; p.lineBreakMode = .byWordWrapping
         return NSAttributedString(string: s, attributes: [.font: NSFont.systemFont(ofSize: px, weight: weight),
-                                                          .foregroundColor: NSColor(white: 1, alpha: alpha), .shadow: sh, .paragraphStyle: p])
+                                                          .foregroundColor: NSColor(white: 1, alpha: alpha),
+                                                          .strokeColor: NSColor(white: 0, alpha: 0.6 * alpha), .strokeWidth: -3.0,
+                                                          .shadow: sh, .paragraphStyle: p])
     }
 
     func layoutLines() {
@@ -605,7 +595,6 @@ final class LyricsOverlayView: NSView {
         let small = big * 0.55
         next.frame = NSRect(x: x, y: 0, width: w, height: small * 1.5)
         for l in cur { l.frame = NSRect(x: x, y: small * 1.5, width: w, height: big * 2.5) }
-        scrim.frame = bounds; scrim.width = big * 10; scrim.needsDisplay = true
         redraw()
     }
 
@@ -615,9 +604,9 @@ final class LyricsOverlayView: NSView {
     private func redraw() {
         redraws += 1
         for (i, l) in cur.enumerated() {
-            l.attributedStringValue = attributed(texts[i], size: big, weight: .bold, alpha: 1, glow: 9, glowAlpha: 0.6)
+            l.attributedStringValue = Self.attributed(texts[i], size: big, weight: .bold, alpha: 1)
         }
-        next.attributedStringValue = attributed(nextText, size: big * 0.55, weight: .medium, alpha: 0.55, glow: 4, glowAlpha: 0.3)
+        next.attributedStringValue = Self.attributed(nextText, size: big * 0.55, weight: .medium, alpha: 0.6)
         applyBreath()
     }
 
@@ -640,7 +629,10 @@ final class LyricsOverlayView: NSView {
     /// Test hook: how many times the attributed strings were rebuilt.
     private(set) var redraws = 0
 
-    /// Smooth crossfade (0.4 s) between the old and the new line. No motion besides the fade.
+    /// Line change: the old line fades out first (`fadeOut`), then the new one fades in (`fadeIn`), so two lines never
+    /// sit on top of each other (a 0.4 s crossfade read as doubled, smeared text).
+    static let fadeOut = 0.12, fadeIn = 0.22
+    private var changeToken = 0
     func show(current: String, next n: String) {
         let old = cur[front]
         front = 1 - front
@@ -648,19 +640,31 @@ final class LyricsOverlayView: NSView {
         texts[front] = current
         nextText = n
         redraw()
-        new.isHidden = current.isEmpty
+        changeToken += 1
+        let token = changeToken
+        new.alphaValue = 0
+        new.isHidden = true
         next.isHidden = n.isEmpty
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.4
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            new.animator().alphaValue = current.isEmpty ? 0 : 1
+            ctx.duration = Self.fadeOut
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             old.animator().alphaValue = 0
-            next.animator().alphaValue = n.isEmpty ? 0 : 1
-            scrim.animator().alphaValue = current.isEmpty ? 0 : 1
+            next.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            guard let self else { return }
-            if old !== self.cur[self.front] { old.isHidden = true }
+            guard let self, token == self.changeToken else { return }
+            old.isHidden = true
+            new.isHidden = current.isEmpty
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = Self.fadeIn
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                new.animator().alphaValue = current.isEmpty ? 0 : 1
+                self.next.animator().alphaValue = n.isEmpty ? 0 : 1
+            })
         })
+    }
+    /// Test hook: how many current-line fields are showing (never more than one).
+    var visibleLineCount: Int {
+        cur.filter { !$0.isHidden && max(Float($0.alphaValue), $0.layer?.presentation()?.opacity ?? 0) > 0.01 }.count
     }
 
     /// 0..1 beat breath: at most +2.5 % size and a slightly wider glow. Slow and small on purpose (photosensitivity rule).
