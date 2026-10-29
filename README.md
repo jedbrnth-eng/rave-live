@@ -250,7 +250,7 @@ Needs Xcode 15.3 or later (the full app, because the icon is compiled with `acto
 ```bash
 git clone https://github.com/jedbrnth-eng/rave-live.git
 cd rave-live
-swift test                       # runs the tempo-tracking test suite
+swift test                       # runs both test suites (app + tempo tracking)
 scripts/make_app.sh              # creates build/RAVE LIVE.app
 open "build/RAVE LIVE.app"
 ```
@@ -260,10 +260,11 @@ open "build/RAVE LIVE.app"
 Optional extras, built from pinned sources into `vendor/` (gitignored) and bundled by `make_app.sh` when present; the app builds and runs without them:
 
 ```bash
+brew install cmake               # projectM and the Now Playing reader build with CMake (ninja is used if installed)
 scripts/build_syphon.sh          # Syphon output (BSD-3-Clause)
 scripts/build_projectm.sh        # MILKDROP engine, libprojectM (LGPL-2.1)
 scripts/fetch_milkdrop_presets.sh     # the 149 built-in MilkDrop presets
-scripts/build_mediaremote_adapter.sh   # Now Playing reader for lyrics + player card (0.6.0, BSD-3-Clause, needs cmake)
+scripts/build_mediaremote_adapter.sh   # Now Playing reader for lyrics + player card (BSD-3-Clause)
 scripts/make_app.sh                    # run again to bundle them
 ```
 
