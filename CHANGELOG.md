@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Lyric styles** (Settings → Lyrics style, `Shift-Y` cycles): **Clean** (default), **Neon karaoke**, **Pop**, **Bass wave**, **Spectrum** and **Auto**. They react to the music RAVE LIVE hears (beat, kick, bass, energy, drops), not just to the clock. Words are revealed one by one: from word timing when the lyrics have it, otherwise spread over the line by syllables and snapped to the live beat grid. Auto picks a style from the energy and cuts to Pop on drops.
+- **Settings → Lyrics** is now an on/off switch that follows the `Y` key (and the other way round), with style, position (lower third / centre), size and timing.
+
+### Fixed
+- **Lyrics were late on Bluetooth headphones**: the player's position already counts the output delay, and RAVE LIVE subtracted it again (~180 ms on Bluetooth). Lines now also go up 150 ms early so reading keeps up with the singer, and the position keeps running when an update has no timestamp.
+- **No dark oval behind the lyrics**: readability comes from a thin outline and a tight shadow on each letter. The old and new line no longer overlap during a change (the old one fades out first).
+- The lyrics now cost about 0.3-0.5 ms of main-thread time per frame (p95) and only move layers; the old text overlay showed missed frames in test runs (frame-interval p95 16-21 ms vs 14.5-14.6 ms with the new styles and with lyrics off, 72 fps target, same session).
+
 ## [0.6.0]
 
 ### Added
