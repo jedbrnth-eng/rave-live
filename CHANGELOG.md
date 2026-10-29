@@ -8,11 +8,25 @@
 - **Remix guard:** remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions are never looked up and show no lyrics, and lyrics stay off when the track length is more than 3 s from the match, since original-song timing doesn't fit them. The card says "lyrics off: remix/edit".
 - **Now Playing card** (bottom left): artwork, title, artist, source app, progress, and previous / play-pause / next buttons that control the playing app. It hides a few seconds after the mouse stops; `N` turns it off. HUD off hides it and the lyrics.
 - Settings rows: Lyrics on/off, lyrics size, lyrics timing, player card on/off, and what Now Playing sees (or why it can't).
-- States shown on the card: "lyrics offline" (retried after 30 s), "instrumental", "no synced lyrics", "lyrics off: remix/edit".
+- States shown on the card: "lyrics offline" (retried after 30 s, then less often), "instrumental", "no synced lyrics", "lyrics off: remix/edit".
 - Now Playing comes from [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause), built from a pinned tag by `scripts/build_mediaremote_adapter.sh` and bundled by `make_app.sh`. Builds without it run as before.
 
 ### Notes
 - Lyrics and the card are on the main window only, like the HUD; they are never sent to Syphon or the output display.
+
+### Fixed (performance and robustness audit)
+- **No more stutter every 2 seconds in long sets.** The metrics file was rebuilt on the render thread every 2 s by sorting every frame time of the set, so the hitch grew with set length (70-245 ms after half an hour at 120 fps). Statistics now live in fixed-size histograms and the file is written in the background; the render thread spends about 0.01 ms on it at any set length. Without `--metrics` the file is written every 10 s.
+- **The Now Playing reader can no longer outlive RAVE LIVE**: quick `Y` / `N` toggles left it running in the background, and so did a crash or force quit. It is now killed if it ignores the stop request, and it watches the app and exits when the app is gone.
+- **System audio comes back on its own** after sleep/wake, a display change, or when macOS stops the capture. It restarts within a second (with backoff if that fails) instead of going silent until a relaunch.
+- **Hotel / festival Wi-Fi login pages no longer stick "no synced lyrics" to a song for 3 days**: an answer that isn't LRCLIB data counts as offline and isn't cached. Offline retries back off (30 s, 1, 2, 4 … 10 min).
+- **Lyrics use less CPU**: the beat breath scales the line on the GPU instead of rebuilding the text 30 times a second.
+- **Syphon keeps the full frame rate while the main window is covered** (it dropped to about 60 fps on a 120 Hz Mac).
+- **First launch after an install or update shows the window at once** and prepares the visuals in the background (the window used to take several seconds, up to ~15 s under load, to appear).
+- `⌘,` with Settings already open no longer stalls the visuals; `P` closes the MilkDrop browser again and no longer takes the keyboard; MILKDROP keys don't refresh a hidden browser.
+- The HUD shows "–" instead of "nan ms" before any latency is measured.
+- `M` (audio source) no longer saves the choice during test runs (`--autoquit`, `--factory-settings`).
+- The metrics event log is capped (first 200 + newest entries, 2000 in all), long lines are cut, and track titles in it are replaced by a short hash.
+- Deleting the Shader Lab file of the preset that is playing can no longer crash SHOW or the HUD.
 
 ## [0.5.1] - 2026-10-29
 

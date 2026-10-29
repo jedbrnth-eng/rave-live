@@ -65,7 +65,23 @@ final class MilkDropBrowser: NSObject, NSTableViewDataSource, NSTableViewDelegat
         reload()
     }
 
-    func show() { reload(); panel.center(); panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(search) }
+    /// Menu / ⌘P: opens the panel (reloaded, centred) with the search field focused. Already open: just bring it
+    /// to the front and make it key.
+    func show() {
+        if panel.isVisible {
+            if !panel.isKeyWindow { panel.makeKeyAndOrderFront(nil) }
+            return
+        }
+        reload(); panel.center(); panel.makeKeyAndOrderFront(nil)
+        if panel.firstResponder !== search.currentEditor() && panel.firstResponder !== search { panel.makeFirstResponder(search) }
+    }
+    /// P key: open or close the panel without taking the keyboard from the visuals (so P closes it again and [ ] keep
+    /// stepping presets); clicking into it makes it key. Every key-window change goes through the input method (an
+    /// XPC round trip), so focusing the search field on each press stalled the visuals (p99 210-750 ms for 40 presses).
+    func toggle() {
+        if panel.isVisible { panel.orderOut(nil); return }
+        reload(); panel.center(); panel.orderFront(nil)
+    }
 
     @objc func reload() {
         let src = tabs.selectedSegment > 0 ? MilkDropLibrary.Source(rawValue: tabs.selectedSegment - 1) : nil
@@ -236,6 +252,10 @@ extension AppDelegate {
         }
         Self.milkBrowser?.show()
     }
+    /// P key (the menu item and ⌘P always open it).
+    func milkToggleBrowser() {
+        if let b = Self.milkBrowser, b.panel.isVisible { b.toggle() } else { milkMenuBrowser(nil) }
+    }
     @objc func milkMenuGet(_ i: NSMenuItem?) {
         guard let m = renderer?.milk else { return }
         m.library.confirmAndDownload { [weak self] ok in
@@ -296,12 +316,12 @@ extension AppDelegate {
             if let p = m.currentPreset { let on = m.library.toggleFavorite(p); flashStatus(on ? "★ Favourite: \(p.name)" : "Removed from favourites: \(p.name)") }
         case "l":
             m.director.locked.toggle(); flashStatus(m.director.locked ? "Preset locked (L to unlock)" : "Preset unlocked: changes follow the beat again")
-        case "p": milkMenuBrowser(nil)
+        case "p": milkToggleBrowser(); r.metrics.event("milk:key p", at: now); return true
         case "0", "1", "2", "3", "4", "5":
             if let p = m.currentPreset { m.library.setRating(p, Int(ch)!); flashStatus(ch == "0" ? "Rating cleared" : "Rated \(ch)/5: \(p.name)") }
         default: return false
         }
-        Self.milkBrowser?.reload()
+        if let b = Self.milkBrowser, b.panel.isVisible { b.reload() }      // a hidden browser reloads when it opens
         r.metrics.event("milk:key \(ch)", at: now)
         return true
     }

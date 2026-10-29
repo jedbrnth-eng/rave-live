@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
 
+import AppKit
 import CoreMedia
 import Foundation
 import RaveAudio
@@ -47,14 +48,19 @@ enum InputSource: Equatable {
     init(key: String) {
         if key.hasPrefix("device:") { let uid = String(key.dropFirst(7)); self = .device(uid.isEmpty ? nil : uid) } else { self = .system }
     }
-    static let defaultsKey = "audioSource"
-    /// The last source the user picked (system audio by default; the default input on macOS 12).
+    /// The last source the user picked (system audio by default; the default input on macOS 12). Goes through
+    /// `Prefs`, so test runs (`--autoquit`, `--factory-settings`) read the default and never save a pick.
     static var saved: InputSource {
-        get {
-            let s = UserDefaults.standard.string(forKey: defaultsKey).map(InputSource.init(key:)) ?? .system
-            return s == .system && !SystemAudio.isSupported ? .mic : s
-        }
-        set { UserDefaults.standard.set(newValue.key, forKey: defaultsKey) }
+        get { saved(in: .shared) }
+        set { save(newValue, in: .shared) }
+    }
+    static func saved(in p: Prefs) -> InputSource {
+        let s = p.audioSource.map(InputSource.init(key:)) ?? .system
+        return s == .system && !SystemAudio.isSupported ? .mic : s
+    }
+    static func save(_ s: InputSource, in p: Prefs) {
+        p.audioSource = s.key
+        if case .device(let uid) = s { p.lastInputDevice = uid ?? "" }
     }
 }
 
@@ -90,6 +96,56 @@ final class AudioEngine: @unchecked Sendable {
 
     func snapshot() -> AudioSnapshot { lock.lock(); defer { lock.unlock() }; return snap }
 
+    /// Capture lifecycle lines ("capture: …") for the metrics log.
+    var onEvent: ((String) -> Void)?
+    /// Restarts system capture after ScreenCaptureKit stops on its own, on wake and when its display goes away.
+    private lazy var restarter: CaptureRestarter = {
+        let r = CaptureRestarter { [weak self] in try await self?.restartSystemCapture() }
+        r.log = { [weak self] s in NSLog("RAVE LIVE %@", s); self?.onEvent?(s) }
+        r.onStatus = { [weak self] s in self?.onStatus?(s ?? "") }
+        return r
+    }()
+    private var systemObservers: [NSObjectProtocol] = []
+
+    /// Main queue. Only while system audio (not demo, not an input device) is the source.
+    private func systemCaptureInterrupted(_ why: String, settle: Double = 0.5) {
+        guard source == .system, sourceLabel == "system", sysCapture != nil else { return }
+        restarter.interrupted(why, settle: settle)
+    }
+
+    private func restartSystemCapture() async throws {
+        guard #available(macOS 13.0, *), let sys = sysCapture as? SystemAudioCapture, source == .system, sourceLabel == "system" else { return }
+        let before = sys.buffersReceived
+        await sys.stop()
+        try await sys.start()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.onEvent?("capture: \(sys.buffersReceived - before) buffers in the 2 s after the restart")
+        }
+    }
+
+    /// Wake and display changes. ScreenCaptureKit's own stop callback covers most cases; these catch a stream that
+    /// keeps "running" but is tied to a display that went away, and the first seconds after wake.
+    private func observeSystemChanges() {
+        guard systemObservers.isEmpty else { return }
+        let ws = NSWorkspace.shared.notificationCenter
+        for n in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
+            systemObservers.append(ws.addObserver(forName: n, object: nil, queue: .main) { [weak self] note in
+                self?.systemCaptureInterrupted(note.name == NSWorkspace.didWakeNotification ? "woke from sleep" : "screens woke", settle: 1)
+            })
+        }
+        systemObservers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self, #available(macOS 13.0, *), let id = (self.sysCapture as? SystemAudioCapture)?.displayID else { return }
+            let ids = NSScreen.screens.map(OutputWindow.displayID)
+            if !ids.contains(id) { self.systemCaptureInterrupted("captured display \(id) went away", settle: 1) }
+        })
+    }
+
+    /// Test hooks (`--vjscript capturestop`, `--vjscript wake`): a system stop of the real stream / a wake notification.
+    func debugSimulateSystemStop() {
+        guard #available(macOS 13.0, *), let sys = sysCapture as? SystemAudioCapture else { onEvent?("capture: no system capture to stop"); return }
+        Task { await sys.debugSimulateSystemStop() }
+    }
+
     var tempo: TempoTracker? { analyzer?.tempo }
 
     func start(_ src: InputSource) async {
@@ -106,9 +162,11 @@ final class AudioEngine: @unchecked Sendable {
                 if !CapturePermission.screenRecordingGranted { CapturePermission.requestScreenRecording() }
                 let sys = (sysCapture as? SystemAudioCapture) ?? SystemAudioCapture()
                 sysCapture = sys
+                await MainActor.run { self.restarter.cancel(); self.observeSystemChanges() }
                 await sys.stop()
                 sys.onSamples = handler
                 sys.onError = { [weak self] e in self?.onStatus?("Capture error: \(e)") }
+                sys.onStopped = { [weak self] e in DispatchQueue.main.async { self?.systemCaptureInterrupted("stream stopped: \(e.localizedDescription)") } }
                 do { try await sys.start(); onStatus?("") }
                 catch { onStatus?(CapturePermission.fixInstructions) }
             } else {
@@ -122,6 +180,7 @@ final class AudioEngine: @unchecked Sendable {
     }
 
     private func startDevice(_ uid: String?, handler: @escaping SampleHandler) async {
+        await MainActor.run { self.restarter.cancel() }
         if #available(macOS 13.0, *), let sys = sysCapture as? SystemAudioCapture { await sys.stop() }
         // Ask before opening the device: opening it while the prompt is pending stalls CoreAudio (seen on macOS 12).
         var permission = MicCapture.permissionStatus

@@ -74,7 +74,7 @@ final class AudioMenu: NSObject, NSMenuDelegate {
     /// M key: toggle between system audio and the last-used input device.
     func toggle() {
         guard let audio else { return }
-        select(audio.source == .system ? .device(UserDefaults.standard.string(forKey: "lastInputDevice")) : .system)
+        select(audio.source == .system ? .device(Prefs.shared.lastInputDevice.flatMap { $0.isEmpty ? nil : $0 }) : .system)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) { rebuild() }
@@ -131,7 +131,6 @@ final class AudioMenu: NSObject, NSMenuDelegate {
     /// Same as choosing an entry in the Audio menu (also used by the Settings window).
     func pick(key: String) {
         let src = InputSource(key: key)
-        if case .device(let uid) = src { UserDefaults.standard.set(uid, forKey: "lastInputDevice") }
         select(src)
     }
 

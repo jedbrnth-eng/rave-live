@@ -123,19 +123,8 @@ final class Renderer: NSObject, MTKViewDelegate {
     init?(view: MTKView, audio: AudioEngine) {
         guard let dev = view.device ?? MTLCreateSystemDefaultDevice(), let q = dev.makeCommandQueue() else { return nil }
         device = dev; queue = q; self.audio = audio
-        do {
-            let lib = try dev.makeLibrary(source: stageShaderSource, options: nil)
-            let d = MTLRenderPipelineDescriptor()
-            d.vertexFunction = lib.makeFunction(name: "vmain")
-            d.fragmentFunction = lib.makeFunction(name: "fmain")
-            d.colorAttachments[0].pixelFormat = view.colorPixelFormat
-            pipeline = try dev.makeRenderPipelineState(descriptor: d)
-            let tl = try dev.makeLibrary(source: transitionShaderSource, options: nil)
-            let td = MTLRenderPipelineDescriptor()
-            td.vertexFunction = tl.makeFunction(name: "tvert"); td.fragmentFunction = tl.makeFunction(name: "tmix")
-            td.colorAttachments[0].pixelFormat = view.colorPixelFormat
-            transitionPipeline = try dev.makeRenderPipelineState(descriptor: td)
-        } catch { NSLog("Shader error: \(error)"); return nil }
+        do { (pipeline, transitionPipeline) = try Self.pipelines(device: dev, pixelFormat: view.colorPixelFormat) }
+        catch { NSLog("Shader error: \(error)"); return nil }
         visuals = VisualsRenderer(device: dev, pixelFormat: view.colorPixelFormat)
         let pc = QualityTier.active.particlesEffective   // 1M on High; RAVE_PARTICLES overrides
         aurora = AuroraRenderer(device: dev, pixelFormat: view.colorPixelFormat, particles: pc)
@@ -143,6 +132,21 @@ final class Renderer: NSObject, MTKViewDelegate {
         super.init()
         milk?.onEvent = { [weak self] e in self?.metrics.event(e, at: CACurrentMediaTime()) }
         metrics.event(String(format: "renderer:t0 host=%.4f", t0), at: t0)     // lets tests line --smoothlog times up with other host-clock logs
+    }
+
+    /// Stage and transition pipelines. Also run by ShaderWarmup on a background thread at launch.
+    static func pipelines(device dev: MTLDevice, pixelFormat: MTLPixelFormat) throws -> (MTLRenderPipelineState, MTLRenderPipelineState) {
+        let lib = try dev.makeLibrary(source: stageShaderSource, options: nil)
+        let d = MTLRenderPipelineDescriptor()
+        d.vertexFunction = lib.makeFunction(name: "vmain")
+        d.fragmentFunction = lib.makeFunction(name: "fmain")
+        d.colorAttachments[0].pixelFormat = pixelFormat
+        let stage = try dev.makeRenderPipelineState(descriptor: d)
+        let tl = try dev.makeLibrary(source: transitionShaderSource, options: nil)
+        let td = MTLRenderPipelineDescriptor()
+        td.vertexFunction = tl.makeFunction(name: "tvert"); td.fragmentFunction = tl.makeFunction(name: "tmix")
+        td.colorAttachments[0].pixelFormat = pixelFormat
+        return (stage, try dev.makeRenderPipelineState(descriptor: td))
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -297,8 +301,16 @@ final class Renderer: NSObject, MTKViewDelegate {
         u[38] = Float(intensity.rawValue)
         u[37] = Float(clock)     // continuous beat clock (beats): latency-compensated grid when locked, 120 BPM free-run otherwise; never jumps except on drops
 
-        guard let rpd = view.currentRenderPassDescriptor, let drawable = view.currentDrawable,
-              let cb = queue.makeCommandBuffer() else { return }
+        // Covered window feeding Syphon (AppDelegate.updateRenderDriver): render into our own texture. A covered
+        // window's drawables come back at the throttled ~60 Hz, which would cap the Syphon feed there.
+        let drawable: CAMetalDrawable?, rpd: MTLRenderPassDescriptor, frameTex: MTLTexture
+        if renderOffscreen, let t = headlessTarget(size) {
+            drawable = nil; frameTex = t; rpd = offscreenPass(t)
+        } else {
+            guard let r = view.currentRenderPassDescriptor, let d = view.currentDrawable else { return }
+            drawable = d; frameTex = d.texture; rpd = r
+        }
+        guard let cb = queue.makeCommandBuffer() else { return }
         let dropStarted = director.dropTime != lastDropTime && director.dropTime > 0
         milk?.intensity = intensity.rawValue
         let ctx = SceneCtx(size: size, dt: dt, s: vs, newKick: kickEvent, newHat: newHat, look: d.look, dropStarted: dropStarted, now: now)
@@ -332,7 +344,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         } else if mode == .visuals, let vis = visuals {
             let before = vis.preset
             vis.direct(look: ctx.look, dropStarted: ctx.dropStarted)
-            if vis.preset != before { metrics.event("preset->" + VisualsRenderer.presetNames[vis.preset], at: ctx.now) }
+            if vis.preset != before { metrics.event("preset->" + VisualsRenderer.presetName(vis.preset), at: ctx.now) }
             encodeClassic(vis, cb: cb, rpd: rpd, ctx: ctx, bpm: locked ? s.bpm : 120)
         } else {
             if mode == .milkdrop, let m = milk, let ev = m.direct(beat: Int(beatIdx), phase: phase, beatLocked: locked, dropStarted: dropStarted, now: now,
@@ -347,7 +359,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         if s.kickCount != lastKickDrawn && pendingKickHost > 0 && s.playing {
             lastKickDrawn = s.kickCount
             let kh = pendingKickHost
-            drawable.addPresentedHandler { [weak self] d in
+            drawable?.addPresentedHandler { [weak self] d in
                 if d.presentedTime > 0 { self?.metrics.latency(d.presentedTime - kh) }
             }
         }
@@ -357,7 +369,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         }
         cb.addCompletedHandler { [weak self] c in self?.metrics.gpu(c.gpuEndTime - c.gpuStartTime) }
         let drawHost = host
-        drawable.addPresentedHandler { [weak self] d in
+        drawable?.addPresentedHandler { [weak self] d in
             guard let self, d.presentedTime > 0 else { return }
             let dd = d.presentedTime - drawHost
             if dd > 0 && dd < 0.2 { self.presentDelay += 0.05 * (dd - self.presentDelay); self.metrics.present(dd) }
@@ -369,26 +381,26 @@ final class Renderer: NSObject, MTKViewDelegate {
         if let i = namedSnaps.firstIndex(where: { elapsed >= $0.at }) { snapName = namedSnaps.remove(at: i).name }
         let snapNow = snapName != nil
         // Discrete GPUs (Intel Macs with AMD): drawables are managed, so copy GPU -> CPU before getBytes.
-        if (snapNow || lumLogPath != nil) && drawable.texture.storageMode == .managed, let b = cb.makeBlitCommandEncoder() {
-            b.synchronize(resource: drawable.texture); b.endEncoding()
+        if (snapNow || lumLogPath != nil) && frameTex.storageMode == .managed, let b = cb.makeBlitCommandEncoder() {
+            b.synchronize(resource: frameTex); b.endEncoding()
         }
         // Shader Lab errors + Tweak panel are for the performer: drawn after Syphon / the output display take the frame
         let labOverlay: ((MTLRenderCommandEncoder, CGSize) -> Void)? = mode == .visuals ? { [weak self] e, sz in
             guard let v = self?.visuals else { return }
-            v.lab.drawOverlays(e, size: sz, device: v.device, pixelFormat: drawable.texture.pixelFormat)
+            v.lab.drawOverlays(e, size: sz, device: v.device, pixelFormat: frameTex.pixelFormat)
         } : nil
-        if let fo = frameOutput { fo.process(cb: cb, texture: drawable.texture, overlay: labOverlay) }
-        else if let ov = labOverlay { FrameOutput.drawOverlay(ov, cb: cb, on: drawable.texture) }
-        if let sp = smooth { sp.encode(cb: cb, source: drawable.texture, meta: probeMeta(elapsed: elapsed, dt: dt, phase: phase, locked: locked, kick: kickVisual, d: d)) }
-        cb.present(drawable)
+        if let fo = frameOutput { fo.process(cb: cb, texture: frameTex, overlay: labOverlay) }
+        else if let ov = labOverlay { FrameOutput.drawOverlay(ov, cb: cb, on: frameTex) }
+        if let sp = smooth { sp.encode(cb: cb, source: frameTex, meta: probeMeta(elapsed: elapsed, dt: dt, phase: phase, locked: locked, kick: kickVisual, d: d)) }
+        if let drawable { cb.present(drawable) }
         cb.commit()
         if snapNow {
             cb.waitUntilCompleted()
-            saveSnapshot(drawable.texture, name: snapName ?? "snap.png")
+            saveSnapshot(frameTex, name: snapName ?? "snap.png")
         }
         if let path = lumLogPath {          // beat-lock probe (test only): mean frame luminance next to the beat phase this frame was drawn with
             cb.waitUntilCompleted()
-            let tex = drawable.texture, w = tex.width, h = tex.height
+            let tex = frameTex, w = tex.width, h = tex.height
             var px = [UInt8](repeating: 0, count: w * 4)
             var sum = 0.0, n = 0.0
             for y in stride(from: 0, to: h, by: 24) {
@@ -402,16 +414,21 @@ final class Renderer: NSObject, MTKViewDelegate {
                                s.bpm, s.confidence, e, d.look, d.beamProg, d.laserProg, d.build, d.drop, fade, s.source, s.droppedGaps)
         if hudVisible && Int(elapsed * 4) != Int((elapsed - Double(dt)) * 4) {
             let m = metrics.summary(recent: 600)
-            let showName = mode == .show ? "SHOW → " + (transition != nil ? "transition to " : "") + showScene.title + (showScene == .visuals ? " " + VisualsRenderer.presetNames[visuals?.preset ?? 0] : "") : ""
+            let showName = mode == .show ? "SHOW → " + (transition != nil ? "transition to " : "") + showScene.title + (showScene == .visuals ? " " + VisualsRenderer.presetName(visuals?.preset ?? 0) : "") : ""
             let milkName = "MILKDROP: " + (milk?.ready == true ? (milk?.currentName ?? "") + (milk?.director.locked == true ? " (locked)" : "") : milk?.lib == nil ? "engine missing" : "no presets")
-            let modeName = mode == .milkdrop ? milkName : mode == .show ? showName + (showScene == .milkdrop ? " " + (milk?.currentName ?? "") : "") : mode == .aurora ? "AURORA" + (camera?.running == true ? " · camera on (\(camera?.hands.count ?? 0) hands)" : " · drag the mouse, C = camera") : visualsMode ? "VISUALS: " + VisualsRenderer.presetNames[(visuals?.preset ?? 0) % VisualsRenderer.count] + ((visuals?.autoCycle ?? true) ? " (auto)" : "") : "STAGE"
-            onHUD?(modeName + "  ·  " + String(format: "%@  ·  %.0f BPM  conf %.0f%%  ·  %.0f fps  p95 %.1f ms  ·  latency p50 %.0f ms%@",
-                          s.playing ? "LIVE" : (fade > 0.05 ? "LIVE (quiet)" : "WAITING FOR MUSIC"),
-                          s.bpm, s.confidence * 100, m.fps, m.frameP95 * 1000, m.latP50 * 1000,
+            let modeName = mode == .milkdrop ? milkName : mode == .show ? showName + (showScene == .milkdrop ? " " + (milk?.currentName ?? "") : "") : mode == .aurora ? "AURORA" + (camera?.running == true ? " · camera on (\(camera?.hands.count ?? 0) hands)" : " · drag the mouse, C = camera") : visualsMode ? "VISUALS: " + VisualsRenderer.presetName(visuals?.preset ?? 0) + ((visuals?.autoCycle ?? true) ? " (auto)" : "") : "STAGE"
+            let fpsText: String = Self.hudNumber(m.fps, "%.0f"), p95Text: String = Self.hudNumber(m.frameP95 * 1000, "%.1f")
+            let latText: String = Self.hudNumber(m.latP50 * 1000, "%.0f")
+            let liveText: String = s.playing ? "LIVE" : (fade > 0.05 ? "LIVE (quiet)" : "WAITING FOR MUSIC")
+            onHUD?(modeName + "  ·  " + String(format: "%@  ·  %.0f BPM  conf %.0f%%  ·  %@ fps  p95 %@ ms  ·  latency p50 %@ ms%@",
+                          liveText, s.bpm, s.confidence * 100, fpsText, p95Text, latText,
                           strobeOverride ? "  ·  ⚠️ STROBE LIMIT OFF" : (strobeEnabled ? "" : "  ·  strobe off"))
                    + "  ·  \(intensity.title) (I)  ·  beat \(Int(beatIdx) % 4 + 1)/4  ·  " + syncInfo)
         }
     }
+
+    /// HUD number, or "–" while there is nothing to measure yet (no kicks heard: the latency p50 is NaN).
+    static func hudNumber(_ v: Double, _ fmt: String) -> String { v.isFinite ? String(format: fmt, v) : "–" }
 
     /// What is on screen right now, for the smoothness probe's log.
     private func probeMeta(elapsed: Double, dt: Float, phase: Double, locked: Bool, kick: Float, d: ShowDirector.Output) -> SmoothProbe.Meta {
@@ -557,7 +574,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             let tag = Self.transitionNames[type].replacingOccurrences(of: " ", with: "_")
             for k in 0...8 { namedSnaps.append((el + dur * Double(k) / 7 - dur / 7, String(format: "tr_%@_%d_%d.png", tag, n, k))) }
         }
-        metrics.event("show:\(showScene.title)->\(to.title) [\(Self.transitionNames[type]) \(Int(beats))b]" + (to == .visuals ? " " + VisualsRenderer.presetNames[visuals?.preset ?? 0] + " pal\(visuals?.paletteIndex ?? 0)" : to == .aurora ? " sym\(aurora?.symmetry ?? 0)" : ""), at: ctx.now)
+        metrics.event("show:\(showScene.title)->\(to.title) [\(Self.transitionNames[type]) \(Int(beats))b]" + (to == .visuals ? " " + VisualsRenderer.presetName(visuals?.preset ?? 0) + " pal\(visuals?.paletteIndex ?? 0)" : to == .aurora ? " sym\(aurora?.symmetry ?? 0)" : ""), at: ctx.now)
         showScene = to
         sceneBeats = 0
         lastTransitionType = type
@@ -609,6 +626,18 @@ final class Renderer: NSObject, MTKViewDelegate {
         let beats: Double = intensity == .wild && energy > 0.7 ? [1, 2, 2][srand(3)] : [4, 4, 8][srand(3)]
         upcoming = nil; upcomingForDrop = false
         startTransition(to: next, type: type, beats: beats, at: Double(bar * 4), ctx: ctx)
+    }
+
+    /// Set while the main window is covered and Syphon is publishing: frames go to `headless`, not to a drawable.
+    var renderOffscreen = false
+    private var headless: MTLTexture?
+    private func headlessTarget(_ size: CGSize) -> MTLTexture? {
+        let w = max(16, Int(size.width)), h = max(16, Int(size.height))
+        if let t = headless, t.width == w, t.height == h { return t }
+        let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: w, height: h, mipmapped: false)
+        d.usage = [.renderTarget, .shaderRead]; d.storageMode = device.hasUnifiedMemory ? .shared : .managed   // snapshots read it back
+        headless = device.makeTexture(descriptor: d)
+        return headless
     }
 
     private func ensureOffscreen(_ size: CGSize) {
@@ -723,64 +752,5 @@ final class Renderer: NSObject, MTKViewDelegate {
         let rep = NSBitmapImageRep(cgImage: img)
         try? FileManager.default.createDirectory(at: snapDir, withIntermediateDirectories: true)
         try? rep.representation(using: .png, properties: [:])?.write(to: snapDir.appendingPathComponent(name))
-    }
-}
-
-/// Frame / GPU / latency statistics, dumped as JSON for acceptance checks.
-final class Metrics: @unchecked Sendable {
-    private let lock = NSLock()
-    private var intervals: [Double] = []
-    private var gpuTimes: [Double] = []
-    private var latencies: [Double] = []
-    private var flashes: [Double] = []
-    var firstReaction: Double?
-    var state = ""
-    var sync = ""
-    let started = Date()
-
-    func frame(interval: Double) { lock.lock(); intervals.append(interval); if intervals.count > 200_000 { intervals.removeFirst(100_000) }; lock.unlock() }
-    func gpu(_ t: Double) { lock.lock(); gpuTimes.append(t); if gpuTimes.count > 200_000 { gpuTimes.removeFirst(100_000) }; lock.unlock() }
-    func latency(_ t: Double) { lock.lock(); if t > 0 && t < 1 { latencies.append(t) }; lock.unlock() }
-    private var presents: [Double] = []
-    func present(_ t: Double) { lock.lock(); presents.append(t); if presents.count > 100_000 { presents.removeFirst(50_000) }; lock.unlock() }
-    func presentP50() -> Double { lock.lock(); defer { lock.unlock() }; let a = presents.sorted(); return a.isEmpty ? .nan : a[a.count / 2] }
-    private var events: [[String: Any]] = []
-    func event(_ name: String, at t: Double) { lock.lock(); events.append(["t": t - CACurrentMediaTime() + Date().timeIntervalSince(started), "event": name]); lock.unlock() }
-    func flash(at t: Double) { lock.lock(); flashes.append(t); lock.unlock() }
-
-    struct Summary { var fps: Double; var frameP50: Double; var frameP95: Double; var frameP99: Double; var gpuP95: Double; var latP50: Double; var latP95: Double; var maxFlashesPerSec: Int; var frames: Int; var latN: Int }
-
-    func summary(recent: Int? = nil) -> Summary {
-        lock.lock(); defer { lock.unlock() }
-        let intervals = recent.map { Array(self.intervals.suffix($0)) } ?? self.intervals
-        let gpuTimes = recent.map { Array(self.gpuTimes.suffix($0)) } ?? self.gpuTimes
-        let latencies = recent.map { Array(self.latencies.suffix($0)) } ?? self.latencies
-        func pct(_ a: [Double], _ q: Double) -> Double { a.isEmpty ? .nan : a.sorted()[min(a.count - 1, Int(Double(a.count) * q))] }
-        let recent = Array(intervals.suffix(120))
-        let fps = recent.isEmpty ? 0 : Double(recent.count) / recent.reduce(0, +)
-        let iv = Array(intervals.dropFirst(30))
-        var maxF = 0
-        for (i, f) in flashes.enumerated() { maxF = max(maxF, flashes[i...].prefix { $0 - f < 1.0 }.count) }
-        return Summary(fps: fps, frameP50: pct(iv, 0.5), frameP95: pct(iv, 0.95), frameP99: pct(iv, 0.99),
-                       gpuP95: pct(gpuTimes, 0.95), latP50: pct(latencies, 0.5), latP95: pct(latencies, 0.95),
-                       maxFlashesPerSec: maxF, frames: intervals.count, latN: latencies.count)
-    }
-
-    func dump(to url: URL) {
-        let s = summary()
-        func j(_ v: Double) -> Any { v.isFinite ? v : NSNull() }
-        let d: [String: Any] = [
-            "elapsed_s": Date().timeIntervalSince(started), "frames": s.frames, "fps_recent": j(s.fps),
-            "frame_interval_ms": ["p50": j(s.frameP50 * 1000), "p95": j(s.frameP95 * 1000), "p99": j(s.frameP99 * 1000)],
-            "gpu_ms_p95": j(s.gpuP95 * 1000),
-            "audio_capture_to_photon_ms": ["p50": j(s.latP50 * 1000), "p95": j(s.latP95 * 1000), "n": s.latN],
-            "first_reaction_after_sound_ms": firstReaction.map { $0 * 1000 } ?? NSNull(),
-            "max_strobe_flashes_in_1s": s.maxFlashesPerSec,
-            "display": r_displayInfo,
-            "sync": sync,
-            "draw_to_photon_ms_p50": j(presentP50() * 1000),
-            "events": { lock.lock(); defer { lock.unlock() }; return events }(), "state": state,
-        ]
-        if let data = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: url) }
     }
 }

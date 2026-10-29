@@ -26,6 +26,7 @@ final class VJRig: NSObject, NSMenuDelegate {
     private var hudState = 0                 // 0 = status line only (launch), 1 = Control HUD + line, 2 = nothing
     private var syphonItem: NSMenuItem?
     private var syphonFrameCost: String = ""
+    private var coverWindow: NSWindow?
 
     // MARK: setup
 
@@ -187,6 +188,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         } else {
             out.syphon?.stop(); out.syphon = nil; log("syphon: stopped")
         }
+        app?.updateRenderDriver()
     }
 
     func sendToScreen(_ index: Int) {
@@ -197,6 +199,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         guard let o = OutputWindow(screen: s, renderer: r, mainView: app.view, sameScreenAsControls: same) else { return }
         outputWindow = o
         o.show(output: out)
+        app.updateRenderDriver()                      // the output view drives rendering now
         log("output: \(s.localizedName) \(Int(o.view.drawableSize.width))x\(Int(o.view.drawableSize.height)) @ \(o.targetFPS) fps (screen max \(s.maximumFramesPerSecond) Hz)" + (same ? ", same screen as the controls" : ""))
         app.window.makeKeyAndOrderFront(nil)
     }
@@ -206,6 +209,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         o.close(output: out)
         outputWindow = nil
         log("output: closed (\(reason)); main window renders again")
+        app?.updateRenderDriver()
         app?.screenChanged(Notification(name: NSWindow.didChangeScreenNotification))
     }
 
@@ -250,7 +254,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         default: return
         }
         if t.continuous && !t.pressed && !t.released && logURL == nil { return }   // a turning knob would flood the metrics events
-        let v = r.mode == .milkdrop ? "MilkDrop " + (r.milk?.currentName ?? "-") : r.visuals.map { VisualsRenderer.presetNames[$0.preset % VisualsRenderer.count] } ?? "-"
+        let v = r.mode == .milkdrop ? "MilkDrop " + (r.milk?.currentName ?? "-") : r.visuals.map { VisualsRenderer.presetName($0.preset) } ?? "-"
         log(String(format: "midi: %@ value %.2f%@ -> mode %@ · preset %@ · intensity %@ · brightness %.2f · blackout %@ · strobe %@",
                    a.rawValue, t.value, t.pressed ? " press" : (t.released ? " release" : ""), r.mode.title, v, r.intensity.title,
                    output?.brightness ?? 1, r.blackout ? "on" : "off", r.manualStrobe ? "held" : "off"))
@@ -311,7 +315,7 @@ final class VJRig: NSObject, NSMenuDelegate {
     private func updateHUD() {
         guard let app, let r = renderer, !hudView.isHidden else { return }
         let s = app.audio.snapshot()
-        let preset = VisualsRenderer.presetNames[(r.visuals?.preset ?? 0) % VisualsRenderer.count] + ((r.visuals?.autoCycle ?? false) ? " (auto)" : "")
+        let preset = VisualsRenderer.presetName(r.visuals?.preset ?? 0) + ((r.visuals?.autoCycle ?? false) ? " (auto)" : "")
         let modeLine: String
         switch r.mode {
         case .show: modeLine = "SHOW → " + r.showScene.title
@@ -407,7 +411,7 @@ final class VJRig: NSObject, NSMenuDelegate {
         M           system audio <-> input
 
         MILKDROP
-        P, Cmd P    preset browser (any mode)
+        P, Cmd P    preset browser (P again closes)
         ]  [  R     next / previous / random
         L           lock preset (no auto changes)
         Shift F     favourite
@@ -456,6 +460,15 @@ final class VJRig: NSObject, NSMenuDelegate {
             if let o = outputWindow { screensChanged(NSScreen.screens.filter { OutputWindow.displayID($0) != o.displayID }) }
         case "brightness": output?.brightness = Float(val) ?? 1
         case "shot": app?.lyrics?.describeNow("shot " + val); captureWindow(name: val, dir: snapDir)
+        case "cover":          // an opaque window over the main window (occlusion test, this app only)
+            if let w = app?.window {
+                let c = NSWindow(contentRect: w.frame.insetBy(dx: -40, dy: -40), styleMask: [.borderless], backing: .buffered, defer: false)
+                c.backgroundColor = .darkGray; c.isOpaque = true; c.isReleasedWhenClosed = false
+                c.orderFront(nil); coverWindow = c
+            }
+        case "uncover": coverWindow?.orderOut(nil); coverWindow = nil
+        case "capturestop": app?.audio.debugSimulateSystemStop()            // ScreenCaptureKit stops the stream on its own
+        case "wake": NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.didWakeNotification, object: NSWorkspace.shared)   // this app only
         case "card": app?.lyrics?.wake()                 // as if the mouse moved: show the player card
         case "cardplay": app?.lyrics?.wake(); app?.lyrics?.pressPlayPause()
         case "lyricsnow": app?.lyrics?.describeNow(val)

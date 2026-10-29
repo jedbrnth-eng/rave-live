@@ -139,21 +139,59 @@ final class NowPlayingSource {
         }
     }
 
-    /// Stops the stream and kills the child (quit, or lyrics and card both switched off).
-    func stop() {
+    /// Stops the stream and kills the child (quit, or lyrics and card both switched off). The adapter can miss a
+    /// SIGTERM that lands in its first milliseconds (quick Y/N toggles left orphans that ran for minutes), so a child
+    /// still alive after `grace` gets SIGKILL. `waitForExit` (quit) blocks until it is gone instead of scheduling that.
+    func stop(waitForExit: Bool = false) {
         queue.sync { [self] in
             wanted = false; generation += 1
-            if let p = process, p.isRunning { p.terminate() }
+            if let p = process { Self.terminate(p, grace: 0.3, on: waitForExit ? nil : queue) }
             process = nil
             if adapter != nil { status = .off }
         }
+    }
+
+    /// SIGTERM now, SIGKILL after `grace` if the child is still running. The closure keeps `p` (and so its pid, which
+    /// Foundation hasn't reaped yet) alive until then. `queue` nil = wait here.
+    static func terminate(_ p: Process, grace: Double, on queue: DispatchQueue?) {
+        guard p.isRunning else { return }
+        let pid = p.processIdentifier
+        p.terminate()
+        let finish = { if p.isRunning { kill(pid, SIGKILL) } }
+        if let q = queue { q.asyncAfter(deadline: .now() + grace, execute: finish); return }
+        let end = Date().addingTimeInterval(grace)
+        while p.isRunning && Date() < end { usleep(10_000) }
+        finish()
+    }
+
+    /// Parent-death watch, run by /usr/bin/perl in front of the adapter. It forks a tiny watcher, then `exec`s the
+    /// adapter in place (same pid, so `Process` still tracks and signals the adapter itself, and the pipes go to it).
+    /// The watcher checks twice a second: adapter gone -> exit; RAVE LIVE gone (quit, crash, force quit) -> SIGTERM the
+    /// adapter, then SIGKILL. Without it a crashed app left the adapter running with PPID 1.
+    static let watchdog = #"""
+    my $app = getppid(); my $me = $$;
+    my $w = fork();
+    if (defined $w && $w == 0) {
+      open(STDIN, '<', '/dev/null'); open(STDOUT, '>', '/dev/null'); open(STDERR, '>', '/dev/null');
+      while (1) {
+        select(undef, undef, undef, 0.5);
+        exit 0 if getppid() != $me;
+        if (!kill(0, $app)) { kill('TERM', $me); select(undef, undef, undef, 0.3); kill('KILL', $me); exit 0; }
+      }
+    }
+    exec('/usr/bin/perl', @ARGV) or exit 127;
+    """#
+
+    /// `/usr/bin/perl` arguments that start the streaming adapter under the watchdog.
+    static func launchArguments(_ a: Adapter) -> [String] {
+        ["-e", watchdog, "--", a.script.path, a.framework.path, "stream", "--micros", "--debounce=50"]
     }
 
     private func launch() {
         guard wanted, process == nil, let a = adapter else { return }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-        p.arguments = [a.script.path, a.framework.path, "stream", "--micros", "--debounce=50"]
+        p.arguments = Self.launchArguments(a)
         let out = Pipe(), err = Pipe()
         p.standardOutput = out; p.standardError = err
         buffer.removeAll(); stream = NowPlayingStream()

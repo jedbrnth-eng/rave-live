@@ -244,11 +244,12 @@ final class LRCLIBClient: @unchecked Sendable {
                 q.append(("duration", String(Int(d.rounded()))))
                 switch await call("/api/get", q) {
                 case .ok(let data):
-                    if let r = try? JSONDecoder().decode(LRCLIBRecord.self, from: data) {
-                        if r.instrumental { return Lookup(result: .instrumental, cacheable: true) }
-                        if r.hasSynced { return Lookup(result: .synced(r), cacheable: true) }
-                        sawPlain = sawPlain || r.hasPlain
-                    }
+                    // A 200 that isn't a record (captive portal or proxy login page, truncated body) says nothing about
+                    // the song: treat it like a server error so the answer isn't cached.
+                    guard let r = try? JSONDecoder().decode(LRCLIBRecord.self, from: data) else { getFailed = true; continue }
+                    if r.instrumental { return Lookup(result: .instrumental, cacheable: true) }
+                    if r.hasSynced { return Lookup(result: .synced(r), cacheable: true) }
+                    sawPlain = sawPlain || r.hasPlain
                 case .network: return Lookup(result: .offline, cacheable: false)
                 case .server: getFailed = true
                 case .missing: break
@@ -259,14 +260,18 @@ final class LRCLIBClient: @unchecked Sendable {
         let cacheable = !getFailed
         // Search with the lenient title, then the strict one if the lenient search found nothing synced.
         var reply = await call("/api/search", [("track_name", titles[0]), ("artist_name", TrackTitle.primaryArtist(a))])
+        if case .ok(let d) = reply, Self.decodeList(d) == nil { reply = .server }        // HTML / truncated: not an answer
         if titles.count > 1, !Task.isCancelled {
             var hit = false
-            if case .ok(let d) = reply { hit = Self.pickBest((try? JSONDecoder().decode([LRCLIBRecord].self, from: d)) ?? [], duration: duration) != nil }
-            if !hit, case .ok = reply { reply = await call("/api/search", [("track_name", titles[1]), ("artist_name", TrackTitle.primaryArtist(a))]) }
+            if case .ok(let d) = reply { hit = Self.pickBest(Self.decodeList(d) ?? [], duration: duration) != nil }
+            if !hit, case .ok = reply {
+                reply = await call("/api/search", [("track_name", titles[1]), ("artist_name", TrackTitle.primaryArtist(a))])
+                if case .ok(let d) = reply, Self.decodeList(d) == nil { reply = .server }
+            }
         }
         switch reply {
         case .ok(let data):
-            let list = (try? JSONDecoder().decode([LRCLIBRecord].self, from: data)) ?? []
+            let list = Self.decodeList(data) ?? []
             if let best = Self.pickBest(list, duration: duration) { return Lookup(result: .synced(best), cacheable: cacheable) }
             if list.contains(where: \.instrumental) && !list.contains(where: \.hasPlain) { return Lookup(result: .instrumental, cacheable: cacheable) }
             return Lookup(result: (sawPlain || list.contains(where: \.hasPlain)) ? .plainOnly : .notFound, cacheable: cacheable)
@@ -274,6 +279,9 @@ final class LRCLIBClient: @unchecked Sendable {
         case .server, .network: return Lookup(result: sawPlain ? .plainOnly : .offline, cacheable: false)
         }
     }
+
+    /// A search body, or nil when it isn't a JSON array of records (only a real `[]` means "nothing found").
+    static func decodeList(_ d: Data) -> [LRCLIBRecord]? { try? JSONDecoder().decode([LRCLIBRecord].self, from: d) }
 
     /// Synced, non-instrumental result closest in length to the playing track (first one if the length is unknown).
     static func pickBest(_ list: [LRCLIBRecord], duration: Double?) -> LRCLIBRecord? {
