@@ -32,8 +32,11 @@ struct LineRaster {
         var maxWidth: CGFloat
         var scale: CGFloat
         var key: String
+        /// Made on the main thread (AppKit font lookup); the raster thread only uses Core Text on it.
+        var font: CTFont
     }
 
+    /// Main thread only (NSFont / font descriptors).
     static func font(_ s: LyricStyle, size: CGFloat) -> CTFont {
         func named(_ n: String) -> CTFont? {
             let f = CTFontCreateWithName(n as CFString, size, nil)
@@ -58,25 +61,30 @@ struct LineRaster {
             return (c(1 - 0.8 * f, 0.25 + 0.65 * f, 0.85 + 0.15 * f), c(1 - 0.8 * f, 0.2 + 0.6 * f, 1))
         case .pop: return (c(1, 0.88, 0.18), c(1, 0.55, 0.1))
         case .spectrum:                                           // low band warm → high band cool, like an EQ
-            let hue = 0.02 + 0.62 * f
-            let col = NSColor(calibratedHue: hue, saturation: 0.85, brightness: 1, alpha: 1).usingColorSpace(.sRGB)!
-            return (col.cgColor, col.cgColor)
+            let (r, g, b) = hsv(0.02 + 0.62 * f, 0.85, 1)
+            return (c(r, g, b), c(r, g, b))
         case .wave: return (c(1, 1, 1), c(0.35, 1, 0.75))
         case .clean, .auto: return (c(1, 1, 1), c(0.65, 0.8, 1))
         }
+    }
+
+    static func hsv(_ h: CGFloat, _ s: CGFloat, _ v: CGFloat) -> (CGFloat, CGFloat, CGFloat) {
+        let i = Int(h * 6) % 6, f = h * 6 - floor(h * 6)
+        let p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s)
+        switch i { case 0: return (v, t, p); case 1: return (q, v, p); case 2: return (p, v, t); case 3: return (p, q, v); case 4: return (t, p, v); default: return (v, p, q) }
     }
 
     /// Lays out and draws. Thread-safe (Core Text + bitmap contexts only).
     static func make(_ sp: Spec) -> LineRaster {
         let words = sp.style.uppercase ? sp.words.map { $0.uppercased() } : sp.words
         var fs = sp.fontSize
-        var font = Self.font(sp.style, size: fs)
+        var font = CTFontCreateCopyWithAttributes(sp.font, fs, nil, nil)
         func measure(_ f: CTFont) -> [CGFloat] { words.map { CTLineGetTypographicBounds(Self.line($0, f), nil, nil, nil) }.map { CGFloat($0) } }
         var widths = measure(font)
         var lay = LyricLayout.layout(widths: widths, space: fs * 0.28, maxWidth: sp.maxWidth, rowHeight: fs * 1.22)
         if lay.size.width > sp.maxWidth, lay.size.width > 0 {     // one long word or a crowded line: shrink to fit
             fs *= max(0.5, sp.maxWidth / lay.size.width)
-            font = Self.font(sp.style, size: fs)
+            font = CTFontCreateCopyWithAttributes(sp.font, fs, nil, nil)
             widths = measure(font)
             lay = LyricLayout.layout(widths: widths, space: fs * 0.28, maxWidth: sp.maxWidth, rowHeight: fs * 1.22)
         }
@@ -231,7 +239,7 @@ final class LyricsStageView: NSView {
     }
     private func spec(_ words: [String], _ style: LyricStyle, fontScale: CGFloat = 1) -> LineRaster.Spec {
         LineRaster.Spec(words: words, style: style, fontSize: fontSize * fontScale, maxWidth: maxTextWidth, scale: contentScale,
-                        key: key(words, style) + "|\(fontScale)")
+                        key: key(words, style) + "|\(fontScale)", font: LineRaster.font(style, size: fontSize * fontScale))
     }
 
     /// Rasterise in the background (no main-thread text work at a line change); `done` runs on the main queue.
@@ -326,7 +334,8 @@ final class LyricsStageView: NSView {
         nextLayer.contents = nil
         let show = !n.isEmpty && (style == .clean || style == .neon)
         guard show else { return }
-        let sp = LineRaster.Spec(words: [n], style: .clean, fontSize: fontSize * 0.5, maxWidth: .greatestFiniteMagnitude, scale: contentScale, key: "next|\(Int(fontSize))|\(contentScale)|" + n)
+        let sp = LineRaster.Spec(words: [n], style: .clean, fontSize: fontSize * 0.5, maxWidth: .greatestFiniteMagnitude, scale: contentScale,
+                                 key: "next|\(Int(fontSize))|\(contentScale)|" + n, font: LineRaster.font(.clean, size: fontSize * 0.5))
         nextRasterKey = sp.key
         raster(sp) { [weak self] r in
             guard let self, self.nextRasterKey == sp.key, let u = r.units.first else { return }

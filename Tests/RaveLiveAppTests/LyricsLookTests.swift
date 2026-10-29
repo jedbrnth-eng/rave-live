@@ -36,7 +36,7 @@ final class LyricsLookTests: XCTestCase {
 
     /// Each glyph is white with a dark outline right next to it (readable on white frames), and nothing dark far away.
     func testGlyphsHaveATightDarkOutline() {
-        let r = LineRaster.make(.init(words: ["O"], style: .clean, fontSize: 80, maxWidth: 2000, scale: 1, key: "t"))
+        let r = LineRaster.make(.init(words: ["O"], style: .clean, fontSize: 80, maxWidth: 2000, scale: 1, key: "t", font: LineRaster.font(.clean, size: 80)))
         guard let img = r.units.first?.images[LineRaster.Kind.base.rawValue] else { return XCTFail("no image") }
         let w = img.width, h = img.height
         var px = [UInt8](repeating: 0, count: w * h * 4)
@@ -53,6 +53,13 @@ final class LyricsLookTests: XCTestCase {
         XCTAssertGreaterThan(white, 200, "white fill")
         XCTAssertGreaterThan(darkOpaque, 50, "dark outline/shadow next to the glyph")
         XCTAssertLessThan(cornerAlpha, 8, "nothing drawn out at the corners: no box")
+    }
+
+    func testSpectrumColoursRunWarmToCool() {
+        let lo = LineRaster.hsv(0.02, 0.85, 1), hi = LineRaster.hsv(0.64, 0.85, 1)
+        XCTAssertGreaterThan(lo.0, lo.2, "low band is red-ish")
+        XCTAssertGreaterThan(hi.2, hi.0, "high band is blue-ish")
+        XCTAssertEqual(LineRaster.hsv(0, 0, 1).0, 1)
     }
 
     /// Line change: the old line goes (120 ms) before the new one appears, so two lines never overlap.
