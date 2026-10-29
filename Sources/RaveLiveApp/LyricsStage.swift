@@ -192,7 +192,10 @@ final class LyricsStageView: NSView {
     private var nextRasterKey = ""
     private let queue = DispatchQueue(label: "ravelive.lyrics.raster", qos: .userInitiated)
     private var cache: [String: LineRaster] = [:]
-    private var pending: Set<String> = []
+    /// Raster jobs in flight: every caller waiting on a key gets the result (a prefetch and the line it becomes
+    /// share one job). `gen` drops jobs started before a restyle, so they can't feed or clear the new style's work.
+    private var pending: [String: (gen: Int, waiters: [(LineRaster) -> Void])] = [:]
+    private var rasterGen = 0
     private var glowLevel = 0.0, shadeLevel = 0.0, beatLevel = 0.0
     private var bandLevels = [Double](repeating: 0, count: 5)
     private var bassLevel = 0.0, kickLevel = 0.0
@@ -247,17 +250,21 @@ final class LyricsStageView: NSView {
     /// Rasterise in the background (no main-thread text work at a line change); `done` runs on the main queue.
     private func raster(_ sp: LineRaster.Spec, done: ((LineRaster) -> Void)? = nil) {
         if let r = cache[sp.key] { done?(r); return }
-        guard !pending.contains(sp.key) else { return }
-        pending.insert(sp.key)
+        if pending[sp.key] != nil {                      // already being drawn: wait for that job
+            if let done { pending[sp.key]?.waiters.append(done) }
+            return
+        }
+        let gen = rasterGen
+        pending[sp.key] = (gen, done.map { [$0] } ?? [])
         queue.async { [weak self] in
             let r = LineRaster.make(sp)
             DispatchQueue.main.async {
-                guard let self else { return }
-                self.pending.remove(sp.key)
+                guard let self, let job = self.pending[sp.key], job.gen == gen else { return }   // restyled meanwhile
+                self.pending[sp.key] = nil
                 self.rasterCount += 1
                 if self.cache.count > 24 { self.cache.removeAll() }
                 self.cache[sp.key] = r
-                done?(r)
+                job.waiters.forEach { $0(r) }
             }
         }
     }
@@ -352,7 +359,7 @@ final class LyricsStageView: NSView {
     }
 
     private func restyle() {
-        cache.removeAll(); pending.removeAll()
+        cache.removeAll(); pending.removeAll(); rasterGen += 1
         let c = current
         current = nil
         leaving.forEach { $0.root.removeFromSuperlayer() }; leaving = []
