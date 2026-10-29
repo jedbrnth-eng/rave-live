@@ -177,6 +177,8 @@ In MILKDROP mode the MIDI targets *Preset next / previous* step MilkDrop presets
 `--vjscript "t:cmd,…"` for scripted UI checks (`hud`, `cheat`, `learn`, `output=N`, `stopoutput`, `unplug` (simulated),
 `syphon`, `brightness=0.5`, `shot=NAME` main window incl. overlays, `outshot=NAME` output frame, `learnshot=NAME`,
 `card` show the player card, `cardplay` click its play/pause button, `lyricsnow=TAG` log position and lyric line).
+Env `RAVE_MTKVIEW_TIMER=1` draws from MTKView's own timer instead of the display link of the screen the window is on
+(macOS 14+), for A/B frame-pacing tests.
 
 Lyrics flags: `--lyrics` / `--no-lyrics`, `--player-card` / `--no-player-card`, `--lyrics-offset MS`, `--lyrics-size 0-2`,
 `--lyrics-log PATH`. Env: `RAVE_LRCLIB_HOST` (another LRCLIB server, or a bad host to test the offline state),

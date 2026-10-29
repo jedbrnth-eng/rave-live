@@ -38,6 +38,7 @@
 - **Hotel / festival Wi-Fi login pages no longer stick "no synced lyrics" to a song for 3 days**: an answer that isn't LRCLIB data counts as offline and isn't cached. Offline retries back off (30 s, 1, 2, 4 … 10 min).
 - **Lyrics use less CPU**: the beat breath scales the line on the GPU instead of rebuilding the text 30 times a second.
 - **Syphon keeps the full frame rate while the main window is covered** (it dropped to about 60 fps on a 120 Hz Mac).
+- **Even frame pacing on every screen** (macOS 14+): the window and Send to Display now draw in step with the screen they are on. On a MacBook whose main display was a 144 Hz monitor, the window on the built-in 120 Hz screen drew at 72 fps instead of 120, so motion stuttered (a frame held for one refresh, then two); Send to Display on that screen did the same.
 - **First launch after an install or update shows the window at once** and prepares the visuals in the background (the window used to take several seconds, up to ~15 s under load, to appear).
 - `⌘,` with Settings already open no longer stalls the visuals; `P` closes the MilkDrop browser again and no longer takes the keyboard; MILKDROP keys don't refresh a hidden browser.
 - The HUD shows "–" instead of "nan ms" before any latency is measured.
