@@ -86,14 +86,30 @@ and a small player card bottom left with artwork, title, artist, the source app,
   (`~/Library/Application Support/RAVE LIVE/Lyrics`).
 - **Remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions get no lyrics** (and are never looked up): original-song timing
   doesn't fit them and wrongly timed lyrics look broken. Lyrics also stay off when the track length is more than 3 s
-  away from the LRCLIB match. The card then says "lyrics off: remix/edit" (or "lyrics off: other version" for a length mismatch).
+  away from the LRCLIB match.
+- **You always see why there are no lyrics.** A small line where the lyrics go (for a few seconds after each change, and
+  whenever the mouse moves) and the card say: "Lyrics off (Y)", "Looking up lyrics…", "No synced lyrics found",
+  "Lyrics server busy, retrying", "Lyrics offline, retrying", "Skipped: remix/edit", "Skipped: video length 4:50 doesn't
+  match the song (2:41)", "Skipped: long video/mix". Every "Skipped" line ends with "Press L to sync anyway".
+- **YouTube and other videos in a browser** (Safari, Chrome, Zen, Arc, Brave, Firefox, Edge…): the title is cleaned
+  ("(Official Video)", "[Official Music Video]", "(Lyrics)", "ft. …", "| …" tails), "Artist - Title" is split, and the
+  channel ("Artist - Topic", "ArtistVEVO") is the artist otherwise. A music video up to 90 s longer than the song syncs
+  with that much intro assumed; anything over twice the song's length is treated as a long video or mix and skipped.
+- **L** syncs a skipped song anyway (from the start of the video) and **L** again undoes it; in MILKDROP, where L locks
+  the preset, use **Shift-L**. **Shift -** / **Shift =** move the lyrics 1 s for the current song (not saved).
+- Full HUD (**H** twice) adds a "Lyrics" row: source app, the title and artist that were looked up, the two lengths
+  compared and the decision. Tell us that line when lyrics look wrong.
+- When lrclib.net is overloaded (503) or rate-limits (429), RAVE LIVE backs off (honouring `Retry-After`, with jitter),
+  tries `/api/search` when `/api/get` fails, and retries the song after 10 s, 20 s, 40 s … up to 10 min.
 - The current line sits large and low in the middle, the next line smaller below it; lines crossfade and breathe very
   gently on the beat (no flashing). Timing follows the audio output latency (Bluetooth, AirPlay); **-** / **=** move the
   lyrics 50 ms earlier / later, or use the Lyrics timing slider (±1000 ms). Size: Settings → Lyrics size.
 - The card hides a few seconds after the mouse stops moving; **N** turns it off. HUD off (clean picture) hides both.
 - Like the HUD, lyrics and the card are on the main window only, never on Syphon or the output display (a follow-up may
   add lyrics to the output).
-- Card notes: "lyrics offline" (no network, LRCLIB down, or a Wi-Fi login page; retried after 30 s, then less often, up to every 10 min), "instrumental", "no synced lyrics".
+- "Lyrics offline" means no network or a Wi-Fi login page (retried after 30 s, then less often, up to every 10 min).
+- There is no second lyrics source: we found no other synced-lyrics service that is free, needs no API key and allows
+  this use in its terms (the others need a key, or are unofficial scrapes of NetEase, QQ Music, Musixmatch or Spotify).
 - Now Playing is read by the bundled [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause)
   through `/usr/bin/perl`, because macOS only lets Apple-signed processes read it. Builds without it
   (`scripts/build_mediaremote_adapter.sh`) run as before and Settings explains why lyrics and the card are off.
@@ -130,6 +146,8 @@ and a small player card bottom left with artwork, title, artist, the source app,
 | Y | synced lyrics on/off |
 | N | Now Playing card on/off |
 | - / = | lyrics 50 ms earlier / later |
+| Shift - / Shift = | lyrics 1 s earlier / later for this song |
+| L | sync lyrics anyway / undo (Shift-L in MILKDROP) |
 
 In MILKDROP mode the MIDI targets *Preset next / previous* step MilkDrop presets and *Auto-cycle* toggles the preset lock.
 

@@ -346,6 +346,7 @@ final class VJRig: NSObject, NSMenuDelegate {
             ("Intensity", r.intensity.title + (flags.isEmpty ? "" : "  · " + flags.joined(separator: " · "))),
             ("Audio", (CommandLine.arguments.contains("--demo") ? "demo (synthetic)" : s.source) + " · " + (s.playing ? "LIVE" : "quiet")),
             ("Syphon", syphon), ("MIDI", midiLine), ("Output", outLine),
+            ("Lyrics", app.lyrics?.hudDebug ?? "-"),
         ]
         let text = "RAVE LIVE · CONTROL  (H hides, ? shortcuts)\n" + rows.map { $0.0.padding(toLength: 10, withPad: " ", startingAt: 0) + $0.1 }.joined(separator: "\n")
         hudView.setText(text, fontSize: 12)
@@ -396,6 +397,8 @@ final class VJRig: NSObject, NSMenuDelegate {
         Y           synced lyrics on/off
         N           player card on/off
         -  =        lyrics earlier / later 50 ms
+        Shift - =   lyrics 1 s (this video)
+        L           sync lyrics anyway / undo
         """,
         """
 
