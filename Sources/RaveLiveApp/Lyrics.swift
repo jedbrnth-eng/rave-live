@@ -19,10 +19,20 @@ enum LRC {
 
     /// Parses LRC text. Several timestamps on one line give one entry each, `[offset:±ms]` is applied
     /// (positive = lyrics sooner), timed blank lines are kept as "" (they clear the screen), anything else is skipped.
+    /// A real song's LRC is a few KB (enhanced LRC with word tags maybe 20 KB). Anything bigger is broken or hostile and is
+    /// cut here, so parsing it on the main thread can't stall the show for seconds.
+    static let maxBytes = 128 * 1024, maxLines = 2000
     static func parse(_ text: String) -> [LyricLine] {
         var out: [(Int, LyricLine)] = []
         var offsetMs = 0.0
+        var text = text
+        if text.utf8.count > maxBytes {                          // keep whole lines only
+            let head = text.utf8.prefix(maxBytes)
+            let cut = head.lastIndex(of: UInt8(ascii: "\n")) ?? head.endIndex
+            text = String(decoding: text.utf8[..<cut], as: UTF8.self)
+        }
         for raw in text.components(separatedBy: "\n") {
+            if out.count >= maxLines { break }
             var rest = Substring(raw.trimmingCharacters(in: CharacterSet(charactersIn: "\r")))
             var times: [Double] = []
             var sawOther = false
@@ -77,6 +87,7 @@ enum LRC {
         }
         for i in 1..<max(1, out.count) where out[i].start < out[i - 1].start { return nil }   // out-of-order tags: ignore them
         for i in 0..<out.count where i + 1 < out.count { out[i].end = out[i + 1].start }
+        if let last = out.last, last.end < last.start { return nil }                   // trailing tag goes backwards
         return out.isEmpty ? nil : out
     }
 
