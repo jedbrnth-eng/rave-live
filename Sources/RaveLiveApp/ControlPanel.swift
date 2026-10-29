@@ -395,6 +395,7 @@ final class VJRig: NSObject, NSMenuDelegate {
 
         LYRICS & NOW PLAYING
         Y           synced lyrics on/off
+        Shift-Y     next lyric style
         N           player card on/off
         -  =        lyrics earlier / later 50 ms
         Shift - =   lyrics 1 s (this video)
@@ -475,6 +476,15 @@ final class VJRig: NSObject, NSMenuDelegate {
         case "card": app?.lyrics?.wake()                 // as if the mouse moved: show the player card
         case "cardplay": app?.lyrics?.wake(); app?.lyrics?.pressPlayPause()
         case "lyricsnow": app?.lyrics?.describeNow(val)
+        case "rec":            // rec=name@seconds: half-size window frames at 15 fps (name_000.png …) for a GIF of the overlay
+            let p = val.split(separator: "@").map(String.init)
+            let secs = p.count > 1 ? Double(p[1]) ?? 3 : 3
+            let n = Int(secs * 15)
+            for i in 0..<n {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) / 15) { [weak self] in
+                    self?.captureWindow(name: String(format: "%@_%03d", p[0], i), dir: snapDir, scale: 0.5)
+                }
+            }
         case "lineshot":       // lineshot=name@0.1: a window shot this long after the next lyric line change (crossfade check)
             let p = val.split(separator: "@").map(String.init)
             let delay = p.count > 1 ? Double(p[1]) ?? 0.1 : 0.1
@@ -489,11 +499,12 @@ final class VJRig: NSObject, NSMenuDelegate {
     }
 
     /// Main window as the performer sees it: the latest frame plus the AppKit overlays drawn on top.
-    private func captureWindow(name: String, dir: URL) {
+    private static let recQueue = DispatchQueue(label: "ravelive.rec", qos: .utility)
+    private func captureWindow(name: String, dir: URL, scale wantScale: CGFloat? = nil) {
         guard let out = output else { return }
         out.onCapture = { [weak self] frame in
             guard let self, let cv = self.app?.window.contentView, let view = self.app?.view else { return }
-            let scale = self.app?.window.backingScaleFactor ?? 2
+            let scale = wantScale ?? self.app?.window.backingScaleFactor ?? 2
             let w = Int(cv.bounds.width * scale), h = Int(cv.bounds.height * scale)
             guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
@@ -507,9 +518,12 @@ final class VJRig: NSObject, NSMenuDelegate {
             }
             ctx.draw(frame, in: r)
             for sub in cv.subviews where sub !== view && !sub.isHidden {
+                if let st = sub as? LyricsStageView { if let img = st.snapshotImage(scale: scale) { ctx.draw(img, in: sub.frame) }; continue }
                 ctx.draw(Self.render(view: sub), in: sub.frame)
             }
-            if let img = ctx.makeImage() { Self.writePNG(img, to: dir.appendingPathComponent(name + ".png")) }
+            guard let img = ctx.makeImage() else { return }
+            let url = dir.appendingPathComponent(name + ".png")
+            if wantScale != nil { Self.recQueue.async { Self.writePNG(img, to: url) } } else { Self.writePNG(img, to: url) }
         }
     }
 

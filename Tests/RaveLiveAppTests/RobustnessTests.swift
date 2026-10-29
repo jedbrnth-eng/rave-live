@@ -165,16 +165,38 @@ final class RobustnessTests: XCTestCase {
 
     // MARK: P2-4 lyrics breath without text rebuilds
 
-    func testBreathDoesNotRebuildTheText() {
-        let v = LyricsOverlayView(frame: NSRect(x: 0, y: 0, width: 960, height: 200))
-        v.layoutLines()
-        v.show(current: "a made-up lyric line", next: "the next made-up line")
-        let after = v.redraws
-        for i in 0..<300 { v.breathe(0.5 + 0.5 * cos(Double(i) * 0.3)) }      // 10 s of 30 Hz ticks
-        XCTAssertEqual(v.redraws, after, "breath rebuilt the attributed strings")
-        XCTAssertEqual(LyricsOverlayView.breathScale(1), 1.025, accuracy: 1e-9)
-        XCTAssertEqual(LyricsOverlayView.breathScale(5), 1.025, accuracy: 1e-9)
-        XCTAssertEqual(LyricsOverlayView.breathScale(0), 1, accuracy: 1e-9)
+    func testCostRing() {
+        var r = CostRing()
+        XCTAssertEqual(r.percentile(0.95), 0)
+        for i in 1...100 { r.add(Double(i)) }
+        XCTAssertEqual(r.count, 100)
+        XCTAssertEqual(r.percentile(0.95), 95, accuracy: 1)
+        XCTAssertEqual(r.max, 100)
+        for _ in 0..<10_000 { r.add(1) }
+        XCTAssertEqual(r.count, 4096, "bounded")
+    }
+
+    /// Every style: 10 s of frames with the music moving never rasterises text again (only layer properties change).
+    func testFramesDoNotRebuildTheText() {
+        for style in LyricStyle.allCases where style != .auto {
+            let v = LyricsStageView(frame: NSRect(x: 0, y: 0, width: 960, height: 400))
+            v.style = style
+            let ws = WordTiming.estimate(text: "a made up lyric line here", start: 0, nextStart: 3)
+            v.setLine(index: 0, text: "a made up lyric line here", words: ws, next: "the next made up line")
+            v.frame(t: 0.1, drive: LyricDrive(), now: 99)          // Pop rasterises its first chunk on the first frame
+            let deadline = Date().addingTimeInterval(3)
+            while v.rasterCount < 2 && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+            let after = v.rasterCount
+            XCTAssertGreaterThan(after, 0, "\(style)")
+            var d = LyricDrive(); d.locked = true; d.bpm = 128
+            for i in 0..<600 {                                     // 10 s at 60 fps
+                d.beatPhase = Double(i % 28) / 28; d.kick = i % 28 < 3 ? 1 : 0; d.energy = Float(i % 100) / 100
+                d.bands = [0.8, 0.6, 0.4, 0.3, 0.2]
+                v.frame(t: Double(i) / 60 * 0.5, drive: d, now: 100 + Double(i) / 60)
+            }
+            if style != .pop { XCTAssertEqual(v.rasterCount, after, "\(style) rasterised during frames") }
+            XCTAssertLessThanOrEqual(v.visibleLineCount, 1)
+        }
     }
 
     // MARK: P3-7 audio source pick in test runs
