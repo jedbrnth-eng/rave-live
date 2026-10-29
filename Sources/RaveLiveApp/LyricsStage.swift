@@ -69,6 +69,7 @@ struct LineRaster {
     }
 
     static func hsv(_ h: CGFloat, _ s: CGFloat, _ v: CGFloat) -> (CGFloat, CGFloat, CGFloat) {
+        guard h.isFinite else { return (v, v, v) }                 // Int(nan) traps; no caller passes one today
         let i = Int(h * 6) % 6, f = h * 6 - floor(h * 6)
         let p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s)
         switch i { case 0: return (v, t, p); case 1: return (q, v, p); case 2: return (p, v, t); case 3: return (p, q, v); case 4: return (t, p, v); default: return (v, p, q) }
@@ -76,15 +77,29 @@ struct LineRaster {
 
     /// Lays out and draws. Thread-safe (Core Text + bitmap contexts only).
     static func make(_ sp: Spec) -> LineRaster {
-        let words = sp.style.uppercase ? sp.words.map { $0.uppercased() } : sp.words
+        var words = sp.style.uppercase ? sp.words.map { $0.uppercased() } : sp.words
         var fs = sp.fontSize
         var font = CTFontCreateCopyWithAttributes(sp.font, fs, nil, nil)
-        func measure(_ f: CTFont) -> [CGFloat] { words.map { CTLineGetTypographicBounds(Self.line($0, f), nil, nil, nil) }.map { CGFloat($0) } }
+        func width(_ w: String, _ f: CTFont) -> CGFloat { CGFloat(CTLineGetTypographicBounds(Self.line(w, f), nil, nil, nil)) }
+        func measure(_ f: CTFont) -> [CGFloat] { words.map { width($0, f) } }
         var widths = measure(font)
         var lay = LyricLayout.layout(widths: widths, space: fs * 0.28, maxWidth: sp.maxWidth, rowHeight: fs * 1.22)
-        if lay.size.width > sp.maxWidth, lay.size.width > 0 {     // one long word or a crowded line: shrink to fit
-            fs *= max(0.5, sp.maxWidth / lay.size.width)
+        // A word wider than the lyric area (rows wrap between words only): shrink, never below half size. A few passes,
+        // because the system font gets relatively wider at smaller sizes (optical sizing).
+        let minFS = sp.fontSize * 0.5
+        for _ in 0..<4 where lay.size.width > sp.maxWidth && lay.size.width > 0 && fs > minFS + 0.01 {
+            fs = max(minFS, fs * min(0.99, sp.maxWidth / lay.size.width))
             font = CTFontCreateCopyWithAttributes(sp.font, fs, nil, nil)
+            widths = measure(font)
+            lay = LyricLayout.layout(widths: widths, space: fs * 0.28, maxWidth: sp.maxWidth, rowHeight: fs * 1.22)
+        }
+        if lay.size.width > sp.maxWidth {                          // still too wide at half size: cut it with an ellipsis
+            for (i, w) in words.enumerated() where widths[i] > sp.maxWidth {
+                let cs = Array(w)
+                var lo = 0, hi = cs.count
+                while lo < hi { let mid = (lo + hi + 1) / 2; if width(String(cs[..<mid]) + "…", font) <= sp.maxWidth { lo = mid } else { hi = mid - 1 } }
+                words[i] = String(cs[..<lo]) + "…"
+            }
             widths = measure(font)
             lay = LyricLayout.layout(widths: widths, space: fs * 0.28, maxWidth: sp.maxWidth, rowHeight: fs * 1.22)
         }
@@ -93,8 +108,7 @@ struct LineRaster {
         var units: [Unit] = []
         for (i, w) in words.enumerated() {
             let r = lay.rects[i]
-            if sp.style.perGlyph {
-                let line = Self.line(w, font)
+            if sp.style.perGlyph, case let line = Self.line(w, font), !Self.isRightToLeft(line) {    // RTL words stay one shaped unit (joined letters, right width)
                 let ns = w as NSString
                 var idx = 0
                 while idx < ns.length {
@@ -111,6 +125,10 @@ struct LineRaster {
             }
         }
         return LineRaster(units: units, wordRects: lay.rects, size: lay.size, pad: pad, fontSize: fs, style: sp.style, key: sp.key)
+    }
+
+    static func isRightToLeft(_ line: CTLine) -> Bool {
+        (CTLineGetGlyphRuns(line) as? [CTRun] ?? []).contains { CTRunGetStatus($0).contains(.rightToLeft) }
     }
 
     private static func line(_ s: String, _ f: CTFont, color: CGColor? = nil, stroke: (CGColor, CGFloat)? = nil) -> CTLine {
@@ -249,6 +267,7 @@ final class LyricsStageView: NSView {
 
     /// Rasterise in the background (no main-thread text work at a line change); `done` runs on the main queue.
     private func raster(_ sp: LineRaster.Spec, done: ((LineRaster) -> Void)? = nil) {
+        assert(Thread.isMainThread, "LyricsStageView is main-thread only (cache and pending aren't locked)")
         if let r = cache[sp.key] { done?(r); return }
         if pending[sp.key] != nil {                      // already being drawn: wait for that job
             if let done { pending[sp.key]?.waiters.append(done) }
