@@ -5,7 +5,7 @@
 ### Added
 - **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low in the middle, the next line smaller below, a smooth crossfade between lines and a very gentle breath on the beat (no flashing). Timing follows the audio output latency, plus a lyrics timing trim (±1000 ms; `-` / `=` move it 50 ms). Lyrics come from [lrclib.net](https://lrclib.net) and are cached on your Mac.
 - **Lyrics are off by default** because they send the playing track's title, artist, album and length to lrclib.net. Turn them on in Settings or with `Y`.
-- **Remix guard:** remixes, edits, bootlegs, VIPs, flips and mashups are never looked up and show no lyrics, and lyrics stay off when the track length is more than 3 s from the match, since original-song timing doesn't fit them. The card says "lyrics off: remix/edit".
+- **Remix guard:** remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions are never looked up and show no lyrics, and lyrics stay off when the track length is more than 3 s from the match, since original-song timing doesn't fit them. The card says "lyrics off: remix/edit".
 - **Now Playing card** (bottom left): artwork, title, artist, source app, progress, and previous / play-pause / next buttons that control the playing app. It hides a few seconds after the mouse stops; `N` turns it off. HUD off hides it and the lyrics.
 - Settings rows: Lyrics on/off, lyrics size, lyrics timing, player card on/off, and what Now Playing sees (or why it can't).
 - States shown on the card: "lyrics offline" (retried after 30 s), "instrumental", "no synced lyrics", "lyrics off: remix/edit".

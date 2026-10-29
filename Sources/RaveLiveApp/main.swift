@@ -110,8 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         hud.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
         hud.textColor = NSColor(white: 1, alpha: 0.75)
-        hud.frame = NSRect(x: 12, y: 8, width: 1200, height: 18)
-        hud.autoresizingMask = [.maxYMargin]
+        hud.frame = NSRect(x: 12, y: 8, width: max(100, window.contentView!.bounds.width - 24), height: 18)
+        hud.autoresizingMask = [.maxYMargin, .width]
+        hud.lineBreakMode = .byTruncatingTail             // ends in "…" at the window edge instead of a cut-off word
         window.contentView!.addSubview(hud)
         status.font = .systemFont(ofSize: 15, weight: .semibold)
         status.textColor = .white
