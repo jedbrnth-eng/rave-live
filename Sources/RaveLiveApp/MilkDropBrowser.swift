@@ -315,6 +315,7 @@ extension AppDelegate {
             guard e.modifierFlags.contains(.shift) else { return false }
             if let p = m.currentPreset { let on = m.library.toggleFavorite(p); flashStatus(on ? "★ Favourite: \(p.name)" : "Removed from favourites: \(p.name)") }
         case "l":
+            guard !e.modifierFlags.contains(.shift) else { return false }       // Shift-L: lyrics "sync anyway" (all modes)
             m.director.locked.toggle(); flashStatus(m.director.locked ? "Preset locked (L to unlock)" : "Preset unlocked: changes follow the beat again")
         case "p": milkToggleBrowser(); r.metrics.event("milk:key p", at: now); return true
         case "0", "1", "2", "3", "4", "5":

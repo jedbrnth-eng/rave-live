@@ -5,14 +5,20 @@
 ### Added
 - **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low in the middle, the next line smaller below, a smooth crossfade between lines and a very gentle breath on the beat (no flashing). Timing follows the audio output latency, plus a lyrics timing trim (±1000 ms; `-` / `=` move it 50 ms). Lyrics come from [lrclib.net](https://lrclib.net) and are cached on your Mac.
 - **Lyrics are off by default** because they send the playing track's title, artist, album and length to lrclib.net. Turn them on in Settings or with `Y`.
-- **Remix guard:** remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions are never looked up and show no lyrics, and lyrics stay off when the track length is more than 3 s from the match, since original-song timing doesn't fit them. The card says "lyrics off: remix/edit".
+- **Remix guard:** remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions are never looked up and show no lyrics, and lyrics stay off when the track length is more than 3 s from the match, since original-song timing doesn't fit them. The card says "skipped: remix/edit".
 - **Now Playing card** (bottom left): artwork, title, artist, source app, progress, and previous / play-pause / next buttons that control the playing app. It hides a few seconds after the mouse stops; `N` turns it off. HUD off hides it and the lyrics.
 - Settings rows: Lyrics on/off, lyrics size, lyrics timing, player card on/off, and what Now Playing sees (or why it can't).
-- States shown on the card: "lyrics offline" (retried after 30 s, then less often), "instrumental", "no synced lyrics", "lyrics off: remix/edit".
+- States shown on the card: "lyrics offline" (retried after 30 s, then less often), "instrumental", "no synced lyrics", "skipped: remix/edit".
 - Now Playing comes from [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause), built from a pinned tag by `scripts/build_mediaremote_adapter.sh` and bundled by `make_app.sh`. Builds without it run as before.
 
 ### Notes
 - Lyrics and the card are on the main window only, like the HUD; they are never sent to Syphon or the output display.
+
+### Fixed (lyrics in the real world: YouTube in a browser, a busy lrclib.net)
+- **No more silent "nothing"**: a small line where the lyrics go and the card always say why there are no lyrics ("Lyrics off (Y)", "Looking up lyrics…", "No synced lyrics found", "Lyrics server busy, retrying", "Skipped: remix/edit", "Skipped: video length … doesn't match the song (…)", "Skipped: long video/mix"). The full HUD has a "Lyrics" debug row (source app, looked-up title/artist, the two lengths, the decision).
+- **YouTube in a browser**: titles lose "(Official Video)", "[Official Music Video]", "(Lyrics)", "ft. …" and "| …"; "Artist - Title" is split and the channel ("- Topic", "VEVO") is the artist otherwise. Music videos up to 90 s longer than the song sync with that intro assumed; uploads over twice the song's length are skipped as a long video/mix.
+- **`L` syncs a skipped song anyway** (Shift-L in MILKDROP), `L` again undoes it; **Shift - / Shift =** move the lyrics 1 s for the current song.
+- **lrclib.net overload (503/429)**: exponential backoff with jitter that honours `Retry-After`, `/api/search` straight after a failed `/api/get`, a "busy" state retried after 10 s, 20 s … 10 min, and never cached.
 
 ### Fixed (performance and robustness audit)
 - **No more stutter every 2 seconds in long sets.** The metrics file was rebuilt on the render thread every 2 s by sorting every frame time of the set, so the hitch grew with set length (70-245 ms after half an hour at 120 fps). Statistics now live in fixed-size histograms and the file is written in the background; the render thread spends about 0.01 ms on it at any set length. Without `--metrics` the file is written every 10 s.

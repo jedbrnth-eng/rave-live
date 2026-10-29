@@ -209,11 +209,12 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(r, .offline)
     }
 
-    func testAllServerErrorsIsOffline() async {
+    /// LRCLIB overloaded the whole time: "busy" (retried sooner, own message), not "offline".
+    func testAllServerErrorsIsBusy() async {
         let net = FakeNet { _ in (Data(), 503) }
         let c = LRCLIBClient(host: "https://lrc.example", transport: net.transport(), retryDelay: 0)
         let r = await c.lookup(title: "Made Up", artist: "Nobody", album: nil, duration: 200)
-        XCTAssertEqual(r, .offline)
+        XCTAssertEqual(r, .busy)
     }
 
     func testInstrumental() async {

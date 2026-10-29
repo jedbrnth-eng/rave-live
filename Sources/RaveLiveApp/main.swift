@@ -401,9 +401,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let l = lyrics else { break }
             guard l.source.adapter != nil else { flashStatus("The player card needs the Now Playing reader (see Settings)"); break }
             l.setCard(!l.cardOn); flashStatus(l.cardOn ? "Player card on" : "Player card off")
-        case ("-", _), ("_", _), ("=", _), ("+", _):
+        case ("l", _):
             guard let l = lyrics, l.source.adapter != nil else { break }
-            l.setOffset(l.offsetMs + (ch == "-" || ch == "_" ? -50 : 50))
+            flashStatus(l.toggleForce())
+        case ("_", _), ("+", _):                  // Shift -/=: whole seconds for this video (intro estimate off, forced sync)
+            guard let l = lyrics, l.source.adapter != nil else { break }
+            flashStatus(l.nudgeVideo(ch == "_" ? -1 : 1))
+        case ("-", _), ("=", _):
+            guard let l = lyrics, l.source.adapter != nil else { break }
+            l.setOffset(l.offsetMs + (ch == "-" ? -50 : 50))
             flashStatus(l.offsetMs == 0 ? "Lyrics timing 0 ms" : String(format: "Lyrics timing %+d ms (%@)", l.offsetMs, l.offsetMs > 0 ? "later" : "earlier"))
         case ("1", _), ("2", _), ("3", _), ("4", _), ("5", _), ("6", _), ("7", _), ("8", _):
             let n = Int(ch)! - 1

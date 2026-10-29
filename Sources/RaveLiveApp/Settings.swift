@@ -168,7 +168,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             [label("Visual sync"), offsetRow],
             [NSGridCell.emptyContentView, note("Bluetooth speakers or a long cable run? Move the visuals later until kicks and flashes line up. Keys , and . nudge by 10 ms.")],
             [label("Lyrics"), lyricsBox],
-            [NSGridCell.emptyContentView, note("While this is on, the playing track's title, artist, album and length are looked up on lrclib.net (a free lyrics database). Remixes, edits and sped-up or slowed versions are never looked up and show no lyrics. Main window only. Y toggles.")],
+            [NSGridCell.emptyContentView, note("While this is on, the playing track's title, artist, album and length are looked up on lrclib.net (a free lyrics database). Remixes, edits and sped-up or slowed versions are never looked up and show no lyrics; L syncs a skipped song anyway. Main window only. Y toggles.")],
             [label("Lyrics size"), lyricsSize],
             [label("Lyrics timing"), lyricsOffsetRow],
             [NSGridCell.emptyContentView, note("Lyrics early or late? Keys - and = move them by 50 ms.")],

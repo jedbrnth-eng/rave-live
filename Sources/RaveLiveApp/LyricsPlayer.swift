@@ -8,21 +8,67 @@ import QuartzCore
 /// Synced lyrics overlay + Now Playing card. Both are AppKit views over the main window (like the HUD), so they never
 /// reach Syphon or the output display. Follow-up: an option to burn lyrics into the output frame.
 final class LyricsController: NSObject {
-    enum LyricsState: Equatable { case off, waiting, looking, synced, remix, lengthDiffers, noLength, instrumental, notFound, offline
-        /// Quiet one-liner for the card. nil = nothing to say.
-        var note: String? {
-            switch self {
-            case .off, .waiting: return nil
-            case .looking: return "finding lyrics…"
-            case .synced: return "lyrics: lrclib.net"
-            case .remix: return "lyrics off: remix/edit"
-            case .lengthDiffers: return "lyrics off: other version"     // length is >3 s from the LRCLIB match
-            case .noLength: return "lyrics off: no track length"
-            case .instrumental: return "instrumental"
-            case .notFound: return "no synced lyrics"
-            case .offline: return "lyrics offline"
-            }
+    enum LyricsState: Equatable { case off, waiting, looking, busy, synced, remix, lengthDiffers, longVideo, noLength, instrumental, notFound, offline }
+
+    /// What the hint line and the card need to explain the state: the two lengths compared, whether the source is a video
+    /// (browser), the intro offset in use, whether the user forced the sync, and the key that forces it ("L", or "Shift-L"
+    /// in MILKDROP where L locks the preset).
+    struct HintContext: Equatable {
+        var trackDuration: Double?, matchDuration: Double?
+        var video: Bool, introOffset: Double, forced: Bool, forceKey: String
+    }
+
+    static func mmss(_ t: Double?) -> String { t.map { PlayerCardView.mmss($0) } ?? "?" }
+
+    /// One line where the lyrics would be. Never a silent nothing: every state that shows no lyrics says why.
+    /// nil while plain synced lyrics are showing (the lyrics are the message).
+    static func hint(_ s: LyricsState, _ c: HintContext) -> String? {
+        let anyway = "Press \(c.forceKey) to sync anyway"
+        switch s {
+        case .waiting: return nil
+        case .off: return "Lyrics off (Y)"
+        case .looking: return "Looking up lyrics…"
+        case .busy: return "Lyrics server busy, retrying"
+        case .offline: return "Lyrics offline, retrying"
+        case .notFound: return "No synced lyrics found"
+        case .instrumental: return "Instrumental: no lyrics"
+        case .remix: return "Skipped: remix/edit. " + anyway
+        case .noLength: return "Skipped: the player reports no track length. " + anyway
+        case .longVideo: return "Skipped: long video/mix (\(mmss(c.trackDuration)), the song is \(mmss(c.matchDuration))). " + anyway
+        case .lengthDiffers:
+            return "Skipped: \(c.video ? "video" : "track") length \(mmss(c.trackDuration)) doesn't match the song (\(mmss(c.matchDuration))). " + anyway
+        case .synced:
+            if c.forced { return "Synced anyway (Shift -/= ±1 s, \(c.forceKey) undoes)" }
+            if c.introOffset > 0 { return "Synced with a \(mmss(c.introOffset)) video intro (Shift -/= ±1 s)" }
+            return nil
         }
+    }
+
+    /// Short version for the player card's note slot (about 26 characters).
+    static func cardNote(_ s: LyricsState, _ c: HintContext) -> String? {
+        switch s {
+        case .waiting: return nil
+        case .off: return "lyrics off (Y)"
+        case .looking: return "looking up lyrics…"
+        case .busy: return "lyrics server busy"
+        case .offline: return "lyrics offline"
+        case .notFound: return "no synced lyrics"
+        case .instrumental: return "instrumental"
+        case .remix: return "skipped: remix/edit"
+        case .noLength: return "skipped: no track length"
+        case .longVideo: return "skipped: long video/mix"
+        case .lengthDiffers: return "skipped: length differs"
+        case .synced: return c.forced ? "synced anyway (\(c.forceKey))" : (c.introOffset > 0 ? "synced (+\(mmss(c.introOffset)) intro)" : "lyrics: lrclib.net")
+        }
+    }
+
+    /// Full-HUD "Lyrics" debug: source app, the cleaned title/artist that were looked up, the lengths compared, the decision.
+    /// One row, kept short so the full HUD panel doesn't grow into the lyrics on small windows.
+    static func debugLine(app: String, title: String, artist: String, trackDuration: Double?, matchDuration: Double?, decision: String, offset: Double) -> String {
+        let t = title.count > 24 ? title.prefix(23) + "…" : title
+        let a = artist.count > 16 ? artist.prefix(15) + "…" : artist
+        return "\(app) · \"\(t)\" / \(a) · \(mmss(trackDuration)) vs \(mmss(matchDuration)) · \(decision)"
+            + (abs(offset) > 0.05 ? String(format: " · offset %+.1f s", offset) : "")
     }
 
     private weak var app: AppDelegate?
@@ -31,6 +77,7 @@ final class LyricsController: NSObject {
     private let cache = LyricsCache(dir: LyricsCache.defaultDir)
     let overlay = LyricsOverlayView()
     let card = PlayerCardView()
+    let hintLabel = LyricsHintView()
     private var timer: Timer?
     private(set) var info: NowPlayingInfo?
     private(set) var state: LyricsState = .off
@@ -47,6 +94,22 @@ final class LyricsController: NSObject {
     private var retries = 0, retryKey = ""
     private var hudLevel: OverlayLevel = .status
     private var logURL: URL?
+    // What the last lookup found and decided for the current track (hint line, HUD debug row, L / Shift -/=).
+    private var matchDuration: Double?
+    private var gate: LyricsGate?
+    private var pendingRecord: LRCLIBRecord?, pendingKey = ""
+    /// Track key the user forced with L (sync a skipped song anyway).
+    private var forcedKey: String?
+    /// Video intro estimate (gate) and the user's Shift -/= steps, both per track, never saved.
+    private(set) var introOffset = 0.0, videoNudge = 0.0
+    private var lookupTitle = "", lookupArtist = ""
+    private var busyRetryAfter: Double?
+    /// When the hint text last changed: it shows for `hintSeconds` after that, and again whenever the mouse moves.
+    private var hintChangedAt = -100.0
+    private var lastHint: String?
+    static let hintSeconds = 8.0
+    /// MILKDROP keeps plain L for its preset lock, so the hint names the key that works in the current mode.
+    var forceKey: String { app?.renderer?.mode == .milkdrop ? "Shift-L" : "L" }
 
     // Live settings (Prefs, unless a command-line flag set them)
     private(set) var lyricsOn: Bool
@@ -75,6 +138,8 @@ final class LyricsController: NSObject {
         card.autoresizingMask = [.maxXMargin, .maxYMargin]
         cv.addSubview(overlay, positioned: .above, relativeTo: app.view)
         cv.addSubview(card, positioned: .above, relativeTo: overlay)
+        cv.addSubview(hintLabel, positioned: .above, relativeTo: overlay)
+        hintLabel.isHidden = true
         card.prev.target = self; card.prev.action = #selector(cardPrev(_:))
         card.play.target = self; card.play.action = #selector(cardPlay(_:))
         card.next.target = self; card.next.action = #selector(cardNext(_:))
@@ -116,7 +181,7 @@ final class LyricsController: NSObject {
         case .restarting: return "Now Playing reader restarting…"
         case .running:
             guard let i = info else { return "Now Playing: nothing is playing." }
-            return "Now Playing: \(i.title) — \(NowPlayingSource.appName(i.bundleID))" + (state.note.map { " · \($0)" } ?? "")
+            return "Now Playing: \(i.title) — \(NowPlayingSource.appName(i.bundleID))" + (Self.cardNote(state, hintContext).map { " · \($0)" } ?? "")
         }
     }
 
@@ -158,7 +223,13 @@ final class LyricsController: NSObject {
 
     // MARK: Now Playing -> lyrics
 
+    /// Test hook: report the Now Playing source as this bundle id (e2e runs make the silent fake player look like a
+    /// browser without registering a second app under a real browser's id).
+    static let testSourceBundle = ProcessInfo.processInfo.environment["RAVE_TEST_NP_BUNDLE"].flatMap { $0.isEmpty ? nil : $0 }
+
     private func nowPlayingChanged(_ i: NowPlayingInfo?) {
+        var i = i
+        if let b = Self.testSourceBundle { i?.bundleID = b }
         let old = info
         info = i
         if old?.trackKey != i?.trackKey {
@@ -169,6 +240,9 @@ final class LyricsController: NSObject {
             else { log("nowplaying: nothing playing") }
             wake(); lines = []; shownIndex = -1; lookupKey = ""; shownPair = ("\u{1}", "\u{1}")
             lookupTask?.cancel(); lookupTask = nil
+            matchDuration = nil; gate = nil; pendingRecord = nil; pendingKey = ""; introOffset = 0; videoNudge = 0; busyRetryAfter = nil
+            lookupTitle = ""; lookupArtist = ""
+            hintChangedAt = CACurrentMediaTime()
             refreshLyrics()
         } else if old?.playing != i?.playing {
             log("nowplaying: \(i?.playing == true ? "playing" : "paused") at \(String(format: "%.2f", i?.position(at: Date().timeIntervalSince1970) ?? 0)) s")
@@ -181,8 +255,75 @@ final class LyricsController: NSObject {
     private func setState(_ s: LyricsState) {
         guard s != state else { return }
         state = s
-        log("lyrics: state \(s)" + (s.note.map { " (\($0))" } ?? ""))
+        hintChangedAt = CACurrentMediaTime()
+        log("lyrics: state \(s)" + (Self.hint(s, hintContext).map { " (\($0))" } ?? ""))
         app?.settings?.refresh()
+    }
+
+    var isVideo: Bool { info.map { TrackTitle.isBrowser($0.bundleID) } ?? false }
+    private var currentKey: String? { info.map { LyricsCache.key(title: $0.title, artist: $0.artist, duration: $0.duration) } }
+    private var isForced: Bool { forcedKey != nil && forcedKey == currentKey }
+    var hintContext: HintContext {
+        HintContext(trackDuration: info?.duration, matchDuration: matchDuration, video: isVideo, introOffset: introOffset, forced: isForced, forceKey: forceKey)
+    }
+    /// The hint line text for the current state (nil = nothing to add).
+    var hintText: String? { info == nil ? nil : Self.hint(state, hintContext) }
+
+    /// Full-HUD "Lyrics" row (also logged with each `shot`).
+    var hudDebug: String {
+        guard source.adapter != nil else { return "Now Playing reader not in this build" }
+        guard let i = info else { return lyricsOn ? "nothing playing" : "lyrics off (Y) · nothing playing" }
+        let decision: String
+        switch state {
+        case .off: decision = "lyrics off (Y)"
+        case .waiting: decision = "waiting"
+        case .looking: decision = "looking up"
+        case .busy: decision = "server busy, retrying"
+        case .offline: decision = "offline, retrying"
+        case .notFound: decision = "no synced lyrics"
+        case .instrumental: decision = "instrumental"
+        case .noLength: decision = "skipped: no length"
+        case .synced: decision = isForced ? "forced (L)" : (introOffset > 0 ? "intro assumed" : "synced")
+        case .remix: decision = "skipped: remix"
+        case .lengthDiffers: decision = "skipped: length"
+        case .longVideo: decision = "skipped: long video"
+        }
+        var t = lookupTitle, a = lookupArtist
+        if t.isEmpty { let x = TrackTitle.lookupIdentity(title: i.title, artist: i.artist, bundleID: i.bundleID); t = x.title; a = x.artist }
+        return Self.debugLine(app: NowPlayingSource.appName(i.bundleID), title: t, artist: a, trackDuration: i.duration,
+                              matchDuration: matchDuration, decision: decision, offset: introOffset + videoNudge)
+    }
+
+    /// L: sync a skipped song anyway, or undo that. Returns the status line to flash.
+    func toggleForce() -> String {
+        guard lyricsOn else { return "Lyrics are off: Y turns them on" }
+        guard let i = info, let key = currentKey else { return "Nothing is playing" }
+        if forcedKey == key {
+            forcedKey = nil; videoNudge = 0
+            log("lyrics: force off")
+            lookupKey = ""; refreshLyrics()
+            hintChangedAt = CACurrentMediaTime()
+            return "Lyrics back to automatic"
+        }
+        switch state {
+        case .remix, .lengthDiffers, .longVideo, .noLength: break
+        case .synced: return "Lyrics already synced: Shift -/= moves them 1 s"
+        default: return Self.hint(state, hintContext) ?? "Nothing to sync"
+        }
+        forcedKey = key; videoNudge = 0
+        log("lyrics: force on (\(state))")
+        if let rec = pendingRecord, pendingKey == key { apply(.synced(rec), for: i) }
+        else { lookupKey = ""; refreshLyrics() }                // remix / no length: never looked up yet
+        hintChangedAt = CACurrentMediaTime()
+        return "Syncing anyway: Shift -/= moves the lyrics 1 s"
+    }
+
+    /// Shift -/=: move the lyrics by whole seconds for this video (intro estimate off, or a forced sync). Not saved.
+    func nudgeVideo(_ seconds: Double) -> String {
+        videoNudge = max(-600, min(600, videoNudge + seconds))
+        hintChangedAt = CACurrentMediaTime()
+        log(String(format: "lyrics: video offset %.1f s (intro %.1f + nudge %.1f)", introOffset + videoNudge, introOffset, videoNudge))
+        return String(format: "Lyrics %+.0f s for this song (total offset %+.1f s)", videoNudge, introOffset + videoNudge)
     }
 
     private func refreshLyrics() {
@@ -191,30 +332,43 @@ final class LyricsController: NSObject {
         guard key != lookupKey else { return }
         lookupKey = key; retryAt = nil
         if key != retryKey { retryKey = key; retries = 0 }
-        if TrackTitle.hasRemixMarker(i.title) { setState(.remix); return }          // remixes are never looked up
-        guard let d = i.duration, d > 0 else { setState(.noLength); return }
+        let forced = forcedKey == key
+        let id = TrackTitle.lookupIdentity(title: i.title, artist: i.artist, bundleID: i.bundleID)
+        lookupTitle = id.title; lookupArtist = id.artist
+        if !forced, TrackTitle.hasRemixMarker(id.videoTitle) { setState(.remix); return }    // remixes are never looked up
+        let d = i.duration.flatMap { $0 > 0 ? $0 : nil }
+        if !forced, d == nil { setState(.noLength); return }
         if let hit = cache.load(key) { log("lyrics: cache hit \(key)"); apply(hit, for: i); return }
         setState(.looking)
-        log("lyrics: lookup \"\(TrackTitle.clean(i.title, strict: false))\" / \(TrackTitle.cleanArtist(i.artist)) / \(Int(d.rounded())) s",
-            redacted: "lyrics: lookup \(Self.titleTag(i.title, i.artist)) / \(Int(d.rounded())) s")
+        log("lyrics: lookup \"\(TrackTitle.clean(id.title, strict: false))\" / \(TrackTitle.cleanArtist(id.artist)) / \(d.map { "\(Int($0.rounded())) s" } ?? "no length") from \(i.bundleID)",
+            redacted: "lyrics: lookup \(Self.titleTag(i.title, i.artist)) / \(d.map { "\(Int($0.rounded())) s" } ?? "no length") from \(i.bundleID)")
         let t0 = CACurrentMediaTime()
         lookupTask?.cancel()
         lookupTask = Task { [client] in
-            let l = await client.lookupDetailed(title: i.title, artist: i.artist, album: i.album, duration: d)
+            let busy: @Sendable () -> Void = { [weak self] in
+                DispatchQueue.main.async { guard let self, self.lookupKey == key, self.state == .looking else { return }; self.setState(.busy) }
+            }
+            let l = await client.lookupDetailed(title: id.title, artist: id.artist, album: i.album, duration: d, onBusy: busy)
             await MainActor.run { [weak self] in
                 guard let self, self.lookupKey == key, !Task.isCancelled else { return }
                 let r = l.result
                 self.log(String(format: "lyrics: lookup done in %.2f s -> %@%@", CACurrentMediaTime() - t0, Self.describe(r), l.cacheable ? "" : " (not cached)"))
                 var gate: LyricsGate?
-                if case .synced(let rec) = r { gate = LyricsGate.decide(rawTitle: i.title, trackDuration: i.duration, matchDuration: rec.duration) }
+                if case .synced(let rec) = r { gate = LyricsGate.decide(rawTitle: id.videoTitle, trackDuration: i.duration, matchDuration: rec.duration, video: TrackTitle.isBrowser(i.bundleID)) }
                 if LyricsCache.shouldStore(r, cacheable: l.cacheable, gate: gate) { self.cache.store(r, key) }
-                self.apply(r, for: i)
+                self.apply(r, for: i, retryAfter: l.retryAfter)
             }
         }
     }
 
     /// 30 s, 60 s, 120 s … capped at 10 min: a dead or always-500 server isn't hammered for the whole song.
-    static func retryDelay(attempt: Int) -> Double { min(600, 30 * pow(2, Double(min(10, max(0, attempt))))) }
+    static func retryDelay(attempt: Int) -> Double { retryDelay(attempt: attempt, busy: false, retryAfter: nil) }
+    /// Busy (LRCLIB overloaded): 10 s, 20 s, 40 s … 10 min, and never sooner than the server's `Retry-After`.
+    static func retryDelay(attempt: Int, busy: Bool, retryAfter: Double?) -> Double {
+        let n = Double(min(10, max(0, attempt)))
+        let base = min(600, (busy ? 10 : 30) * pow(2, n))
+        return max(base, min(3600, retryAfter ?? 0))
+    }
 
     /// Short stable tag for a track in logs that persist ("track#1a2b3c4d"): FNV-1a of title + artist, no text.
     static func titleTag(_ title: String, _ artist: String) -> String {
@@ -230,23 +384,42 @@ final class LyricsController: NSObject {
         }
     }
 
-    private func apply(_ r: LyricsResult, for i: NowPlayingInfo) {
+    private func apply(_ r: LyricsResult, for i: NowPlayingInfo, retryAfter: Double? = nil) {
         switch r {
         case .synced(let rec):
-            switch LyricsGate.decide(rawTitle: i.title, trackDuration: i.duration, matchDuration: rec.duration) {
-            case .show:
+            let video = TrackTitle.isBrowser(i.bundleID)
+            let id = TrackTitle.lookupIdentity(title: i.title, artist: i.artist, bundleID: i.bundleID)
+            let g = LyricsGate.decide(rawTitle: id.videoTitle, trackDuration: i.duration, matchDuration: rec.duration, video: video)
+            matchDuration = rec.duration; gate = g
+            pendingRecord = rec; pendingKey = LyricsCache.key(title: i.title, artist: i.artist, duration: i.duration)
+            let forced = isForced
+            log(String(format: "lyrics: gate %@%@ · track %.1f s vs match %.1f s · video %@ · record %d",
+                       g.decision, forced ? " (forced by user)" : "", i.duration ?? -1, rec.duration ?? -1, video ? "yes" : "no", rec.id))
+            var sync = forced
+            introOffset = 0
+            switch g {
+            case .show: sync = true
+            case .intro(let s): sync = true; introOffset = s
+            case .remix: if !forced { setState(.remix) }
+            case .lengthDiffers: if !forced { setState(.lengthDiffers) }
+            case .longVideo: if !forced { setState(.longVideo) }
+            case .noLength: if !forced { setState(.noLength) }
+            }
+            if sync {
                 lines = LRC.parse(rec.syncedLyrics ?? ""); shownIndex = -1; shownPair = ("\u{1}", "\u{1}")
                 setState(lines.isEmpty ? .notFound : .synced)
-                log("lyrics: \(lines.count) synced lines, match \(String(format: "%.1f", rec.duration ?? 0)) s vs track \(String(format: "%.1f", i.duration ?? 0)) s")
-            case .remix: setState(.remix)
-            case .lengthDiffers: setState(.lengthDiffers)
-            case .noLength: setState(.noLength)
+                hintChangedAt = CACurrentMediaTime()
+                log("lyrics: \(lines.count) synced lines, match \(String(format: "%.1f", rec.duration ?? 0)) s vs track \(String(format: "%.1f", i.duration ?? 0)) s, intro offset \(String(format: "%.1f", introOffset)) s")
             }
         case .instrumental: setState(.instrumental)
         case .plainOnly, .notFound: setState(.notFound)
-        case .offline:
-            setState(.offline)
-            retryAt = CACurrentMediaTime() + Self.retryDelay(attempt: retries)   // same song still on: try again later
+        case .offline, .busy:
+            let busy = r == .busy
+            setState(busy ? .busy : .offline)
+            busyRetryAfter = retryAfter
+            let wait = Self.retryDelay(attempt: retries, busy: busy, retryAfter: retryAfter)
+            log(String(format: "lyrics: %@, retry in %.0f s", busy ? "server busy" : "offline", wait))
+            retryAt = CACurrentMediaTime() + wait                 // same song still on: try again later
             retries += 1
             return
         }
@@ -257,7 +430,7 @@ final class LyricsController: NSObject {
     func heardPosition() -> Double? {
         guard let i = info else { return nil }
         let lat = app?.renderer?.outputLatency.seconds ?? 0
-        return i.position(at: Date().timeIntervalSince1970) - lat - Double(offsetMs) / 1000
+        return i.position(at: Date().timeIntervalSince1970) - lat - Double(offsetMs) / 1000 - (state == .synced ? introOffset + videoNudge : 0)
     }
 
     /// Test log line for snapshots: position, the line index and its LRC timestamp.
@@ -267,19 +440,20 @@ final class LyricsController: NSObject {
         let idx = LRC.index(at: heard, in: lines)
         // which LRC line the overlay's text actually is (first line with that text at or before `heard`)
         let shownText = overlay.currentText
-        let shownIdx = overlay.isHidden ? nil : lines.indices.last { lines[$0].text == shownText && lines[$0].time <= heard + 0.5 }
+        let shownIdx = overlay.isHidden || shownText.isEmpty ? nil : lines.indices.last { lines[$0].text == shownText && lines[$0].time <= heard + 0.5 }
         log(String(format: "lyrics: %@ pos=%.3f heard=%.3f latency=%.0fms offset=%dms state=%@ expectedLine=%@ expectedTime=%@ shownLine=%@ shownTime=%@ overlay=%@ breath=%.3f card=%@",
                    tag, pos, heard, (app?.renderer?.outputLatency.seconds ?? 0) * 1000, offsetMs, "\(state)",
                    idx.map(String.init) ?? "none", idx.map { String(format: "%.2f", lines[$0].time) } ?? "-",
                    shownIdx.map(String.init) ?? "none", shownIdx.map { String(format: "%.2f", lines[$0].time) } ?? "-",
                    overlay.isHidden ? "hidden" : "visible", overlay.lineScale, card.isHidden ? "hidden" : String(format: "visible(alpha %.2f)", card.alphaValue)))
+        log("lyrics: \(tag) hint=\(hintLabel.isHidden ? "hidden" : "\"" + hintLabel.text + "\"") cardNote=\"\(card.note.stringValue)\" offsetTotal=\(String(format: "%.1f", introOffset + videoNudge)) debug=\(hudDebug)")
     }
 
     // MARK: per frame (30 Hz)
 
     private func tick() {
         let now = CACurrentMediaTime()
-        if let r = retryAt, now > r, state == .offline { lookupKey = ""; retryAt = nil; refreshLyrics() }
+        if let r = retryAt, now > r, state == .offline || state == .busy { lookupKey = ""; retryAt = nil; refreshLyrics() }
         let clean = hudLevel == .clean
         // card: visible for a few seconds after mouse movement / a track or play-state change
         let awake = now - lastWake < 4
@@ -289,9 +463,18 @@ final class LyricsController: NSObject {
         card.alphaValue = alpha
         card.isHidden = hidden
         if wantCard {
-            card.setNote(lyricsOn ? state.note : nil)
+            card.setNote(Self.cardNote(state, hintContext))
             if let i = info { card.setProgress(position: i.position(at: Date().timeIntervalSince1970), duration: i.duration, playing: i.playing) }
         }
+        // hint line: why there are no lyrics (or how the video is synced), for a few seconds after a change or a mouse move
+        let h = hintText
+        if h != lastHint { lastHint = h; hintChangedAt = now }
+        let showHint = h != nil && !clean && source.adapter != nil && (awake || card.hovering || now - hintChangedAt < Self.hintSeconds)
+        if showHint, let h {
+            if hintLabel.text != h { hintLabel.text = h }
+            positionHint()
+        }
+        hintLabel.isHidden = !showHint
         // lyrics
         let wantLyrics = lyricsOn && state == .synced && info != nil && !clean
         overlay.isHidden = !wantLyrics
@@ -323,6 +506,21 @@ final class LyricsController: NSObject {
         let bottom = max(card.frame.maxY + 10, b.height * 0.10)
         overlay.frame = NSRect(x: 0, y: bottom, width: b.width, height: overlay.preferredHeight(for: b))
         overlay.layoutLines()
+        positionHint()
+    }
+
+    /// Centred where the lyrics go; above them while synced lines can show (intro / forced notes).
+    private func positionHint() {
+        guard let cv = app?.window.contentView else { return }
+        let s = hintLabel.fittingSize
+        let w = min(cv.bounds.width - 24, s.width)
+        // synced: just under the lyrics (above them it can sit under the full HUD panel); otherwise where the line would be
+        var y = state == .synced ? max(4, overlay.frame.minY - s.height - 4) : overlay.frame.minY + overlay.frame.height * 0.3
+        var f = NSRect(x: ((cv.bounds.width - w) / 2).rounded(), y: y.rounded(), width: w, height: s.height)
+        if state == .synced, !card.isHidden, f.intersects(card.frame.insetBy(dx: -6, dy: -6)) {   // small window: go above the lyrics
+            y = overlay.frame.maxY + 4; f.origin.y = y.rounded()
+        }
+        if hintLabel.frame != f { hintLabel.frame = f }
     }
 
     // MARK: card buttons
@@ -470,6 +668,32 @@ final class LyricsOverlayView: NSView {
     var currentText: String { texts[front] }
     /// Scale the beat breath currently applies to the line (1 = none), read back from the layer.
     var lineScale: Double { Double(cur[front].layer?.transform.m11 ?? 1) }
+}
+
+/// One small, dim line that explains the lyrics state ("Lyrics off (Y)", "Skipped: long video/mix…"). A plain label
+/// with a rounded dark backing so it reads over bright visuals and shows up in `shot=` snapshots.
+final class LyricsHintView: NSView {
+    private let label = NSTextField(labelWithString: "")
+    var text: String {
+        get { label.stringValue }
+        set { label.stringValue = newValue; needsLayout = true; invalidateIntrinsicContentSize() }
+    }
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor(white: 0, alpha: 0.5).cgColor
+        layer?.cornerRadius = 9
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textColor = NSColor(white: 1, alpha: 0.82)
+        label.alignment = .center
+        label.lineBreakMode = .byTruncatingTail
+        addSubview(label)
+    }
+    convenience init() { self.init(frame: .zero) }
+    required init?(coder: NSCoder) { fatalError() }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }        // never catches clicks meant for the visuals
+    override var fittingSize: NSSize { let s = label.fittingSize; return NSSize(width: ceil(s.width) + 24, height: ceil(s.height) + 8) }
+    override func layout() { super.layout(); label.frame = bounds.insetBy(dx: 12, dy: 4) }
 }
 
 /// Small Now Playing card, bottom left: artwork, title, artist, source app, progress, previous / play-pause / next.
