@@ -221,7 +221,7 @@ Measured with the app's built-in metrics (`--metrics`) on an Apple M4 Max MacBoo
 | Classic Visuals (Silk) | 72 fps (target) | 14.6 ms | 6.0 ms |
 | AURORA | 72 fps (target) | 14.6 ms | 7.9 ms |
 
-Every mode held its target with no dropped-frame spikes (frame interval p99 14.7 ms). Audio-to-screen latency was about 24 ms (p50) and 36 ms (p95) in the Stage run. The strobe limiter never allowed more than 1 flash per second. On the 120 Hz built-in display the app targets 120 fps instead. These are demo-mode numbers on one high-end Mac; real music and slower Macs will differ.
+Every mode's recent frame rate reached its target; frame interval p99 was 14.7 ms across each run. Audio-to-screen latency was about 24 ms (p50) and 36 ms (p95) in the Stage run. The strobe limiter never allowed more than 1 flash per second. On the 120 Hz built-in display the app targets 120 fps instead. These are demo-mode numbers on one high-end Mac; real music and slower Macs will differ.
 
 ## Privacy and permissions
 
