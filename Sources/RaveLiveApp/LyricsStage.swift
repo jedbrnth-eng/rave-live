@@ -134,8 +134,7 @@ struct LineRaster {
             body(ctx)
             return ctx.makeImage()
         }
-        let black = CGColor(gray: 0, alpha: 1)
-        let outline = sp.style == .pop ? -9.0 : -4.0              // % of the font size; negative = fill + outline
+        let outline: CGFloat = sp.style == .pop ? -9 : -4           // % of the font size; negative = fill + outline
         func text(_ ctx: CGContext, _ fill: CGColor, stroke: (CGColor, CGFloat)?, shadow: (CGColor, CGFloat, CGSize)?) {
             ctx.saveGState()
             if let (c, b, o) = shadow { ctx.setShadow(offset: o, blur: b * sp.scale, color: c) }
@@ -153,7 +152,10 @@ struct LineRaster {
         }
         let lit: CGImage?
         switch sp.style {
-        case .neon, .pop, .spectrum: lit = image { ctx in text(ctx, litC, stroke: (sp.style == .neon ? CGColor(gray: 1, alpha: 0.9) : black.copy(alpha: 0.7)!, sp.style == .neon ? -2.5 : outline), shadow: tight) }
+        case .neon, .pop, .spectrum:
+            let litStroke: CGColor = sp.style == .neon ? CGColor(gray: 1, alpha: 0.9) : CGColor(gray: 0, alpha: 0.7)
+            let litWidth: CGFloat = sp.style == .neon ? -2.5 : outline
+            lit = image { ctx in text(ctx, litC, stroke: (litStroke, litWidth), shadow: tight) }
         default: lit = nil
         }
         return [shade, glow, base, lit]
