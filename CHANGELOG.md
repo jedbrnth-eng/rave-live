@@ -2,28 +2,21 @@
 
 ## [Unreleased]
 
-### Added
-- **Lyric styles** (Settings → Lyrics style, `Shift-Y` cycles): **Clean** (default), **Neon karaoke**, **Pop**, **Bass wave**, **Spectrum** and **Auto**. They react to the music RAVE LIVE hears (beat, kick, bass, energy, drops), not just to the clock. Words are revealed one by one: from word timing when the lyrics have it, otherwise spread over the line by syllables and snapped to the live beat grid. Auto picks a style from the energy and cuts to Pop on drops.
-- **Settings → Lyrics** is now an on/off switch that follows the `Y` key (and the other way round), with style, position (lower third / centre), size and timing.
-
-### Fixed
-- **Lyrics were late on Bluetooth headphones**: the player's position already counts the output delay, and RAVE LIVE subtracted it again (~180 ms on Bluetooth). Lines now also go up 150 ms early so reading keeps up with the singer, and the position keeps running when an update has no timestamp.
-- **No dark oval behind the lyrics**: readability comes from a thin outline and a tight shadow on each letter. The old and new line no longer overlap during a change (the old one fades out first).
-- The lyrics now cost about 0.3-0.5 ms of main-thread time per frame (p95) and only move layers; the old text overlay showed missed frames in test runs (frame-interval p95 16-21 ms vs 14.5-14.6 ms with the new styles and with lyrics off, 72 fps target, same session).
-
 ## [0.6.0]
 
 ### Added
-- **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low in the middle, the next line smaller below, a smooth crossfade between lines and a very gentle breath on the beat (no flashing). Timing follows the audio output latency, plus a lyrics timing trim (±1000 ms; `-` / `=` move it 50 ms). Lyrics come from [lrclib.net](https://lrclib.net) and are cached on your Mac.
+- **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low on screen (or centred), the next line smaller below, and a clean change between lines (the old line fades out before the new one comes in, so they never overlap). No box or dark shape behind the text: a thin outline and a tight shadow on each letter keep it readable. Lines follow the player's own position, which already counts Bluetooth and other output delays, and go up 150 ms early so reading keeps up with the singer; a lyrics timing trim (±1000 ms; `-` / `=` move it 50 ms) covers the rest. Lyrics come from [lrclib.net](https://lrclib.net) and are cached on your Mac.
+- **Lyric styles** (Settings → Lyrics style, `Shift-Y` cycles): **Clean** (default), **Neon karaoke**, **Pop**, **Bass wave**, **Spectrum** and **Auto**. They react to the music RAVE LIVE hears (beat, kick, bass, energy, drops), not just to the clock. Words are revealed one by one: from word timing when the lyrics have it, otherwise spread over the line by syllables and snapped to the live beat grid. Auto picks a style from the energy and cuts to Pop on drops.
 - **Lyrics are off by default** because they send the playing track's title, artist, album and length to lrclib.net. Turn them on in Settings or with `Y`.
 - **Remix guard:** remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions are never looked up and show no lyrics, and lyrics stay off when the track length is more than 3 s from the match, since original-song timing doesn't fit them. The card says "skipped: remix/edit".
 - **Now Playing card** (bottom left): artwork, title, artist, source app, progress, and previous / play-pause / next buttons that control the playing app. It hides a few seconds after the mouse stops; `N` turns it off. HUD off hides it and the lyrics.
-- Settings rows: Lyrics on/off, lyrics size, lyrics timing, player card on/off, and what Now Playing sees (or why it can't).
+- **Settings → Lyrics**: an on/off switch that follows the `Y` key (and the other way round), style, position (lower third / centre), size and timing, the player card on/off, and what Now Playing sees (or why it can't).
 - States shown on the card: "lyrics offline" (retried after 30 s, then less often), "instrumental", "no synced lyrics", "skipped: remix/edit".
 - Now Playing comes from [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause), built from a pinned tag by `scripts/build_mediaremote_adapter.sh` and bundled by `make_app.sh`. Builds without it run as before.
 
 ### Notes
 - Lyrics and the card are on the main window only, like the HUD; they are never sent to Syphon or the output display.
+- The lyrics cost about 0.3-0.5 ms of main-thread time per frame (p95) and only move layers: frame-interval p95 was 14.5-14.6 ms with each style and with lyrics off (72 fps target, demo audio, one Mac).
 
 ### Fixed (lyrics in the real world: YouTube in a browser, a busy lrclib.net)
 - **No more silent "nothing"**: a small line where the lyrics go and the card always say why there are no lyrics ("Lyrics off (Y)", "Looking up lyrics…", "No synced lyrics found", "Lyrics server busy, retrying", "Skipped: remix/edit", "Skipped: video length … doesn't match the song (…)", "Skipped: long video/mix"). The full HUD has a "Lyrics" debug row (source app, looked-up title/artist, the two lengths, the decision).

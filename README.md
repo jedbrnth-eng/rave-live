@@ -32,7 +32,7 @@
   <sub>Every look in one reel: Stage, all 48 Classic Visuals presets, AURORA and six of the 149 built-in MilkDrop presets, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
 </p>
 
-> **Status: pre-release.** The latest download is **0.5.1**. **0.6.0** (synced lyrics, a Now Playing card and a performance and robustness pass) is finished and merged on `main` but **not released yet**: build from source to try it, or wait for the 0.6.0 download. Expect rough edges. Issues and pull requests are welcome.
+> **Status: pre-release.** The latest download is **0.6.0**: synced lyrics with six music-reactive lyric styles, a Now Playing card, and a performance and robustness pass. Expect rough edges. Issues and pull requests are welcome.
 
 > **Platform: Mac only, Linux/Windows planned.** RAVE LIVE is written for macOS (Swift, Metal and Apple's audio capture), so it does not run on Linux or Windows yet. A cross-platform version is planned; there is no date. Follow along or help in the issues.
 
@@ -40,7 +40,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/releases/latest/download/RAVE-LIVE.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20RAVE%20LIVE%20for%20Mac-Free-ff2d95?style=for-the-badge&logo=apple&logoColor=white" alt="Download RAVE LIVE for Mac, free" height="56"></a><br>
-  <sub>Free · Apple silicon and Intel · macOS 12+ · about 8 MB · version 0.5.1</sub>
+  <sub>Free · Apple silicon and Intel · macOS 12+ · about 8 MB · version 0.6.0</sub>
 </p>
 
 ## Download (no Terminal needed)
@@ -93,7 +93,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 - **MIDI**: MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, brightness, strobe, blackout, tap…), and MIDI clock sync.
 - **Control HUD** (`H`) and a **keyboard cheat sheet** (`?`) that never appear on Syphon or the output display.
 - **Settings** (`⌘,`): HUD on/off, startup mode and fullscreen, intensity, strobes, audio source, quality and visual sync offset, all remembered.
-- **Coming in 0.6.0 (on `main`, not in the 0.5.1 download yet): synced lyrics and a Now Playing card** for whatever your Mac is playing: the current lyric line large and low on screen, a small card with artwork and play/pause/next. Lyrics are off by default (they look the song up on [lrclib.net](https://lrclib.net)); remixes and edits never get wrongly timed lyrics. Main window only. Details in [docs/VJ.md](docs/VJ.md#lyrics-and-the-now-playing-card).
+- **Synced lyrics and a Now Playing card** (new in 0.6.0) for whatever your Mac is playing: the current lyric line large and low on screen in one of six lyric styles that move with the music, and a small card with artwork and play/pause/next. Lyrics are off by default (they look the song up on [lrclib.net](https://lrclib.net)); remixes and edits never get wrongly timed lyrics. Main window only. Details in [docs/VJ.md](docs/VJ.md#lyrics-and-the-now-playing-card).
 - Details: [docs/VJ.md](docs/VJ.md). Writing shaders: [docs/SHADERS.md](docs/SHADERS.md). Sharing looks and shaders: [community/](community/README.md).
 
 <table>
@@ -109,18 +109,16 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
   </tr>
 </table>
 
-<sub>All images are unedited frames rendered by the app itself (0.6.0 build from `main`, built-in 128 BPM demo signal, at the drop).</sub>
+<sub>All images are unedited frames rendered by the app itself (0.6.0, built-in 128 BPM demo signal, at the drop).</sub>
 
-### Coming in 0.6.0 (on `main`, not released yet)
-
-The 0.5.1 download doesn't have these yet. They are merged on `main` and will ship in the 0.6.0 release; until then, [build from source](#build-from-source) to try them.
+### New in 0.6.0
 
 <p align="center">
   <img src="docs/screenshots/lyrics-card.jpg" alt="Neon City with a synced lyric line large in the middle, the next line smaller below it, and the Now Playing card at the bottom left with artwork, title, artist, progress and play controls" width="860"><br>
   <sub>Synced lyrics and the Now Playing card over Neon City. The song, artist and lyrics here are made up and served from a local test server; the card and the lyric timing are the app's own.</sub>
 </p>
 
-- **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low on screen, the next line smaller below, a soft crossfade and a gentle breath on the beat (no flashing). **Off by default**, because turning them on sends the playing track's title, artist, album and length to [lrclib.net](https://lrclib.net). Remixes, edits, sped-up and slowed versions are never looked up, so you never get wrongly timed lyrics. `Y` toggles, `-` `=` nudge the timing.
+- **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low on screen (or centred), the next line smaller below, and a clean change between lines (the old line fades out before the new one comes in). No box behind the text; a thin outline keeps it readable over any visual. **Off by default**, because turning them on sends the playing track's title, artist, album and length to [lrclib.net](https://lrclib.net). Remixes, edits, sped-up and slowed versions are never looked up, so you never get wrongly timed lyrics. `Y` toggles, `-` `=` nudge the timing.
 - **Now Playing card** (bottom left): artwork, title, artist, the app it's playing in, progress, and previous / play-pause / next buttons. It hides a few seconds after the mouse stops; `N` turns it off.
 - **Lyric styles** that move with the music, not just the clock: Clean (default), Neon karaoke, Pop, Bass wave, Spectrum and Auto (follows the energy, cuts to Pop on drops). Words light up one by one, snapped to the live beat when the lyrics only time whole lines. Settings → Lyrics style, or `Shift-Y`.
 
@@ -128,7 +126,8 @@ The 0.5.1 download doesn't have these yet. They are merged on `main` and will sh
   <img src="docs/screenshots/lyrics-styles.webp" alt="Six lyric styles over RAVE LIVE visuals, top to bottom: Clean, Neon karaoke with a magenta-to-cyan fill sweeping through the words, Pop with two big words at a time, Bass wave with the letters riding a wave, Spectrum with each word coloured and sized like an equaliser bar, and Auto switching to Pop on a drop" width="640"><br>
   <sub>Top to bottom: Clean, Neon karaoke, Pop, Bass wave, Spectrum, Auto on a drop. Made-up lyrics from a local test server, recorded from the app's own window (demo audio).</sub>
 </p>
-- **New Settings rows** for lyrics on/off, lyrics size and timing, the player card, and what Now Playing currently sees.
+
+- **Settings → Lyrics**: an on/off switch that follows `Y`, lyric style, position (lower third or centre), size and timing, the player card, and what Now Playing currently sees.
 - **Smoother long sets and better recovery:** no more small stutter every 2 seconds late in a long set, system audio comes back on its own after sleep or a display change, Syphon keeps full frame rate while the window is covered, and the window appears at once on first launch.
 
 Full list: [CHANGELOG.md](CHANGELOG.md).
@@ -142,7 +141,7 @@ Full list: [CHANGELOG.md](CHANGELOG.md).
 
 <p align="center">
   <img src="docs/screenshots/settings.png" alt="The Settings window: HUD, Open in, Intensity, Strobe effects, Audio, Quality, Visual sync, then the Lyrics switch, Lyrics style, position, size, timing and Player card rows" width="420"><br>
-  <sub>Settings (<code>⌘,</code>), from a build of <code>main</code>. The Lyrics rows (switch, style, position, size, timing) and Player card are new since 0.5.1; everything above them is in 0.5.1.</sub>
+  <sub>Settings (<code>⌘,</code>). The Lyrics rows (switch, style, position, size, timing) and Player card are new in 0.6.0; everything above them arrived in 0.5.1.</sub>
 </p>
 
 ### New in 0.5
@@ -189,10 +188,10 @@ Full list: [CHANGELOG.md](CHANGELOG.md).
 | `⌘,` | Settings: HUD, startup mode, intensity, strobes, audio, quality, sync offset |
 | `?` | Keyboard cheat sheet |
 | `⌘L` | MIDI Learn |
-| `Y` | Synced lyrics on/off (looks the song up on lrclib.net) · 0.6.0, on `main` |
-| `N` | Now Playing card on/off · 0.6.0, on `main` |
-| `-` `=` | Lyrics 50 ms earlier / later · 0.6.0, on `main` |
-| `Shift-Y` | Next lyric style (Clean, Neon karaoke, Pop, Bass wave, Spectrum, Auto) · on `main` |
+| `Y` | Synced lyrics on/off (looks the song up on lrclib.net) |
+| `N` | Now Playing card on/off |
+| `-` `=` | Lyrics 50 ms earlier / later |
+| `Shift-Y` | Next lyric style (Clean, Neon karaoke, Pop, Bass wave, Spectrum, Auto) |
 
 <p align="center">
   <img src="docs/screenshots/app-window.jpg" alt="The app window with the mode switcher at the top left and the live status bar at the bottom showing BPM, confidence, fps and latency" width="860">
@@ -218,7 +217,7 @@ any input device (CoreAudio) ────┴─► LiveAnalyzer ─► TempoTrac
 
 ## Performance
 
-Measured with the app's built-in metrics (`--metrics`) on an Apple M4 Max MacBook Pro, 1920×1080, built-in 128 BPM demo signal, 0.6.0 build from `main`, one mode at a time for 40 seconds. The window was on a 144 Hz external monitor, where the app targets 72 fps (the smallest whole divisor of the refresh rate that is at least 60, so frames are evenly paced):
+Measured with the app's built-in metrics (`--metrics`) on an Apple M4 Max MacBook Pro, 1920×1080, built-in 128 BPM demo signal, 0.6.0, one mode at a time for 40 seconds. The window was on a 144 Hz external monitor, where the app targets 72 fps (the smallest whole divisor of the refresh rate that is at least 60, so frames are evenly paced):
 
 | Mode | Frame rate | Frame interval p95 | GPU time p95 |
 |---|---|---|---|
