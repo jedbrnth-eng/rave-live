@@ -81,6 +81,16 @@ struct Prefs {
         nonmutating set { set(max(-1000, min(1000, newValue)), "lyricsOffsetMs") }
     }
 
+    /// Lyric look (Settings → Lyrics → Style).
+    var lyricsStyle: LyricStyle {
+        get { LyricStyle.from(key: string("lyricsStyle")) }
+        nonmutating set { setString(newValue.rawValue, "lyricsStyle") }
+    }
+    var lyricsPosition: LyricPosition {
+        get { LyricPosition.from(key: string("lyricsPosition")) }
+        nonmutating set { setString(newValue.rawValue, "lyricsPosition") }
+    }
+
     /// Audio menu pick (`InputSource.key`), nil = never picked (system audio). M and the menu save it; test runs don't.
     var audioSource: String? {
         get { string("audioSource") }
@@ -101,7 +111,7 @@ struct Prefs {
     func reset() {
         guard !frozen else { return }
         for k in ["overlayLevel", "startMode", "lastMode", "startFullscreen", "intensity", "strobeEnabled", "syncOffsetMs",
-                  "lyricsEnabled", "playerCard", "lyricsSize", "lyricsOffsetMs"] { defaults.removeObject(forKey: k) }
+                  "lyricsEnabled", "playerCard", "lyricsSize", "lyricsOffsetMs", "lyricsStyle", "lyricsPosition"] { defaults.removeObject(forKey: k) }
     }
 }
 
