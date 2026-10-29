@@ -26,6 +26,8 @@ struct Prefs {
     private func int(_ k: String, _ def: Int) -> Int { frozen ? def : (defaults.object(forKey: k) as? Int ?? def) }
     private func bool(_ k: String, _ def: Bool) -> Bool { frozen ? def : (defaults.object(forKey: k) as? Bool ?? def) }
     private func set(_ v: Any, _ k: String) { if !frozen { defaults.set(v, forKey: k) } }
+    private func string(_ k: String) -> String? { frozen ? nil : defaults.string(forKey: k) }
+    private func setString(_ v: String?, _ k: String) { if frozen { return }; if let v { defaults.set(v, forKey: k) } else { defaults.removeObject(forKey: k) } }
 
     var overlay: OverlayLevel {
         get { OverlayLevel(rawValue: int("overlayLevel", OverlayLevel.status.rawValue)) ?? .status }
@@ -77,6 +79,17 @@ struct Prefs {
     var lyricsOffsetMs: Int {
         get { max(-1000, min(1000, int("lyricsOffsetMs", 0))) }
         nonmutating set { set(max(-1000, min(1000, newValue)), "lyricsOffsetMs") }
+    }
+
+    /// Audio menu pick (`InputSource.key`), nil = never picked (system audio). M and the menu save it; test runs don't.
+    var audioSource: String? {
+        get { string("audioSource") }
+        nonmutating set { setString(newValue, "audioSource") }
+    }
+    /// The input device M switches back to (UID; "" = default input).
+    var lastInputDevice: String? {
+        get { string("lastInputDevice") }
+        nonmutating set { setString(newValue, "lastInputDevice") }
     }
 
     /// The mode to open in when no mode flag was given.
@@ -222,7 +235,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     static func msText(_ ms: Int) -> String { ms == 0 ? "0 ms" : String(format: "%+d ms %@", ms, ms > 0 ? "later" : "earlier") }
 
-    func show() { refresh(); window?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
+    /// ⌘, again while Settings is already in front does nothing (it used to rebuild the window state twice per press).
+    /// Becoming key refreshes it (windowDidBecomeKey).
+    func show() {
+        guard let w = window, !(w.isVisible && w.isKeyWindow && NSApp.isActive) else { return }
+        w.makeKeyAndOrderFront(nil)
+        if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
+    }
     func windowDidBecomeKey(_ n: Notification) { refresh() }
     func windowWillClose(_ n: Notification) { app?.window.makeFirstResponder(app?.view) }
 

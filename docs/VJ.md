@@ -93,7 +93,7 @@ and a small player card bottom left with artwork, title, artist, the source app,
 - The card hides a few seconds after the mouse stops moving; **N** turns it off. HUD off (clean picture) hides both.
 - Like the HUD, lyrics and the card are on the main window only, never on Syphon or the output display (a follow-up may
   add lyrics to the output).
-- Card notes: "lyrics offline" (no network or LRCLIB down; retried after 30 s), "instrumental", "no synced lyrics".
+- Card notes: "lyrics offline" (no network, LRCLIB down, or a Wi-Fi login page; retried after 30 s, then less often, up to every 10 min), "instrumental", "no synced lyrics".
 - Now Playing is read by the bundled [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause)
   through `/usr/bin/perl`, because macOS only lets Apple-signed processes read it. Builds without it
   (`scripts/build_mediaremote_adapter.sh`) run as before and Settings explains why lyrics and the card are off.
@@ -119,7 +119,7 @@ and a small player card bottom left with artwork, title, artist, the source app,
 | M | system audio ↔ the last input device |
 | C, ⌘K | camera hands & body (AURORA) |
 | F, ⌘F | fullscreen (Esc exits), in every mode |
-| P, ⌘P | MilkDrop preset browser |
+| P, ⌘P | MilkDrop preset browser (P again closes it) |
 | R | MILKDROP: random preset · open Tweak panel: reset the preset |
 | L | MILKDROP: lock the preset (no automatic changes) |
 | Shift-F | MILKDROP: favourite the preset |

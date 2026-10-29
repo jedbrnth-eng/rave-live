@@ -57,6 +57,10 @@ public enum CaptureError: Error, CustomStringConvertible {
 public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     public var onSamples: SampleHandler?
     public var onError: ((Error) -> Void)?
+    /// The stream ended on its own (sleep/wake, display change, another app or the system took it). Not called for `stop()`.
+    public var onStopped: ((Error) -> Void)?
+    /// Display the content filter is tied to (SCK audio needs a display filter).
+    public private(set) var displayID: CGDirectDisplayID?
     public private(set) var droppedGaps = 0
     public private(set) var buffersReceived = 0
     private var stream: SCStream?
@@ -90,9 +94,18 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
         try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: videoQueue)
         try await s.startCapture()
         stream = s
+        displayID = display.displayID
+        expectedPTS = nil
     }
 
     public func stop() async { try? await stream?.stopCapture(); stream = nil }
+
+    /// Test hook (`--vjscript capturestop`): really stops the running stream, then reports it the way ScreenCaptureKit
+    /// reports a system stop, so the app's recovery path runs without sleeping the Mac.
+    public func debugSimulateSystemStop() async {
+        await stop()
+        onStopped?(NSError(domain: "RAVE LIVE simulated stop", code: -3821, userInfo: [NSLocalizedDescriptionKey: "simulated: the stream was stopped by the system"]))
+    }
 
     public func stream(_ stream: SCStream, didOutputSampleBuffer sb: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, sb.isValid else { return }
@@ -131,7 +144,10 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
         } catch { onError?(error) }
     }
 
-    public func stream(_ stream: SCStream, didStopWithError error: Error) { onError?(error) }
+    public func stream(_ stream: SCStream, didStopWithError error: Error) {
+        if stream === self.stream { self.stream = nil }
+        onStopped?(error)
+    }
 }
 
 /// A CoreAudio device with at least one input channel (mic, interface, DJ mixer, BlackHole/Loopback).

@@ -43,6 +43,8 @@ final class LyricsController: NSObject {
     static let nextLineLead = 8.0
     private var lastWake = -100.0
     private var retryAt: Double?
+    /// Offline retries for the current song (backoff 30 s, 60 s, 120 s … 10 min); reset on a new song or an answer.
+    private var retries = 0, retryKey = ""
     private var hudLevel: OverlayLevel = .status
     private var logURL: URL?
 
@@ -87,11 +89,13 @@ final class LyricsController: NSObject {
         timer = t
     }
 
-    func shutdown() { timer?.invalidate(); lookupTask?.cancel(); source.stop() }
+    func shutdown() { timer?.invalidate(); lookupTask?.cancel(); source.stop(waitForExit: true) }
 
-    func log(_ s: String) {
-        NSLog("RAVE LIVE %@", s)
-        app?.renderer?.metrics.event(s, at: CACurrentMediaTime())
+    /// `redacted` replaces `s` in the system log and the metrics JSON (written to ~/.cache by default and kept for the
+    /// whole run): track titles and artists only go to the opt-in `--lyrics-log` test file.
+    func log(_ s: String, redacted: String? = nil) {
+        NSLog("RAVE LIVE %@", redacted ?? s)
+        app?.renderer?.metrics.event(redacted ?? s, at: CACurrentMediaTime())
         guard let u = logURL else { return }
         let line = String(format: "%.3f %@\n", Date().timeIntervalSince1970, s)
         if let h = try? FileHandle(forWritingTo: u) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() }
@@ -158,7 +162,10 @@ final class LyricsController: NSObject {
         let old = info
         info = i
         if old?.trackKey != i?.trackKey {
-            if let i { log(String(format: "nowplaying: track \"%@\" — %@ (%@) %.1f s", i.title, i.artist, i.bundleID, i.duration ?? -1)) }
+            if let i {
+                log(String(format: "nowplaying: track \"%@\" — %@ (%@) %.1f s", i.title, i.artist, i.bundleID, i.duration ?? -1),
+                    redacted: String(format: "nowplaying: track %@ (%@) %.1f s", Self.titleTag(i.title, i.artist), i.bundleID, i.duration ?? -1))
+            }
             else { log("nowplaying: nothing playing") }
             wake(); lines = []; shownIndex = -1; lookupKey = ""; shownPair = ("\u{1}", "\u{1}")
             lookupTask?.cancel(); lookupTask = nil
@@ -183,11 +190,13 @@ final class LyricsController: NSObject {
         let key = LyricsCache.key(title: i.title, artist: i.artist, duration: i.duration)
         guard key != lookupKey else { return }
         lookupKey = key; retryAt = nil
+        if key != retryKey { retryKey = key; retries = 0 }
         if TrackTitle.hasRemixMarker(i.title) { setState(.remix); return }          // remixes are never looked up
         guard let d = i.duration, d > 0 else { setState(.noLength); return }
         if let hit = cache.load(key) { log("lyrics: cache hit \(key)"); apply(hit, for: i); return }
         setState(.looking)
-        log("lyrics: lookup \"\(TrackTitle.clean(i.title, strict: false))\" / \(TrackTitle.cleanArtist(i.artist)) / \(Int(d.rounded())) s")
+        log("lyrics: lookup \"\(TrackTitle.clean(i.title, strict: false))\" / \(TrackTitle.cleanArtist(i.artist)) / \(Int(d.rounded())) s",
+            redacted: "lyrics: lookup \(Self.titleTag(i.title, i.artist)) / \(Int(d.rounded())) s")
         let t0 = CACurrentMediaTime()
         lookupTask?.cancel()
         lookupTask = Task { [client] in
@@ -202,6 +211,16 @@ final class LyricsController: NSObject {
                 self.apply(r, for: i)
             }
         }
+    }
+
+    /// 30 s, 60 s, 120 s … capped at 10 min: a dead or always-500 server isn't hammered for the whole song.
+    static func retryDelay(attempt: Int) -> Double { min(600, 30 * pow(2, Double(min(10, max(0, attempt))))) }
+
+    /// Short stable tag for a track in logs that persist ("track#1a2b3c4d"): FNV-1a of title + artist, no text.
+    static func titleTag(_ title: String, _ artist: String) -> String {
+        var h: UInt64 = 0xcbf29ce484222325
+        for b in (title + "\u{1f}" + artist).utf8 { h ^= UInt64(b); h = h &* 0x100000001b3 }
+        return String(format: "track#%08llx", h & 0xffff_ffff)
     }
 
     static func describe(_ r: LyricsResult) -> String {
@@ -227,8 +246,11 @@ final class LyricsController: NSObject {
         case .plainOnly, .notFound: setState(.notFound)
         case .offline:
             setState(.offline)
-            retryAt = CACurrentMediaTime() + 30                  // try again in 30 s if the same song is still on
+            retryAt = CACurrentMediaTime() + Self.retryDelay(attempt: retries)   // same song still on: try again later
+            retries += 1
+            return
         }
+        retries = 0
     }
 
     /// Song position the listener hears now: adapter position minus the audio output latency, minus the user trim.
@@ -246,11 +268,11 @@ final class LyricsController: NSObject {
         // which LRC line the overlay's text actually is (first line with that text at or before `heard`)
         let shownText = overlay.currentText
         let shownIdx = overlay.isHidden ? nil : lines.indices.last { lines[$0].text == shownText && lines[$0].time <= heard + 0.5 }
-        log(String(format: "lyrics: %@ pos=%.3f heard=%.3f latency=%.0fms offset=%dms state=%@ expectedLine=%@ expectedTime=%@ shownLine=%@ shownTime=%@ overlay=%@ card=%@",
+        log(String(format: "lyrics: %@ pos=%.3f heard=%.3f latency=%.0fms offset=%dms state=%@ expectedLine=%@ expectedTime=%@ shownLine=%@ shownTime=%@ overlay=%@ breath=%.3f card=%@",
                    tag, pos, heard, (app?.renderer?.outputLatency.seconds ?? 0) * 1000, offsetMs, "\(state)",
                    idx.map(String.init) ?? "none", idx.map { String(format: "%.2f", lines[$0].time) } ?? "-",
                    shownIdx.map(String.init) ?? "none", shownIdx.map { String(format: "%.2f", lines[$0].time) } ?? "-",
-                   overlay.isHidden ? "hidden" : "visible", card.isHidden ? "hidden" : String(format: "visible(alpha %.2f)", card.alphaValue)))
+                   overlay.isHidden ? "hidden" : "visible", overlay.lineScale, card.isHidden ? "hidden" : String(format: "visible(alpha %.2f)", card.alphaValue)))
     }
 
     // MARK: per frame (30 Hz)
@@ -383,13 +405,36 @@ final class LyricsOverlayView: NSView {
         redraw()
     }
 
+    /// Builds the attributed strings. Only on a new line or a resize: the beat breath is a layer transform
+    /// (`applyBreath`), so the text isn't laid out and shadow-blurred again 30 times a second (that roughly doubled
+    /// the app's CPU with lyrics on).
     private func redraw() {
-        let b = breath
+        redraws += 1
         for (i, l) in cur.enumerated() {
-            l.attributedStringValue = attributed(texts[i], size: big * (1 + 0.025 * b), weight: .bold, alpha: 1, glow: 6 + 6 * b, glowAlpha: 0.5 + 0.2 * b)
+            l.attributedStringValue = attributed(texts[i], size: big, weight: .bold, alpha: 1, glow: 9, glowAlpha: 0.6)
         }
         next.attributedStringValue = attributed(nextText, size: big * 0.55, weight: .medium, alpha: 0.55, glow: 4, glowAlpha: 0.3)
+        applyBreath()
     }
+
+    /// Scale the current line about its centre by `breathScale(breath)`. Core Animation applies it on the GPU.
+    private func applyBreath() {
+        let k = Self.breathScale(breath)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        for l in cur {
+            guard let layer = l.layer else { continue }
+            let b = layer.bounds, ax = b.width * layer.anchorPoint.x, ay = b.height * layer.anchorPoint.y
+            let cx = b.midX - ax, cy = b.midY - ay        // centre relative to the anchor (AppKit puts it at the corner)
+            var t = CATransform3DMakeTranslation(cx, cy, 0)
+            t = CATransform3DScale(t, k, k, 1)
+            layer.transform = CATransform3DTranslate(t, -cx, -cy, 0)
+        }
+        CATransaction.commit()
+    }
+    /// +2.5 % at the peak of the beat.
+    static func breathScale(_ b: CGFloat) -> CGFloat { 1 + 0.025 * max(0, min(1, b)) }
+    /// Test hook: how many times the attributed strings were rebuilt.
+    private(set) var redraws = 0
 
     /// Smooth crossfade (0.4 s) between the old and the new line. No motion besides the fade.
     func show(current: String, next n: String) {
@@ -417,12 +462,14 @@ final class LyricsOverlayView: NSView {
     /// 0..1 beat breath: at most +2.5 % size and a slightly wider glow. Slow and small on purpose (photosensitivity rule).
     func breathe(_ b: Double) {
         let v = CGFloat(b)
-        guard abs(v - breath) > 0.02 else { return }
+        guard abs(v - breath) > 0.01 else { return }
         breath = v
-        redraw()
+        applyBreath()
     }
 
     var currentText: String { texts[front] }
+    /// Scale the beat breath currently applies to the line (1 = none), read back from the layer.
+    var lineScale: Double { Double(cur[front].layer?.transform.m11 ?? 1) }
 }
 
 /// Small Now Playing card, bottom left: artwork, title, artist, source app, progress, previous / play-pause / next.

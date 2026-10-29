@@ -19,7 +19,24 @@ final class VisualsRenderer {
     /// SHOW / drop picks: big, punchy presets vs calm ones (every built-in is in exactly one list).
     static let loudPresets = [0, 2, 6, 8, 9, 10, 11, 12, 13, 18, 20, 22, 24, 25, 27, 31, 33, 36, 40, 43, 44, 45]
     static let calmPresets = [1, 3, 7, 14, 15, 16, 17, 19, 21, 23, 26, 28, 29, 30, 32, 34, 35, 37, 38, 39, 41, 42, 46, 47]
-    var currentName: String { let n = Self.presetNames; return n.indices.contains(preset) ? n[preset] : n[0] }
+    /// Name for a preset index that may be stale: Shader Lab entries vanish when their .metal file is deleted, so an
+    /// index taken before that can point past the end (indexing `presetNames` directly crashed there).
+    static func presetName(_ i: Int) -> String { let n = presetNames; return n.indices.contains(i) ? n[i] : n[0] }
+    var currentName: String { Self.presetName(preset) }
+    /// Warp, sim and composite pipelines. Also run by ShaderWarmup on a background thread at launch.
+    static func pipelines(device: MTLDevice, pixelFormat: MTLPixelFormat) throws -> (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState) {
+        let lib = try device.makeLibrary(source: visualsShaderSource, options: nil)
+        let d = MTLRenderPipelineDescriptor()
+        d.vertexFunction = lib.makeFunction(name: "vvert")
+        d.fragmentFunction = lib.makeFunction(name: "vwarp")
+        d.colorAttachments[0].pixelFormat = .rgba16Float
+        let warp = try device.makeRenderPipelineState(descriptor: d)
+        d.fragmentFunction = lib.makeFunction(name: "vsim")
+        let sim = try device.makeRenderPipelineState(descriptor: d)
+        d.fragmentFunction = lib.makeFunction(name: "vcomp")
+        d.colorAttachments[0].pixelFormat = pixelFormat
+        return (warp, sim, try device.makeRenderPipelineState(descriptor: d))
+    }
     /// Index into the Shader Lab list when a user shader is selected, else nil.
     var userIndex: Int? { preset >= Self.builtinNames.count ? preset - Self.builtinNames.count : nil }
     let lab = PresetLab()
@@ -68,19 +85,8 @@ final class VisualsRenderer {
     init?(device: MTLDevice, pixelFormat: MTLPixelFormat) {
         self.device = device
         self.pixelFormat = pixelFormat
-        do {
-            let lib = try device.makeLibrary(source: visualsShaderSource, options: nil)
-            let d = MTLRenderPipelineDescriptor()
-            d.vertexFunction = lib.makeFunction(name: "vvert")
-            d.fragmentFunction = lib.makeFunction(name: "vwarp")
-            d.colorAttachments[0].pixelFormat = .rgba16Float
-            warp = try device.makeRenderPipelineState(descriptor: d)
-            d.fragmentFunction = lib.makeFunction(name: "vsim")
-            sim = try device.makeRenderPipelineState(descriptor: d)
-            d.fragmentFunction = lib.makeFunction(name: "vcomp")
-            d.colorAttachments[0].pixelFormat = pixelFormat
-            comp = try device.makeRenderPipelineState(descriptor: d)
-        } catch { NSLog("Visuals shader error: \(error)"); return nil }
+        do { (warp, sim, comp) = try Self.pipelines(device: device, pixelFormat: pixelFormat) }
+        catch { NSLog("Visuals shader error: \(error)"); return nil }
         lab.visuals = self
         UserShaderLibrary.shared.device = device
         DispatchQueue.main.async { [weak self] in self?.lab.applyCommandLine() }

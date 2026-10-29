@@ -41,29 +41,40 @@ final class AuroraRenderer {
         curlStrength = [18, 28, 40][seed % 3]
     }
 
+    /// Fluid compute kernels (advect, splat, maskInject, curlK, vorticity, divergence, pressureK, scaleK, gradient,
+    /// particles) and the particle / dye / final render pipelines. Also run by ShaderWarmup at launch.
+    static func pipelines(device: MTLDevice, pixelFormat: MTLPixelFormat) throws -> (c: [MTLComputePipelineState], draw: MTLRenderPipelineState, dye: MTLRenderPipelineState, final: MTLRenderPipelineState) {
+        let lib = try device.makeLibrary(source: auroraShaderSource, options: nil)
+        var c: [MTLComputePipelineState] = []
+        for n in ["advect", "splat", "maskInject", "curlK", "vorticity", "divergence", "pressureK", "scaleK", "gradient", "particles"] {
+            guard let f = lib.makeFunction(name: n) else { throw NSError(domain: "Aurora", code: 1, userInfo: [NSLocalizedDescriptionKey: "missing kernel \(n)"]) }
+            c.append(try device.makeComputePipelineState(function: f))
+        }
+        let d = MTLRenderPipelineDescriptor()
+        d.vertexFunction = lib.makeFunction(name: "pvert"); d.fragmentFunction = lib.makeFunction(name: "pfrag")
+        d.colorAttachments[0].pixelFormat = .rgba16Float
+        d.colorAttachments[0].isBlendingEnabled = true
+        d.colorAttachments[0].rgbBlendOperation = .add; d.colorAttachments[0].alphaBlendOperation = .add
+        d.colorAttachments[0].sourceRGBBlendFactor = .one; d.colorAttachments[0].destinationRGBBlendFactor = .one
+        d.colorAttachments[0].sourceAlphaBlendFactor = .one; d.colorAttachments[0].destinationAlphaBlendFactor = .one
+        let draw = try device.makeRenderPipelineState(descriptor: d)
+        let d2 = MTLRenderPipelineDescriptor()
+        d2.vertexFunction = lib.makeFunction(name: "fsv"); d2.fragmentFunction = lib.makeFunction(name: "dyeToHDR")
+        d2.colorAttachments[0].pixelFormat = .rgba16Float
+        let dye = try device.makeRenderPipelineState(descriptor: d2)
+        d2.fragmentFunction = lib.makeFunction(name: "finalComp"); d2.colorAttachments[0].pixelFormat = pixelFormat
+        let final = try device.makeRenderPipelineState(descriptor: d2)
+        return (c, draw, dye, final)
+    }
+
     init?(device: MTLDevice, pixelFormat: MTLPixelFormat, particles: Int) {
         self.device = device
         particleCount = particles
         do {
-            let lib = try device.makeLibrary(source: auroraShaderSource, options: nil)
-            func k(_ n: String) throws -> MTLComputePipelineState { try device.makeComputePipelineState(function: lib.makeFunction(name: n)!) }
-            pAdvect = try k("advect"); pSplat = try k("splat"); pMask = try k("maskInject"); pCurl = try k("curlK")
-            pVort = try k("vorticity"); pDiv = try k("divergence"); pPress = try k("pressureK"); pScale = try k("scaleK")
-            pGrad = try k("gradient"); pParticles = try k("particles")
-            let d = MTLRenderPipelineDescriptor()
-            d.vertexFunction = lib.makeFunction(name: "pvert"); d.fragmentFunction = lib.makeFunction(name: "pfrag")
-            d.colorAttachments[0].pixelFormat = .rgba16Float
-            d.colorAttachments[0].isBlendingEnabled = true
-            d.colorAttachments[0].rgbBlendOperation = .add; d.colorAttachments[0].alphaBlendOperation = .add
-            d.colorAttachments[0].sourceRGBBlendFactor = .one; d.colorAttachments[0].destinationRGBBlendFactor = .one
-            d.colorAttachments[0].sourceAlphaBlendFactor = .one; d.colorAttachments[0].destinationAlphaBlendFactor = .one
-            pDraw = try device.makeRenderPipelineState(descriptor: d)
-            let d2 = MTLRenderPipelineDescriptor()
-            d2.vertexFunction = lib.makeFunction(name: "fsv"); d2.fragmentFunction = lib.makeFunction(name: "dyeToHDR")
-            d2.colorAttachments[0].pixelFormat = .rgba16Float
-            pDye = try device.makeRenderPipelineState(descriptor: d2)
-            d2.fragmentFunction = lib.makeFunction(name: "finalComp"); d2.colorAttachments[0].pixelFormat = pixelFormat
-            pFinal = try device.makeRenderPipelineState(descriptor: d2)
+            let p = try Self.pipelines(device: device, pixelFormat: pixelFormat)
+            pAdvect = p.c[0]; pSplat = p.c[1]; pMask = p.c[2]; pCurl = p.c[3]; pVort = p.c[4]; pDiv = p.c[5]; pPress = p.c[6]
+            pScale = p.c[7]; pGrad = p.c[8]; pParticles = p.c[9]
+            pDraw = p.draw; pDye = p.dye; pFinal = p.final
         } catch { NSLog("Aurora shader error: \(error)"); return nil }
         guard let buf = device.makeBuffer(length: particles * 32, options: .storageModeShared) else { return nil }
         particleBuf = buf

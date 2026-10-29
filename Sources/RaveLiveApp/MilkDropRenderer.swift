@@ -90,15 +90,19 @@ final class MilkDropRenderer: @unchecked Sendable {
 
     init?(device: MTLDevice, pixelFormat: MTLPixelFormat, library: MilkDropLibrary) {
         self.device = device; self.library = library
-        do {
-            let l = try device.makeLibrary(source: milkDropShaderSource, options: nil)
-            let d = MTLRenderPipelineDescriptor()
-            d.vertexFunction = l.makeFunction(name: "mvert"); d.fragmentFunction = l.makeFunction(name: "mfrag")
-            d.colorAttachments[0].pixelFormat = pixelFormat
-            comp = try device.makeRenderPipelineState(descriptor: d)
-            d.fragmentFunction = l.makeFunction(name: "mcopy")
-            copy = try device.makeRenderPipelineState(descriptor: d)
-        } catch { NSLog("MilkDrop shader error: \(error)"); return nil }
+        do { (comp, copy) = try Self.pipelines(device: device, pixelFormat: pixelFormat) }
+        catch { NSLog("MilkDrop shader error: \(error)"); return nil }
+    }
+
+    /// Also run by ShaderWarmup on a background thread at launch (fills Metal's cache).
+    static func pipelines(device: MTLDevice, pixelFormat: MTLPixelFormat) throws -> (MTLRenderPipelineState, MTLRenderPipelineState) {
+        let l = try device.makeLibrary(source: milkDropShaderSource, options: nil)
+        let d = MTLRenderPipelineDescriptor()
+        d.vertexFunction = l.makeFunction(name: "mvert"); d.fragmentFunction = l.makeFunction(name: "mfrag")
+        d.colorAttachments[0].pixelFormat = pixelFormat
+        let comp = try device.makeRenderPipelineState(descriptor: d)
+        d.fragmentFunction = l.makeFunction(name: "mcopy")
+        return (comp, try device.makeRenderPipelineState(descriptor: d))
     }
 
     // MARK: - audio (capture queue)
