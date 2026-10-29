@@ -32,7 +32,7 @@
   <sub>Every look in one reel: Stage, all 48 Classic Visuals presets, AURORA and six of the 149 built-in MilkDrop presets, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
 </p>
 
-> **Status: pre-release (0.5).** Expect rough edges. Issues and pull requests are welcome.
+> **Status: pre-release.** The latest download is **0.5.1**. **0.6.0** (synced lyrics, a Now Playing card and a performance and robustness pass) is finished and merged on `main` but **not released yet**: build from source to try it, or wait for the 0.6.0 download. Expect rough edges. Issues and pull requests are welcome.
 
 > **Platform: Mac only, Linux/Windows planned.** RAVE LIVE is written for macOS (Swift, Metal and Apple's audio capture), so it does not run on Linux or Windows yet. A cross-platform version is planned; there is no date. Follow along or help in the issues.
 
@@ -40,7 +40,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/releases/latest/download/RAVE-LIVE.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20RAVE%20LIVE%20for%20Mac-Free-ff2d95?style=for-the-badge&logo=apple&logoColor=white" alt="Download RAVE LIVE for Mac, free" height="56"></a><br>
-  <sub>Free · Apple silicon and Intel · macOS 12+ · about 9 MB</sub>
+  <sub>Free · Apple silicon and Intel · macOS 12+ · about 8 MB · version 0.5.1</sub>
 </p>
 
 ## Download (no Terminal needed)
@@ -93,7 +93,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 - **MIDI**: MIDI Learn (`⌘L`) for 14 targets (mode, preset, intensity, brightness, strobe, blackout, tap…), and MIDI clock sync.
 - **Control HUD** (`H`) and a **keyboard cheat sheet** (`?`) that never appear on Syphon or the output display.
 - **Settings** (`⌘,`): HUD on/off, startup mode and fullscreen, intensity, strobes, audio source, quality and visual sync offset, all remembered.
-- **Synced lyrics and a Now Playing card** for whatever your Mac is playing: the current lyric line large and low on screen, a small card with artwork and play/pause/next. Lyrics are off by default (they look the song up on [lrclib.net](https://lrclib.net)); remixes and edits never get wrongly timed lyrics. Main window only. Details in [docs/VJ.md](docs/VJ.md#lyrics-and-the-now-playing-card).
+- **Coming in 0.6.0 (on `main`, not in the 0.5.1 download yet): synced lyrics and a Now Playing card** for whatever your Mac is playing: the current lyric line large and low on screen, a small card with artwork and play/pause/next. Lyrics are off by default (they look the song up on [lrclib.net](https://lrclib.net)); remixes and edits never get wrongly timed lyrics. Main window only. Details in [docs/VJ.md](docs/VJ.md#lyrics-and-the-now-playing-card).
 - Details: [docs/VJ.md](docs/VJ.md). Writing shaders: [docs/SHADERS.md](docs/SHADERS.md). Sharing looks and shaders: [community/](community/README.md).
 
 <table>
@@ -109,7 +109,35 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
   </tr>
 </table>
 
-<sub>All images are unedited frames rendered by the app (version 0.4, demo track).</sub>
+<sub>All images are unedited frames rendered by the app itself (0.6.0 build from `main`, built-in 128 BPM demo signal, at the drop).</sub>
+
+### Coming in 0.6.0 (on `main`, not released yet)
+
+The 0.5.1 download doesn't have these yet. They are merged on `main` and will ship in the 0.6.0 release; until then, [build from source](#build-from-source) to try them.
+
+<p align="center">
+  <img src="docs/screenshots/lyrics-card.jpg" alt="Neon City with a synced lyric line large in the middle, the next line smaller below it, and the Now Playing card at the bottom left with artwork, title, artist, progress and play controls" width="860"><br>
+  <sub>Synced lyrics and the Now Playing card over Neon City. The song, artist and lyrics here are made up and served from a local test server; the card and the lyric timing are the app's own.</sub>
+</p>
+
+- **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low on screen, the next line smaller below, a soft crossfade and a gentle breath on the beat (no flashing). **Off by default**, because turning them on sends the playing track's title, artist, album and length to [lrclib.net](https://lrclib.net). Remixes, edits, sped-up and slowed versions are never looked up, so you never get wrongly timed lyrics. `Y` toggles, `-` `=` nudge the timing.
+- **Now Playing card** (bottom left): artwork, title, artist, the app it's playing in, progress, and previous / play-pause / next buttons. It hides a few seconds after the mouse stops; `N` turns it off.
+- **New Settings rows** for lyrics on/off, lyrics size and timing, the player card, and what Now Playing currently sees.
+- **Smoother long sets and better recovery:** no more small stutter every 2 seconds late in a long set, system audio comes back on its own after sleep or a display change, Syphon keeps full frame rate while the window is covered, and the window appears at once on first launch.
+
+Full list: [CHANGELOG.md](CHANGELOG.md).
+
+### HUD and Settings (0.5.1)
+
+<p align="center">
+  <img src="docs/screenshots/hud-modes.jpg" alt="Three Stage frames side by side: with the status line, with the full Control HUD, and with the HUD off for a clean picture" width="860"><br>
+  <sub><code>H</code> cycles the HUD: status line → full Control HUD → off (clean picture, no mode bar). None of it is ever sent to Syphon or the output display.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="The Settings window: HUD, Open in, Intensity, Strobe effects, Audio, Quality, Visual sync, and the 0.6.0 Lyrics, Lyrics size, Lyrics timing and Player card rows" width="420"><br>
+  <sub>Settings (<code>⌘,</code>), shown from the 0.6.0 build. The Lyrics and Player card rows arrive with 0.6.0; everything above them is in 0.5.1.</sub>
+</p>
 
 ### New in 0.5
 
@@ -125,7 +153,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 ### Every visual
 
 <details>
-<summary>Contact sheet of the 0.4 looks</summary>
+<summary>Contact sheet of every look (0.5)</summary>
 
 <p align="center">
   <img src="docs/visuals-grid.jpg" alt="Contact sheet of Stage, all 48 Classic Visuals presets, AURORA and six built-in MilkDrop presets, each labelled with its name" width="860">
@@ -155,9 +183,9 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 | `⌘,` | Settings: HUD, startup mode, intensity, strobes, audio, quality, sync offset |
 | `?` | Keyboard cheat sheet |
 | `⌘L` | MIDI Learn |
-| `Y` | Synced lyrics on/off (looks the song up on lrclib.net) |
-| `N` | Now Playing card on/off |
-| `-` `=` | Lyrics 50 ms earlier / later |
+| `Y` | Synced lyrics on/off (looks the song up on lrclib.net) · 0.6.0, on `main` |
+| `N` | Now Playing card on/off · 0.6.0, on `main` |
+| `-` `=` | Lyrics 50 ms earlier / later · 0.6.0, on `main` |
 
 <p align="center">
   <img src="docs/screenshots/app-window.jpg" alt="The app window with the mode switcher at the top left and the live status bar at the bottom showing BPM, confidence, fps and latency" width="860">
@@ -170,7 +198,8 @@ system audio (ScreenCaptureKit) ─┐
 any input device (CoreAudio) ────┴─► LiveAnalyzer ─► TempoTracker ─► ShowDirector ─► Metal renderers
                                      FFT bands,       tempo, beat      phrases,        Stage · Classic
                                      onsets, kick/    phase, bar       build/drop      Visuals · AURORA
-                                     snare/hat        line             detection       + transitions
+                                     snare/hat        line             detection       · MILKDROP
+                                                                                       + transitions
                                                          ▲
                                      Beat This! referee ─┘ (optional Python sidecar)
 ```
@@ -182,17 +211,17 @@ any input device (CoreAudio) ────┴─► LiveAnalyzer ─► TempoTrac
 
 ## Performance
 
-Measured with the app's built-in metrics (`--metrics`) on an Apple M4 Max MacBook Pro (120 Hz built-in display), 1920×1080, using the synthetic 128 BPM demo track:
+Measured with the app's built-in metrics (`--metrics`) on an Apple M4 Max MacBook Pro, 1920×1080, built-in 128 BPM demo signal, 0.6.0 build from `main`, one mode at a time for 40 seconds. The window was on a 144 Hz external monitor, where the app targets 72 fps (the smallest whole divisor of the refresh rate that is at least 60, so frames are evenly paced):
 
-| Mode | Frame rate | GPU time p95 |
-|---|---|---|
-| Stage | 108 fps | 4.4 ms |
-| Classic Visuals (Neon City) | 107 fps | 3.9 ms |
-| Classic Visuals (Fireworks) | 121 fps | 2.5 ms |
-| Classic Visuals (Silk) | 108 fps | 3.8 ms |
-| AURORA | 120 fps | 6.2 ms |
+| Mode | Frame rate | Frame interval p95 | GPU time p95 |
+|---|---|---|---|
+| Stage | 72 fps (target) | 14.5 ms | 7.0 ms |
+| Classic Visuals (Neon City) | 72 fps (target) | 14.5 ms | 5.8 ms |
+| Classic Visuals (Fireworks) | 72 fps (target) | 14.5 ms | 1.7 ms |
+| Classic Visuals (Silk) | 72 fps (target) | 14.6 ms | 6.0 ms |
+| AURORA | 72 fps (target) | 14.6 ms | 7.9 ms |
 
-Frame rate is the last few seconds of a 40-second run, and the display caps it at 120. Draw-to-photon time was about 29–32 ms (p50). The strobe limiter never allowed more than 1 flash per second in these runs. These are demo-mode numbers on one high-end Mac; real music and slower Macs will differ.
+Every mode's recent frame rate reached its target; frame interval p99 was 14.7 ms across each run. Audio-to-screen latency was about 24 ms (p50) and 36 ms (p95) in the Stage run. The strobe limiter never allowed more than 1 flash per second. On the 120 Hz built-in display the app targets 120 fps instead. These are demo-mode numbers on one high-end Mac; real music and slower Macs will differ.
 
 ## Privacy and permissions
 
@@ -226,8 +255,12 @@ Optional extras, built from pinned sources into `vendor/` (gitignored) and bundl
 ```bash
 scripts/build_syphon.sh          # Syphon output (BSD-3-Clause)
 scripts/build_projectm.sh        # MILKDROP engine, libprojectM (LGPL-2.1)
-scripts/build_mediaremote_adapter.sh   # Now Playing reader for lyrics + player card (BSD-3-Clause, needs cmake)
+scripts/fetch_milkdrop_presets.sh     # the 149 built-in MilkDrop presets
+scripts/build_mediaremote_adapter.sh   # Now Playing reader for lyrics + player card (0.6.0, BSD-3-Clause, needs cmake)
+scripts/make_app.sh                    # run again to bundle them
 ```
+
+`make_app.sh` prints a `note: no vendor/...` line for each extra it can't find and still builds, so check its output if MILKDROP, Syphon or lyrics are missing.
 
 Try it with no music playing:
 
@@ -252,7 +285,7 @@ Rebuild the app and it finds `tools/.venv` and `tools/referee.py` in the folder 
 
 ## Testing
 
-- `swift test` runs the `RaveAudioTests` suite: tempo lock on six drum styles (house, drum and bass, boom bap, rock, metal, techno), fast re-lock after a tempo change, beats landing on kicks, silence, tap tempo, rhythmless audio (a past crash), and the referee's gate that rejects irregular beat reports.
+- `swift test` runs two suites. `RaveLiveAppTests` covers the app side: lyrics matching and the remix guard, the Now Playing reader's process lifecycle, saved settings, metrics cost over a long set, MilkDrop preset handling, the show director and smoothing. `RaveAudioTests` covers tempo lock on six drum styles (house, drum and bass, boom bap, rock, metal, techno), fast re-lock after a tempo change, beats landing on kicks, silence, tap tempo, rhythmless audio (a past crash), and the referee's gate that rejects irregular beat reports.
 - CI runs on every push and pull request: release build, tests, the synthetic-pattern probe, an ad-hoc-signed app bundle, and a check that no personal file paths are committed.
 - `.build/release/rave-probe synth` checks the tracker against deterministic drum patterns, and `rave-probe file <audio> <bpm>` against a real track.
 - `scripts/bench.py` benchmarks tempo lock time against BPM values you supply as a JSON list of `[path, bpm, genre]` (for example exported from a DJ library): `scripts/bench.py [clip_start_s] <tracks.json>`. No track list or per-track results ship with the repo. `tools/eval_sync.py` scores beat phase against Beat This! ground truth. Both need your own audio files; no music is stored in this repo.
@@ -265,7 +298,9 @@ Sources/
 ├── RaveAudio/      capture, analyzer, tempo tracker, Beat This! referee client, synth test signals
 ├── RaveLiveApp/    app, show director, Metal renderers and shaders, hand tracking
 └── RaveProbe/      rave-probe command-line harness
-Tests/RaveAudioTests/
+Tests/
+├── RaveAudioTests/     tempo tracking, MIDI clock, referee
+└── RaveLiveAppTests/   lyrics, Now Playing, settings, metrics, MilkDrop, show director
 scripts/            make_app.sh, bench.py, shader compile check, live sync test
 tools/              referee.py, ground-truth and sync-evaluation scripts
 ```
