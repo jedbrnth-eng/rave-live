@@ -81,7 +81,7 @@ not on Syphon or the output display.
 RAVE LIVE can show synced lyrics for whatever your Mac reports as Now Playing (Spotify, Music, browsers, most players),
 and a small player card bottom left with artwork, title, artist, the source app, progress and previous / play-pause / next.
 
-- **Lyrics are off until you turn them on** (Settings → Lyrics, or **Y**): while on, the playing track's title, artist,
+- **Lyrics are off until you turn them on** (Settings → Lyrics switch, or **Y**; the switch follows the key): while on, the playing track's title, artist,
   album and length are looked up on [lrclib.net](https://lrclib.net), a free lyrics database. Results are cached on your Mac
   (`~/Library/Application Support/RAVE LIVE/Lyrics`).
 - **Remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions get no lyrics** (and are never looked up): original-song timing
@@ -101,9 +101,29 @@ and a small player card bottom left with artwork, title, artist, the source app,
   compared and the decision. Tell us that line when lyrics look wrong.
 - When lrclib.net is overloaded (503) or rate-limits (429), RAVE LIVE backs off (honouring `Retry-After`, with jitter),
   tries `/api/search` when `/api/get` fails, and retries the song after 10 s, 20 s, 40 s … up to 10 min.
-- The current line sits large and low in the middle, the next line smaller below it; lines crossfade and breathe very
-  gently on the beat (no flashing). Timing follows the audio output latency (Bluetooth, AirPlay); **-** / **=** move the
-  lyrics 50 ms earlier / later, or use the Lyrics timing slider (±1000 ms). Size: Settings → Lyrics size.
+- **Styles** (Settings → Lyrics style, or **Shift-Y** to cycle). Every style reacts to the music RAVE LIVE hears, not
+  just to the clock: the beat, the kick, the bass and the energy.
+  - **Clean** (default): white, calm. Words not sung yet are dimmed, each word brightens and lifts a little as it is sung,
+    the line breathes on the beat.
+  - **Neon karaoke**: a magenta → cyan fill sweeps through each word as it is sung; the glow follows the song's energy
+    and swells on the beat.
+  - **Pop**: one to three big words at a time (CapCut-style), each springing in as it is sung; kicks punch them.
+  - **Bass wave**: the letters ride a wave whose height follows the bass, and every kick sends a ripple from the word
+    being sung.
+  - **Spectrum**: every word is an equaliser bar, its height driven by its own frequency band (low on the left).
+  - **Auto**: Clean when it's quiet, Bass wave or Neon as the energy builds, Pop on drops (it cuts in on the drop and
+    rides it for 16 s); otherwise it only changes between lines.
+- **Word by word**: lyrics with word timing (enhanced LRC) use it. Most LRCLIB lyrics only time whole lines, so the
+  words are spread over the line by syllables and then snapped to the live beat grid (8th notes) when they are already
+  close, which is where sung words land.
+- Position: **Lower third** (default) or **Centre**; size Small / Medium / Large. No box or shade behind the text: every
+  letter has a thin dark outline and a tight shadow, so it reads on white frames too. Lines never overlap: the old line
+  fades out (0.12 s) before the new one fades in.
+- **Strobe effects off** (Settings, or **S**) also calms the lyrics: glows and brightness can't change faster than a
+  full swing in 0.4 s, and kicks punch half as hard.
+- Lines go up 150 ms before they are sung, so reading keeps up with the singer. The player's own position is used as
+  it is: players already count the Bluetooth/AirPlay delay, so it is not subtracted again (that made lyrics late on
+  Bluetooth headphones). **-** / **=** move the lyrics 50 ms earlier / later, or use the Lyrics timing slider (±1000 ms).
 - The card hides a few seconds after the mouse stops moving; **N** turns it off. HUD off (clean picture) hides both.
 - Like the HUD, lyrics and the card are on the main window only, never on Syphon or the output display (a follow-up may
   add lyrics to the output).

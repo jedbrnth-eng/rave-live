@@ -7,7 +7,11 @@ import Foundation
 /// Synced lyrics: LRC parsing, title cleaning, the remix guard, the LRCLIB client and the on-disk cache.
 /// Everything here is pure or injectable so it is unit-tested; the overlay (LyricsOverlay.swift) only draws.
 
-struct LyricLine: Equatable, Codable { let time: Double; let text: String }
+struct LyricLine: Equatable, Codable {
+    let time: Double; let text: String
+    /// Per-word times from enhanced LRC `<mm:ss.xx>` tags (nil = line timing only, the usual case on LRCLIB).
+    var words: [TimedWord]? = nil
+}
 
 enum LRC {
     private static let timeTag = try! NSRegularExpression(pattern: #"^(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?$"#)
@@ -35,15 +39,45 @@ enum LRC {
             }
             guard !times.isEmpty, !sawOther else { continue }
             var line = rest.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.contains("<") {                                  // enhanced LRC: drop per-word <mm:ss.xx> tags
+            var words: [TimedWord]?
+            if line.contains("<") {                                  // enhanced LRC: per-word <mm:ss.xx> tags
+                words = times.count == 1 ? wordTimes(line, lineTime: times[0]) : nil
                 line = wordTag.stringByReplacingMatches(in: line, range: NSRange(location: 0, length: (line as NSString).length), withTemplate: "")
                 line = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")
             }
-            for t in times { out.append((out.count, LyricLine(time: t, text: line))) }
+            for t in times { out.append((out.count, LyricLine(time: t, text: line, words: words))) }
         }
         let shift = offsetMs / 1000
         return out.sorted { $0.1.time != $1.1.time ? $0.1.time < $1.1.time : $0.0 < $1.0 }
-            .map { LyricLine(time: max(0, $0.1.time - shift), text: $0.1.text) }
+            .map { LyricLine(time: max(0, $0.1.time - shift), text: $0.1.text,
+                             words: $0.1.words?.map { TimedWord(text: $0.text, start: max(0, $0.start - shift), end: max(0, $0.end - shift)) }) }
+    }
+
+    /// Words with their `<mm:ss.xx>` start times. Text before the first tag starts at the line time; several words after one
+    /// tag share the span to the next tag; a trailing tag gives the last word its end. nil when the tags make no sense.
+    static func wordTimes(_ s: String, lineTime: Double) -> [TimedWord]? {
+        let ns = s as NSString
+        let ms = wordTag.matches(in: s, range: NSRange(location: 0, length: ns.length))
+        guard !ms.isEmpty else { return nil }
+        var segs: [(Double, String)] = []
+        var cursor = 0, t = lineTime
+        for m in ms {
+            segs.append((t, ns.substring(with: NSRange(location: cursor, length: m.range.location - cursor))))
+            let tag = ns.substring(with: m.range).dropFirst().dropLast()
+            guard let v = time(String(tag)) else { return nil }
+            t = v; cursor = m.range.location + m.range.length
+        }
+        segs.append((t, ns.substring(from: cursor)))
+        var out: [TimedWord] = []
+        for (i, (start, text)) in segs.enumerated() {
+            let toks = text.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            let nextT = i + 1 < segs.count ? segs[i + 1].0 : start + 0.5 * Double(max(1, toks.count))
+            let step = (nextT - start) / Double(max(1, toks.count))
+            for (k, w) in toks.enumerated() { out.append(TimedWord(text: w, start: start + step * Double(k), end: start + step * Double(k + 1))) }
+        }
+        for i in 1..<max(1, out.count) where out[i].start < out[i - 1].start { return nil }   // out-of-order tags: ignore them
+        for i in 0..<out.count where i + 1 < out.count { out[i].end = out[i + 1].start }
+        return out.isEmpty ? nil : out
     }
 
     private static func time(_ tag: String) -> Double? {

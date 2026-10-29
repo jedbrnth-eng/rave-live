@@ -75,10 +75,12 @@ final class LyricsController: NSObject {
     let source: NowPlayingSource
     private let client = LRCLIBClient()
     private let cache = LyricsCache(dir: LyricsCache.defaultDir)
-    let overlay = LyricsOverlayView()
+    let overlay = LyricsStageView()
     let card = PlayerCardView()
     let hintLabel = LyricsHintView()
     private var timer: Timer?
+    /// Test hook (`lineshot=`): runs once at the next change to a new non-empty line.
+    var onNextLineChange: (() -> Void)?
     private(set) var info: NowPlayingInfo?
     private(set) var state: LyricsState = .off
     private var lines: [LyricLine] = []
@@ -111,21 +113,31 @@ final class LyricsController: NSObject {
     /// MILKDROP keeps plain L for its preset lock, so the hint names the key that works in the current mode.
     var forceKey: String { app?.renderer?.mode == .milkdrop ? "Shift-L" : "L" }
 
-    // Live settings (Prefs, unless a command-line flag set them)
-    private(set) var lyricsOn: Bool
-    private(set) var cardOn: Bool
-    private(set) var size: Int
-    private(set) var offsetMs: Int
+    // Live settings: one model shared with the Settings window (Prefs, unless a command-line flag set them)
+    let settingsModel: LyricsSettingsModel
+    var lyricsOn: Bool { settingsModel.state.on }
+    var cardOn: Bool { settingsModel.state.card }
+    var size: Int { settingsModel.state.size }
+    var offsetMs: Int { settingsModel.state.offsetMs }
+    var style: LyricStyle { settingsModel.state.style }
+    /// The look on screen now (Auto resolves to one of the others).
+    private(set) var activeStyle: LyricStyle = .clean
+    private var auto = AutoStyle()
+    private var lastDrive = LyricDrive()
+    private var currentWords: [TimedWord] = []
 
     init(app: AppDelegate) {
         self.app = app
         let a = CommandLine.arguments
         func arg(_ k: String) -> String? { a.firstIndex(of: k).flatMap { a.count > $0 + 1 ? a[$0 + 1] : nil } }
         let p = Prefs.shared
-        lyricsOn = a.contains("--lyrics") ? true : (a.contains("--no-lyrics") ? false : p.lyricsEnabled)
-        cardOn = a.contains("--player-card") ? true : (a.contains("--no-player-card") ? false : p.playerCard)
-        size = arg("--lyrics-size").flatMap(Int.init).map { max(0, min(2, $0)) } ?? p.lyricsSize
-        offsetMs = arg("--lyrics-offset").flatMap(Int.init).map { max(-1000, min(1000, $0)) } ?? p.lyricsOffsetMs
+        settingsModel = LyricsSettingsModel(prefs: p, initial: .init(
+            on: a.contains("--lyrics") ? true : (a.contains("--no-lyrics") ? false : p.lyricsEnabled),
+            card: a.contains("--player-card") ? true : (a.contains("--no-player-card") ? false : p.playerCard),
+            style: arg("--lyrics-style").map { LyricStyle.from(key: $0) } ?? p.lyricsStyle,
+            position: arg("--lyrics-position").map { LyricPosition.from(key: $0) } ?? p.lyricsPosition,
+            size: arg("--lyrics-size").flatMap(Int.init).map { max(0, min(2, $0)) } ?? p.lyricsSize,
+            offsetMs: arg("--lyrics-offset").flatMap(Int.init).map { max(-1000, min(1000, $0)) } ?? p.lyricsOffsetMs))
         logURL = arg("--lyrics-log").map { URL(fileURLWithPath: NSString(string: $0).expandingTildeInPath) }
         source = NowPlayingSource()
         super.init()
@@ -133,6 +145,10 @@ final class LyricsController: NSObject {
         source.log = { [weak self] s in DispatchQueue.main.async { self?.log(s) } }
         source.onChange = { [weak self] i in self?.nowPlayingChanged(i) }
         source.onStatus = { [weak self] _ in self?.app?.settings?.refresh() }
+        var last = settingsModel.state
+        settingsModel.observe { [weak self] s in let old = last; last = s; self?.settingsChanged(from: old, to: s) }
+        activeStyle = style == .auto ? .clean : style
+        overlay.style = activeStyle; overlay.position = settingsModel.state.position; overlay.size = size
         guard let cv = app.window.contentView else { return }
         overlay.autoresizingMask = [.width, .maxYMargin]
         card.autoresizingMask = [.maxXMargin, .maxYMargin]
@@ -147,14 +163,21 @@ final class LyricsController: NSObject {
         card.isHidden = true; overlay.isHidden = true
         layout()
         NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: cv, queue: .main) { [weak self] _ in self?.layout() }
-        log("lyrics: adapter \(source.adapter == nil ? "missing" : "found") · lyrics \(lyricsOn ? "on" : "off") · card \(cardOn ? "on" : "off") · offset \(offsetMs) ms · host \(client.host)")
+        log("lyrics: adapter \(source.adapter == nil ? "missing" : "found") · lyrics \(lyricsOn ? "on" : "off") · card \(cardOn ? "on" : "off") · offset \(offsetMs) ms · style \(style.rawValue) · host \(client.host)")
         updateSource()
+        if let fake = Self.testNowPlaying { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.nowPlayingChanged(fake) } }
         let t = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(t, forMode: .common)                  // keeps lyrics moving while a menu is open or the window resizes
         timer = t
     }
 
-    func shutdown() { timer?.invalidate(); lookupTask?.cancel(); source.stop(waitForExit: true) }
+    func shutdown() {
+        if logURL != nil, frameCost.count > 0 {
+            log(String(format: "lyrics: frame cost n=%d p50=%.3fms p95=%.3fms max=%.3fms", frameCost.count, frameCost.percentile(0.5) * 1000,
+                       frameCost.percentile(0.95) * 1000, frameCost.max * 1000))
+        }
+        timer?.invalidate(); lookupTask?.cancel(); source.stop(waitForExit: true)
+    }
 
     /// `redacted` replaces `s` in the system log and the metrics JSON (written to ~/.cache by default and kept for the
     /// whole run): track titles and artists only go to the opt-in `--lyrics-log` test file.
@@ -168,12 +191,24 @@ final class LyricsController: NSObject {
 
     /// The adapter only runs while lyrics or the card are switched on.
     private func updateSource() {
+        if Self.testNowPlaying != nil { return }                 // test: in-process fake track, the Mac's Now Playing is never read
         if lyricsOn || cardOn { source.start() } else { source.stop(); nowPlayingChanged(nil) }
     }
+
+    /// Test hook `RAVE_TEST_NOWPLAYING="title|artist|duration|elapsed"`: a playing track injected in-process, so style proofs
+    /// run without registering a fake Now Playing app system-wide (which the user's own player and RAVE LIVE would see).
+    static let testNowPlaying: NowPlayingInfo? = {
+        guard let s = ProcessInfo.processInfo.environment["RAVE_TEST_NOWPLAYING"] else { return nil }
+        let p = s.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard p.count == 4, let d = Double(p[2]), let e = Double(p[3]) else { return nil }
+        return NowPlayingInfo(title: p[0], artist: p[1], album: "", bundleID: "io.github.jedbrnth-eng.test", duration: d, elapsed: e,
+                              timestamp: Date().timeIntervalSince1970, rate: 1, playing: true, artwork: nil)
+    }()
 
     // MARK: settings (Settings window, keys)
 
     var adapterNote: String {
+        if let t = Self.testNowPlaying { return "Now Playing: \(t.title) (test track)" + (Self.cardNote(state, hintContext).map { " · \($0)" } ?? "") }
         switch source.mainStatus {
         case .missing: return "The Now Playing reader isn't included in this build, so lyrics and the player card are off. Build it with scripts/build_mediaremote_adapter.sh, then scripts/make_app.sh."
         case .failed(let why): return "Now Playing is unavailable: \(why). Lyrics and the player card are off."
@@ -185,27 +220,42 @@ final class LyricsController: NSObject {
         }
     }
 
-    func setLyrics(_ on: Bool, save: Bool = true) {
-        lyricsOn = on
-        if save { Prefs.shared.lyricsEnabled = on }
-        lookupKey = ""; lines = []; shownIndex = -1; shownPair = ("\u{1}", "\u{1}")
-        if !on { lookupTask?.cancel(); lookupTask = nil }       // nothing more goes to lrclib.net once lyrics are off
-        updateSource()
-        refreshLyrics()
-        log("lyrics: \(on ? "on" : "off")")
+    // Keys and the Settings window change the model; `settingsChanged` applies it (so both always agree).
+    func setLyrics(_ on: Bool, save: Bool = true) { settingsModel.setOn(on, save: save) }
+    func setCard(_ on: Bool, save: Bool = true) { settingsModel.setCard(on, save: save) }
+    func setSize(_ s: Int) { settingsModel.setSize(s) }
+    func setOffset(_ ms: Int) { settingsModel.setOffset(ms) }
+    func setStyle(_ s: LyricStyle) { settingsModel.setStyle(s) }
+    /// Shift-Y: next style.
+    func cycleStyle() -> String {
+        let all = LyricStyle.allCases
+        let s = all[((all.firstIndex(of: style) ?? 0) + 1) % all.count]
+        setStyle(s)
+        return "Lyrics style: \(s.title)"
     }
-    func setCard(_ on: Bool, save: Bool = true) {
-        cardOn = on
-        if save { Prefs.shared.playerCard = on }
-        updateSource(); wake()
-        log("lyrics: card \(on ? "on" : "off")")
+    func resetToDefaults() { settingsModel.resetToDefaults() }
+
+    private func settingsChanged(from old: LyricsSettingsModel.State, to s: LyricsSettingsModel.State) {
+        if old.on != s.on {
+            lookupKey = ""; lines = []; shownIndex = -1; shownPair = ("\u{1}", "\u{1}")
+            if !s.on { lookupTask?.cancel(); lookupTask = nil; overlay.clear() }   // nothing more goes to lrclib.net once lyrics are off
+            updateSource()
+            refreshLyrics()
+            log("lyrics: \(s.on ? "on" : "off")")
+        }
+        if old.card != s.card { updateSource(); wake(); log("lyrics: card \(s.card ? "on" : "off")") }
+        if old.offsetMs != s.offsetMs { log("lyrics: offset \(s.offsetMs) ms") }
+        if old.style != s.style {
+            if s.style != .auto { activeStyle = s.style } else { auto = AutoStyle(); activeStyle = .clean }
+            overlay.style = activeStyle
+            shownPair = ("\u{1}", "\u{1}")
+            log("lyrics: style \(s.style.rawValue)")
+        }
+        if old.position != s.position || old.size != s.size {
+            overlay.position = s.position; overlay.size = s.size; layout(); shownPair = ("\u{1}", "\u{1}")
+        }
+        app?.settings?.refresh()
     }
-    func setSize(_ s: Int) { size = max(0, min(2, s)); Prefs.shared.lyricsSize = size; overlay.size = size; layout() }
-    func setOffset(_ ms: Int) {
-        offsetMs = max(-1000, min(1000, ms)); Prefs.shared.lyricsOffsetMs = offsetMs
-        log("lyrics: offset \(offsetMs) ms")
-    }
-    func resetToDefaults() { setLyrics(false, save: false); setCard(true, save: false); size = 1; offsetMs = 0; overlay.size = 1; layout() }
 
     /// H key / Settings HUD level. Clean hides the card and the lyrics too.
     func overlayChanged(_ l: OverlayLevel) { hudLevel = l; tick() }
@@ -429,15 +479,16 @@ final class LyricsController: NSObject {
     /// Song position the listener hears now: adapter position minus the audio output latency, minus the user trim.
     func heardPosition() -> Double? {
         guard let i = info else { return nil }
-        let lat = app?.renderer?.outputLatency.seconds ?? 0
-        return i.position(at: Date().timeIntervalSince1970) - lat - Double(offsetMs) / 1000 - (state == .synced ? introOffset + videoNudge : 0)
+        return LyricsTiming.heardPosition(sourcePosition: i.position(at: Date().timeIntervalSince1970), bundleID: i.bundleID,
+                                          outputLatency: app?.renderer?.outputLatency.seconds ?? 0, userOffsetMs: offsetMs,
+                                          videoOffset: state == .synced ? introOffset + videoNudge : 0)
     }
 
     /// Test log line for snapshots: position, the line index and its LRC timestamp.
     func describeNow(_ tag: String) {
         let pos = info.map { $0.position(at: Date().timeIntervalSince1970) } ?? -1
         let heard = heardPosition() ?? -1
-        let idx = LRC.index(at: heard, in: lines)
+        let idx = LyricsTiming.lineIndex(heard: heard, in: lines)
         // which LRC line the overlay's text actually is (first line with that text at or before `heard`)
         let shownText = overlay.currentText
         let shownIdx = overlay.isHidden || shownText.isEmpty ? nil : lines.indices.last { lines[$0].text == shownText && lines[$0].time <= heard + 0.5 }
@@ -446,6 +497,7 @@ final class LyricsController: NSObject {
                    idx.map(String.init) ?? "none", idx.map { String(format: "%.2f", lines[$0].time) } ?? "-",
                    shownIdx.map(String.init) ?? "none", shownIdx.map { String(format: "%.2f", lines[$0].time) } ?? "-",
                    overlay.isHidden ? "hidden" : "visible", overlay.lineScale, card.isHidden ? "hidden" : String(format: "visible(alpha %.2f)", card.alphaValue)))
+        log("lyrics: \(tag) style=\(activeStyle.rawValue) overlayFrame=\(NSStringFromRect(overlay.frame)) \(overlay.debugGeometry)")
         log("lyrics: \(tag) hint=\(hintLabel.isHidden ? "hidden" : "\"" + hintLabel.text + "\"") cardNote=\"\(card.note.stringValue)\" offsetTotal=\(String(format: "%.1f", introOffset + videoNudge)) debug=\(hudDebug)")
     }
 
@@ -475,37 +527,72 @@ final class LyricsController: NSObject {
             positionHint()
         }
         hintLabel.isHidden = !showHint
-        // lyrics
+        // lyrics (lines and animation run per rendered frame in `renderFrame`; this timer covers frames that stop coming)
         let wantLyrics = lyricsOn && state == .synced && info != nil && !clean
-        overlay.isHidden = !wantLyrics
-        guard wantLyrics, let heard = heardPosition() else { return }
-        let idx = LRC.index(at: heard, in: lines)
+        if overlay.isHidden != !wantLyrics { overlay.isHidden = !wantLyrics; if !wantLyrics { overlay.clear(); shownPair = ("\u{1}", "\u{1}") } }
+        if wantLyrics && now - lastFrameAt > 0.1 { renderFrame(lastDrive, fromTimer: true) }
+    }
+
+    private var lastFrameAt = -100.0
+
+    /// Once per rendered frame (Renderer.onFrame, main thread): line changes on time, then the style's animation.
+    func renderFrame(_ d: LyricDrive, fromTimer: Bool = false) {
+        let t0 = CACurrentMediaTime()
+        if !fromTimer { lastDrive = d; lastFrameAt = t0 }
+        guard !overlay.isHidden, let heard = heardPosition() else { return }
+        updateLine(heard)
+        if style == .auto && !fromTimer {                        // drops switch Auto at once, not at the next line
+            let s = auto.update(energy: d.energy, drop: d.drop, build: d.build, now: t0, atLineChange: false)
+            if s != activeStyle { activeStyle = s; overlay.style = s; log("lyrics: auto style \(s.rawValue) (drop)") }
+        }
+        overlay.frame(t: heard, drive: d)
+        frameCost.add(CACurrentMediaTime() - t0)
+    }
+    /// Main-thread time the lyrics take per frame (logged at quit in test runs: the perf proof).
+    private(set) var frameCost = CostRing()
+
+    /// The beat grid in song time, from the renderer's heard beat phase (nil while the tempo isn't locked).
+    private func beatGrid(_ heard: Double) -> BeatGrid? {
+        let d = lastDrive
+        guard d.locked, d.bpm > 0 else { return nil }
+        return BeatGrid(bpm: d.bpm, refTime: heard, refPhase: d.beatPhase)
+    }
+
+    private func updateLine(_ heard: Double) {
+        let idx = LyricsTiming.lineIndex(heard: heard, in: lines)
+        if idx != shownIndex, let n = idx, logURL != nil, let i = info {      // test log: when each line went up
+            log(String(format: "lyrics: linechange idx=%d lrc=%.3f src=%.3f heard=%.3f latency=%.0fms tsAge=%.3f", n, lines[n].time,
+                       i.position(at: Date().timeIntervalSince1970), heard, (app?.renderer?.outputLatency.seconds ?? 0) * 1000,
+                       i.timestamp.map { Date().timeIntervalSince1970 - $0 } ?? -1))
+        }
         shownIndex = idx
         let cur = idx.map { lines[$0].text } ?? ""
         let nextIdx = (idx ?? -1) + 1
         var nextText = nextIdx < lines.count ? lines[nextIdx].text : ""
         if cur.isEmpty && nextIdx < lines.count && lines[nextIdx].time - heard > Self.nextLineLead { nextText = "" }
         if cur != shownPair.0 || nextText != shownPair.1 {
+            let changed = cur != shownPair.0 && !cur.isEmpty
             shownPair = (cur, nextText)
-            overlay.show(current: cur, next: nextText)
+            if changed && style == .auto {
+                let d = lastDrive
+                let s = auto.update(energy: d.energy, drop: d.drop, build: d.build, now: CACurrentMediaTime(), atLineChange: true)
+                if s != activeStyle { activeStyle = s; overlay.style = s; log("lyrics: auto style \(s.rawValue)") }
+            }
+            currentWords = idx.map { WordTiming.timed(lines[$0], nextStart: $0 + 1 < lines.count ? lines[$0 + 1].time : nil, grid: beatGrid(heard)) } ?? []
+            overlay.setLine(index: idx ?? -1, text: cur, words: currentWords, next: nextText)
+            if nextIdx < lines.count { overlay.prepare(lines[nextIdx].text) }
+            if changed, let f = onNextLineChange { onNextLineChange = nil; f() }
         }
-        // gentle breath on the beat: cosine of the heard beat phase, peaking on the beat; nothing when the tempo is unlocked
-        var breath = 0.0
-        if let r = app?.renderer, r.beatLocked {
-            let c = cos(2 * Double.pi * r.heardBeatPhase)
-            breath = 0.5 + 0.5 * c
-        }
-        overlay.breathe(breath)
     }
 
     private func layout() {
         guard let cv = app?.window.contentView else { return }
         let b = cv.bounds
         card.frame = NSRect(x: 12, y: 32, width: card.frame.width, height: card.frame.height)
-        overlay.size = size
         let bottom = max(card.frame.maxY + 10, b.height * 0.10)
-        overlay.frame = NSRect(x: 0, y: bottom, width: b.width, height: overlay.preferredHeight(for: b))
-        overlay.layoutLines()
+        overlay.frame = NSRect(x: 0, y: bottom, width: b.width, height: max(40, b.height * 0.8 - bottom))
+        overlay.relayout()
+        shownPair = ("\u{1}", "\u{1}")
         positionHint()
     }
 
@@ -515,7 +602,7 @@ final class LyricsController: NSObject {
         let s = hintLabel.fittingSize
         let w = min(cv.bounds.width - 24, s.width)
         // synced: just under the lyrics (above them it can sit under the full HUD panel); otherwise where the line would be
-        var y = state == .synced ? max(4, overlay.frame.minY - s.height - 4) : overlay.frame.minY + overlay.frame.height * 0.3
+        var y = state == .synced ? max(4, overlay.frame.minY - s.height - 4) : overlay.frame.minY + overlay.lineCenterY - s.height / 2
         var f = NSRect(x: ((cv.bounds.width - w) / 2).rounded(), y: y.rounded(), width: w, height: s.height)
         if state == .synced, !card.isHidden, f.intersects(card.frame.insetBy(dx: -6, dy: -6)) {   // small window: go above the lyrics
             y = overlay.frame.maxY + 4; f.origin.y = y.rounded()
@@ -529,145 +616,6 @@ final class LyricsController: NSObject {
     @objc private func cardPlay(_ b: NSButton) { log("card: play/pause"); source.send(.toggle); wake() }
     @objc private func cardNext(_ b: NSButton) { log("card: next"); source.send(.next); wake() }
     func pressPlayPause() { card.play.performClick(nil) }
-}
-
-/// Current line large and centred low on screen, next line smaller and dimmer; lines crossfade.
-/// Plain NSTextFields (not CATextLayers) so the `shot=` window snapshots capture exactly what is on screen.
-final class LyricsOverlayView: NSView {
-    private let cur = [NSTextField(wrappingLabelWithString: ""), NSTextField(wrappingLabelWithString: "")]
-    private let next = NSTextField(wrappingLabelWithString: "")
-    private var front = 0
-    private var texts = ["", ""]
-    private var nextText = ""
-    private var breath: CGFloat = 0
-    var size = 1
-    private var scale: CGFloat { [0.042, 0.056, 0.074][max(0, min(2, size))] }
-    private var big: CGFloat = 30
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        scrim.alphaValue = 0
-        scrim.autoresizingMask = [.width, .height]
-        addSubview(scrim)
-        for l in cur + [next] {
-            l.alignment = .center
-            l.maximumNumberOfLines = 2                      // long lines wrap onto a second line, then truncate
-            l.lineBreakMode = .byWordWrapping
-            l.cell?.truncatesLastVisibleLine = true
-            l.drawsBackground = false
-            l.isBordered = false
-            l.alphaValue = 0
-            l.isHidden = true
-            addSubview(l)
-        }
-    }
-    convenience init() { self.init(frame: .zero) }
-    required init?(coder: NSCoder) { fatalError() }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    /// Soft dark halo behind the lines so they stay readable over bright visuals. A drawn subview (so window snapshots
-    /// include it) that fades with the text, feathered to transparent so it reads as shade, not a box.
-    private final class Scrim: NSView {
-        var width: CGFloat = 0
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-        override func draw(_ dirtyRect: NSRect) {
-            let w = min(bounds.width * 0.9, max(width, bounds.width * 0.6))
-            let r = NSRect(x: (bounds.width - w) / 2, y: 0, width: w, height: bounds.height)   // inside bounds: no clipped edge
-            NSGradient(colors: [NSColor(white: 0, alpha: 0.42), NSColor(white: 0, alpha: 0.18), NSColor(white: 0, alpha: 0)],
-                       atLocations: [0, 0.55, 1], colorSpace: .deviceRGB)?
-                .draw(in: NSBezierPath(ovalIn: r), relativeCenterPosition: .zero)
-        }
-    }
-    private let scrim = Scrim()
-
-    func preferredHeight(for b: NSRect) -> CGFloat { b.height * scale * 3.9 }
-
-    private func attributed(_ s: String, size px: CGFloat, weight: NSFont.Weight, alpha: CGFloat, glow: CGFloat, glowAlpha: CGFloat) -> NSAttributedString {
-        let sh = NSShadow()
-        sh.shadowColor = NSColor(calibratedRed: 0.55, green: 0.75, blue: 1, alpha: glowAlpha)
-        sh.shadowBlurRadius = glow
-        sh.shadowOffset = .zero
-        let p = NSMutableParagraphStyle(); p.alignment = .center; p.lineBreakMode = .byWordWrapping
-        return NSAttributedString(string: s, attributes: [.font: NSFont.systemFont(ofSize: px, weight: weight),
-                                                          .foregroundColor: NSColor(white: 1, alpha: alpha), .shadow: sh, .paragraphStyle: p])
-    }
-
-    func layoutLines() {
-        let w = bounds.width * 0.8, x = (bounds.width - w) / 2
-        big = max(14, (window?.contentView?.bounds.height ?? bounds.height * 3) * scale)
-        let small = big * 0.55
-        next.frame = NSRect(x: x, y: 0, width: w, height: small * 1.5)
-        for l in cur { l.frame = NSRect(x: x, y: small * 1.5, width: w, height: big * 2.5) }
-        scrim.frame = bounds; scrim.width = big * 10; scrim.needsDisplay = true
-        redraw()
-    }
-
-    /// Builds the attributed strings. Only on a new line or a resize: the beat breath is a layer transform
-    /// (`applyBreath`), so the text isn't laid out and shadow-blurred again 30 times a second (that roughly doubled
-    /// the app's CPU with lyrics on).
-    private func redraw() {
-        redraws += 1
-        for (i, l) in cur.enumerated() {
-            l.attributedStringValue = attributed(texts[i], size: big, weight: .bold, alpha: 1, glow: 9, glowAlpha: 0.6)
-        }
-        next.attributedStringValue = attributed(nextText, size: big * 0.55, weight: .medium, alpha: 0.55, glow: 4, glowAlpha: 0.3)
-        applyBreath()
-    }
-
-    /// Scale the current line about its centre by `breathScale(breath)`. Core Animation applies it on the GPU.
-    private func applyBreath() {
-        let k = Self.breathScale(breath)
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        for l in cur {
-            guard let layer = l.layer else { continue }
-            let b = layer.bounds, ax = b.width * layer.anchorPoint.x, ay = b.height * layer.anchorPoint.y
-            let cx = b.midX - ax, cy = b.midY - ay        // centre relative to the anchor (AppKit puts it at the corner)
-            var t = CATransform3DMakeTranslation(cx, cy, 0)
-            t = CATransform3DScale(t, k, k, 1)
-            layer.transform = CATransform3DTranslate(t, -cx, -cy, 0)
-        }
-        CATransaction.commit()
-    }
-    /// +2.5 % at the peak of the beat.
-    static func breathScale(_ b: CGFloat) -> CGFloat { 1 + 0.025 * max(0, min(1, b)) }
-    /// Test hook: how many times the attributed strings were rebuilt.
-    private(set) var redraws = 0
-
-    /// Smooth crossfade (0.4 s) between the old and the new line. No motion besides the fade.
-    func show(current: String, next n: String) {
-        let old = cur[front]
-        front = 1 - front
-        let new = cur[front]
-        texts[front] = current
-        nextText = n
-        redraw()
-        new.isHidden = current.isEmpty
-        next.isHidden = n.isEmpty
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.4
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            new.animator().alphaValue = current.isEmpty ? 0 : 1
-            old.animator().alphaValue = 0
-            next.animator().alphaValue = n.isEmpty ? 0 : 1
-            scrim.animator().alphaValue = current.isEmpty ? 0 : 1
-        }, completionHandler: { [weak self] in
-            guard let self else { return }
-            if old !== self.cur[self.front] { old.isHidden = true }
-        })
-    }
-
-    /// 0..1 beat breath: at most +2.5 % size and a slightly wider glow. Slow and small on purpose (photosensitivity rule).
-    func breathe(_ b: Double) {
-        let v = CGFloat(b)
-        guard abs(v - breath) > 0.01 else { return }
-        breath = v
-        applyBreath()
-    }
-
-    var currentText: String { texts[front] }
-    /// Scale the beat breath currently applies to the line (1 = none), read back from the layer.
-    var lineScale: Double { Double(cur[front].layer?.transform.m11 ?? 1) }
 }
 
 /// One small, dim line that explains the lyrics state ("Lyrics off (Y)", "Skipped: long video/mix…"). A plain label
@@ -812,5 +760,19 @@ final class ProgressBar: NSView {
         guard f > 0 else { return }
         NSColor(white: 1, alpha: 0.85).setFill()
         NSBezierPath(roundedRect: NSRect(x: b.minX, y: b.minY, width: b.width * f, height: b.height), xRadius: b.height / 2, yRadius: b.height / 2).fill()
+    }
+}
+
+/// Fixed-size ring of recent durations (O(1) per add; percentiles only when asked).
+struct CostRing {
+    private var v = [Double](repeating: 0, count: 4096)
+    private var n = 0
+    private(set) var max = 0.0
+    var count: Int { Swift.min(n, v.count) }
+    mutating func add(_ x: Double) { v[n % v.count] = x; n += 1; if x > max { max = x } }
+    func percentile(_ p: Double) -> Double {
+        let s = v.prefix(count).sorted()
+        guard !s.isEmpty else { return 0 }
+        return s[Swift.min(s.count - 1, Int(Double(s.count - 1) * p))]
     }
 }

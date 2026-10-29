@@ -28,6 +28,9 @@ final class Renderer: NSObject, MTKViewDelegate {
     var beatClockIndex: Float { beatIdx }
     /// Beat phase (0..1) on the heard timeline as of the last frame, and whether the tempo is locked (lyrics breath).
     var heardBeatPhase: Double { lastBeatPhase }
+    /// Called on the main thread after each frame is committed, with what the music is doing on the heard timeline
+    /// (the lyrics animate from it, in step with the visuals).
+    var onFrame: ((LyricDrive) -> Void)?
     private(set) var beatLocked = false
 
     // Show state
@@ -394,6 +397,8 @@ final class Renderer: NSObject, MTKViewDelegate {
         if let sp = smooth { sp.encode(cb: cb, source: frameTex, meta: probeMeta(elapsed: elapsed, dt: dt, phase: phase, locked: locked, kick: kickVisual, d: d)) }
         if let drawable { cb.present(drawable) }
         cb.commit()
+        onFrame?(LyricDrive(beatPhase: phase, locked: locked, bpm: s.bpm, kick: kickVisual, bands: vs.bands, energy: vs.energy,
+                            drop: d.drop, build: d.build, strobe: strobeEnabled))
         if snapNow {
             cb.waitUntilCompleted()
             saveSnapshot(frameTex, name: snapName ?? "snap.png")

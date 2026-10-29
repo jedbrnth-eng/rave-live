@@ -176,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         vj.attach(app: self)
         lyrics = LyricsController(app: self)
         lyrics?.overlayChanged(vj.overlay)
+        r.onFrame = { [weak self] d in self?.lyrics?.renderFrame(d) }
         modeControl.segmentCount = Renderer.Mode.allCases.count
         for m in Renderer.Mode.allCases { modeControl.setLabel(m.title, forSegment: m.rawValue); modeControl.setWidth(110, forSegment: m.rawValue) }
         modeControl.target = self; modeControl.action = #selector(modeClicked(_:))
@@ -397,6 +398,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard l.source.adapter != nil else { flashStatus("Lyrics need the Now Playing reader (see Settings)"); break }   // nothing to switch on
             l.setLyrics(!l.lyricsOn)
             flashStatus(l.lyricsOn ? "Lyrics on: track titles are looked up on lrclib.net" : "Lyrics off")
+        case ("y", true):                        // Shift-Y: next lyric style
+            guard let l = lyrics, l.source.adapter != nil else { break }
+            flashStatus(l.cycleStyle())
         case ("n", false):
             guard let l = lyrics else { break }
             guard l.source.adapter != nil else { flashStatus("The player card needs the Now Playing reader (see Settings)"); break }

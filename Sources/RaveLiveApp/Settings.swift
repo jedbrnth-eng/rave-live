@@ -81,6 +81,16 @@ struct Prefs {
         nonmutating set { set(max(-1000, min(1000, newValue)), "lyricsOffsetMs") }
     }
 
+    /// Lyric look (Settings → Lyrics → Style).
+    var lyricsStyle: LyricStyle {
+        get { LyricStyle.from(key: string("lyricsStyle")) }
+        nonmutating set { setString(newValue.rawValue, "lyricsStyle") }
+    }
+    var lyricsPosition: LyricPosition {
+        get { LyricPosition.from(key: string("lyricsPosition")) }
+        nonmutating set { setString(newValue.rawValue, "lyricsPosition") }
+    }
+
     /// Audio menu pick (`InputSource.key`), nil = never picked (system audio). M and the menu save it; test runs don't.
     var audioSource: String? {
         get { string("audioSource") }
@@ -101,7 +111,7 @@ struct Prefs {
     func reset() {
         guard !frozen else { return }
         for k in ["overlayLevel", "startMode", "lastMode", "startFullscreen", "intensity", "strobeEnabled", "syncOffsetMs",
-                  "lyricsEnabled", "playerCard", "lyricsSize", "lyricsOffsetMs"] { defaults.removeObject(forKey: k) }
+                  "lyricsEnabled", "playerCard", "lyricsSize", "lyricsOffsetMs", "lyricsStyle", "lyricsPosition"] { defaults.removeObject(forKey: k) }
     }
 }
 
@@ -118,19 +128,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let offsetLabel = NSTextField(labelWithString: "")
     private let quality = NSPopUpButton()
     private let audioSource = NSPopUpButton()
-    private let lyricsBox = NSButton(checkboxWithTitle: "Show synced lyrics for the playing song", target: nil, action: nil)
-    private let cardBox = NSButton(checkboxWithTitle: "Show the Now Playing card (bottom left, hides when the mouse rests)", target: nil, action: nil)
-    private let lyricsSize = NSSegmentedControl(labels: ["Small", "Medium", "Large"], trackingMode: .selectOne, target: nil, action: nil)
-    private let lyricsOffset = NSSlider(value: 0, minValue: -1000, maxValue: 1000, target: nil, action: nil)
-    private let lyricsOffsetLabel = NSTextField(labelWithString: "")
+    /// Lyrics controls, bound to the same model as the Y / Shift-Y / - / = keys (nil in a build without the lyrics controller).
+    private(set) var lyricsSection: LyricsSettingsSection?
     private let nowPlayingNote = NSTextField(wrappingLabelWithString: "")
 
     init(app: AppDelegate) {
         self.app = app
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 640), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 740), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "RAVE LIVE Settings"
         w.isReleasedWhenClosed = false
         super.init(window: w)
+        lyricsSection = app.lyrics.map { LyricsSettingsSection(model: $0.settingsModel) }
         w.delegate = self
         build()
         refresh()
@@ -152,11 +160,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let offsetRow = NSStackView(views: [offset, offsetLabel]); offset.widthAnchor.constraint(equalToConstant: 240).isActive = true
         offsetLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         let reset = NSButton(title: "Restore Defaults", target: self, action: #selector(resetAll(_:)))
-        let lyricsOffsetRow = NSStackView(views: [lyricsOffset, lyricsOffsetLabel]); lyricsOffset.widthAnchor.constraint(equalToConstant: 240).isActive = true
-        lyricsOffsetLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         nowPlayingNote.font = .systemFont(ofSize: 11); nowPlayingNote.textColor = .secondaryLabelColor; nowPlayingNote.preferredMaxLayoutWidth = 400
 
-        let rows: [[NSView]] = [
+        var rows: [[NSView]] = [
             [label("HUD"), overlay],
             [NSGridCell.emptyContentView, note("H cycles status → full → off while playing. Never shown on Syphon or the output display.")],
             [label("Open in"), startMode],
@@ -167,15 +173,23 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             [label("Quality"), quality],
             [label("Visual sync"), offsetRow],
             [NSGridCell.emptyContentView, note("Bluetooth speakers or a long cable run? Move the visuals later until kicks and flashes line up. Keys , and . nudge by 10 ms.")],
-            [label("Lyrics"), lyricsBox],
-            [NSGridCell.emptyContentView, note("While this is on, the playing track's title, artist, album and length are looked up on lrclib.net (a free lyrics database). Remixes, edits and sped-up or slowed versions are never looked up and show no lyrics; L syncs a skipped song anyway. Main window only. Y toggles.")],
-            [label("Lyrics size"), lyricsSize],
-            [label("Lyrics timing"), lyricsOffsetRow],
-            [NSGridCell.emptyContentView, note("Lyrics early or late? Keys - and = move them by 50 ms.")],
-            [label("Player card"), cardBox],
-            [NSGridCell.emptyContentView, nowPlayingNote],
-            [NSGridCell.emptyContentView, reset],
         ]
+        if let s = lyricsSection {
+            let onRow = NSStackView(views: [s.enabled, s.enabledLabel])
+            let offRow = NSStackView(views: [s.offset, s.offsetLabel]); s.offset.widthAnchor.constraint(equalToConstant: 240).isActive = true
+            rows += [
+                [label("Lyrics"), onRow],
+                [NSGridCell.emptyContentView, note("While this is on, the playing track's title, artist, album and length are looked up on lrclib.net (a free lyrics database). Remixes, edits and sped-up or slowed versions are never looked up and show no lyrics; L syncs a skipped song anyway. Main window only.")],
+                [label("Lyrics style"), s.style],
+                [NSGridCell.emptyContentView, s.styleNote],
+                [label("Lyrics position"), s.position],
+                [label("Lyrics size"), s.size],
+                [label("Lyrics timing"), offRow],
+                [NSGridCell.emptyContentView, note("Lyrics early or late? Keys - and = move them by 50 ms. Shift-Y cycles the style.")],
+                [label("Player card"), s.card],
+            ]
+        }
+        rows += [[NSGridCell.emptyContentView, nowPlayingNote], [NSGridCell.emptyContentView, reset]]
         let grid = NSGridView(views: rows)
         grid.rowSpacing = 10; grid.columnSpacing = 12
         grid.column(at: 0).xPlacement = .trailing
@@ -194,10 +208,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         intensity.target = self; intensity.action = #selector(intensityChanged(_:))
         strobe.target = self; strobe.action = #selector(strobeChanged(_:))
         offset.target = self; offset.action = #selector(offsetChanged(_:)); offset.isContinuous = true
-        lyricsBox.target = self; lyricsBox.action = #selector(lyricsChanged(_:))
-        cardBox.target = self; cardBox.action = #selector(cardChanged(_:))
-        lyricsSize.target = self; lyricsSize.action = #selector(lyricsSizeChanged(_:))
-        lyricsOffset.target = self; lyricsOffset.action = #selector(lyricsOffsetChanged(_:)); lyricsOffset.isContinuous = true
     }
 
     /// Pull the live state into the controls (keys, MIDI and menus change the same things).
@@ -223,11 +233,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         audioSource.selectItem(at: AudioMenu.shared.options().firstIndex { $0.current } ?? 0)
         if let l = app.lyrics {
             let ok = l.source.adapter != nil
-            lyricsBox.state = l.lyricsOn ? .on : .off; lyricsBox.isEnabled = ok
-            cardBox.state = l.cardOn ? .on : .off; cardBox.isEnabled = ok
-            lyricsSize.selectedSegment = l.size; lyricsSize.isEnabled = ok
-            lyricsOffset.doubleValue = Double(l.offsetMs); lyricsOffset.isEnabled = ok
-            lyricsOffsetLabel.stringValue = Self.msText(l.offsetMs)
+            lyricsSection?.show(l.settingsModel.state)
+            lyricsSection?.setAvailable(ok)
             nowPlayingNote.stringValue = l.adapterNote
             nowPlayingNote.textColor = ok ? .secondaryLabelColor : .systemOrange
         }
@@ -257,14 +264,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let ms = Int((s.doubleValue / 5).rounded()) * 5
         app?.renderer.userOffset = Double(ms) / 1000; Prefs.shared.offsetMs = ms
         offsetLabel.stringValue = ms == 0 ? "0 ms" : String(format: "%+d ms %@", ms, ms > 0 ? "later" : "earlier")
-    }
-    @objc private func lyricsChanged(_ s: NSButton) { app?.lyrics?.setLyrics(s.state == .on); refresh() }
-    @objc private func cardChanged(_ s: NSButton) { app?.lyrics?.setCard(s.state == .on); refresh() }
-    @objc private func lyricsSizeChanged(_ s: NSSegmentedControl) { app?.lyrics?.setSize(s.selectedSegment) }
-    @objc private func lyricsOffsetChanged(_ s: NSSlider) {
-        let ms = Int((s.doubleValue / 10).rounded()) * 10
-        app?.lyrics?.setOffset(ms)
-        lyricsOffsetLabel.stringValue = Self.msText(ms)
     }
     @objc private func qualityChanged(_ s: NSPopUpButton) { if let k = s.selectedItem?.representedObject as? String { QualityController.shared.select(k) } }
     @objc private func audioChanged(_ s: NSPopUpButton) { if let k = s.selectedItem?.representedObject as? String { AudioMenu.shared.pick(key: k) } }

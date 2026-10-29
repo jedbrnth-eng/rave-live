@@ -122,6 +122,12 @@ The 0.5.1 download doesn't have these yet. They are merged on `main` and will sh
 
 - **Synced lyrics** for whatever your Mac is playing (Spotify, Music, browsers, most players): the current line large and low on screen, the next line smaller below, a soft crossfade and a gentle breath on the beat (no flashing). **Off by default**, because turning them on sends the playing track's title, artist, album and length to [lrclib.net](https://lrclib.net). Remixes, edits, sped-up and slowed versions are never looked up, so you never get wrongly timed lyrics. `Y` toggles, `-` `=` nudge the timing.
 - **Now Playing card** (bottom left): artwork, title, artist, the app it's playing in, progress, and previous / play-pause / next buttons. It hides a few seconds after the mouse stops; `N` turns it off.
+- **Lyric styles** that move with the music, not just the clock: Clean (default), Neon karaoke, Pop, Bass wave, Spectrum and Auto (follows the energy, cuts to Pop on drops). Words light up one by one, snapped to the live beat when the lyrics only time whole lines. Settings → Lyrics style, or `Shift-Y`.
+
+<p align="center">
+  <img src="docs/screenshots/lyrics-styles.webp" alt="Six lyric styles over RAVE LIVE visuals, top to bottom: Clean, Neon karaoke with a magenta-to-cyan fill sweeping through the words, Pop with two big words at a time, Bass wave with the letters riding a wave, Spectrum with each word coloured and sized like an equaliser bar, and Auto switching to Pop on a drop" width="640"><br>
+  <sub>Top to bottom: Clean, Neon karaoke, Pop, Bass wave, Spectrum, Auto on a drop. Made-up lyrics from a local test server, recorded from the app's own window (demo audio).</sub>
+</p>
 - **New Settings rows** for lyrics on/off, lyrics size and timing, the player card, and what Now Playing currently sees.
 - **Smoother long sets and better recovery:** no more small stutter every 2 seconds late in a long set, system audio comes back on its own after sleep or a display change, Syphon keeps full frame rate while the window is covered, and the window appears at once on first launch.
 
@@ -135,8 +141,8 @@ Full list: [CHANGELOG.md](CHANGELOG.md).
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/settings.png" alt="The Settings window: HUD, Open in, Intensity, Strobe effects, Audio, Quality, Visual sync, and the 0.6.0 Lyrics, Lyrics size, Lyrics timing and Player card rows" width="420"><br>
-  <sub>Settings (<code>⌘,</code>), shown from the 0.6.0 build. The Lyrics and Player card rows arrive with 0.6.0; everything above them is in 0.5.1.</sub>
+  <img src="docs/screenshots/settings.png" alt="The Settings window: HUD, Open in, Intensity, Strobe effects, Audio, Quality, Visual sync, then the Lyrics switch, Lyrics style, position, size, timing and Player card rows" width="420"><br>
+  <sub>Settings (<code>⌘,</code>), from a build of <code>main</code>. The Lyrics rows (switch, style, position, size, timing) and Player card are new since 0.5.1; everything above them is in 0.5.1.</sub>
 </p>
 
 ### New in 0.5
@@ -186,6 +192,7 @@ Full list: [CHANGELOG.md](CHANGELOG.md).
 | `Y` | Synced lyrics on/off (looks the song up on lrclib.net) · 0.6.0, on `main` |
 | `N` | Now Playing card on/off · 0.6.0, on `main` |
 | `-` `=` | Lyrics 50 ms earlier / later · 0.6.0, on `main` |
+| `Shift-Y` | Next lyric style (Clean, Neon karaoke, Pop, Bass wave, Spectrum, Auto) · on `main` |
 
 <p align="center">
   <img src="docs/screenshots/app-window.jpg" alt="The app window with the mode switcher at the top left and the live status bar at the bottom showing BPM, confidence, fps and latency" width="860">
