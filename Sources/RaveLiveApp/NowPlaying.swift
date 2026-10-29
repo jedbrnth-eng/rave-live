@@ -62,7 +62,7 @@ struct NowPlayingStream {
 
     var info: NowPlayingInfo? {
         guard let title = payload["title"] as? String, !title.isEmpty else { return nil }
-        let duration = num("durationMicros").map { $0 / 1e6 } ?? num("duration")
+        let duration = (num("durationMicros").map { $0 / 1e6 } ?? num("duration")).flatMap { $0.isFinite && $0 > 0 && $0 < 1e7 ? $0 : nil }
         let elapsed = num("elapsedTimeMicros").map { $0 / 1e6 } ?? num("elapsedTime") ?? 0
         var ts = num("timestampEpochMicros").map { $0 / 1e6 }
         if ts == nil, let s = payload["timestamp"] as? String { ts = Self.iso.date(from: s)?.timeIntervalSince1970 }

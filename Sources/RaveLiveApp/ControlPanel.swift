@@ -348,11 +348,18 @@ final class VJRig: NSObject, NSMenuDelegate {
         layoutOverlays()
     }
 
+    /// Full Control HUD frame: top right, moved down below the mode bar when a narrow window would make them overlap.
+    static func hudFrame(bounds b: NSRect, size hs: NSSize, avoid: NSRect?) -> NSRect {
+        var f = NSRect(x: b.maxX - hs.width - 12, y: b.maxY - hs.height - 12, width: hs.width, height: hs.height)
+        if let m = avoid, f.intersects(m.insetBy(dx: -6, dy: -6)) { f.origin.y = max(b.minY + 4, m.minY - 8 - hs.height) }
+        return f
+    }
+
     private func layoutOverlays() {
         guard let cv = app?.window.contentView else { return }
         let b = cv.bounds
         let hs = hudView.fittingSize
-        hudView.frame = NSRect(x: b.maxX - hs.width - 12, y: b.maxY - hs.height - 12, width: hs.width, height: hs.height)
+        hudView.frame = Self.hudFrame(bounds: b, size: hs, avoid: app?.modeControl.isHidden == false ? app?.modeControl.frame : nil)
         let cs = cheatView.fittingSize
         cheatView.frame = NSRect(x: (b.width - cs.width) / 2, y: (b.height - cs.height) / 2, width: cs.width, height: cs.height)
     }

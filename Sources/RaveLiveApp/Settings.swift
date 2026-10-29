@@ -114,7 +114,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     init(app: AppDelegate) {
         self.app = app
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 610), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 640), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "RAVE LIVE Settings"
         w.isReleasedWhenClosed = false
         super.init(window: w)
@@ -155,7 +155,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             [label("Visual sync"), offsetRow],
             [NSGridCell.emptyContentView, note("Bluetooth speakers or a long cable run? Move the visuals later until kicks and flashes line up. Keys , and . nudge by 10 ms.")],
             [label("Lyrics"), lyricsBox],
-            [NSGridCell.emptyContentView, note("While this is on, the playing track's title, artist, album and length are looked up on lrclib.net (a free lyrics database). Remixes and edits are never looked up and show no lyrics. Main window only. Y toggles.")],
+            [NSGridCell.emptyContentView, note("While this is on, the playing track's title, artist, album and length are looked up on lrclib.net (a free lyrics database). Remixes, edits and sped-up or slowed versions are never looked up and show no lyrics. Main window only. Y toggles.")],
             [label("Lyrics size"), lyricsSize],
             [label("Lyrics timing"), lyricsOffsetRow],
             [NSGridCell.emptyContentView, note("Lyrics early or late? Keys - and = move them by 50 ms.")],
@@ -212,8 +212,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             let ok = l.source.adapter != nil
             lyricsBox.state = l.lyricsOn ? .on : .off; lyricsBox.isEnabled = ok
             cardBox.state = l.cardOn ? .on : .off; cardBox.isEnabled = ok
-            lyricsSize.selectedSegment = l.size
-            lyricsOffset.doubleValue = Double(l.offsetMs)
+            lyricsSize.selectedSegment = l.size; lyricsSize.isEnabled = ok
+            lyricsOffset.doubleValue = Double(l.offsetMs); lyricsOffset.isEnabled = ok
             lyricsOffsetLabel.stringValue = Self.msText(l.offsetMs)
             nowPlayingNote.stringValue = l.adapterNote
             nowPlayingNote.textColor = ok ? .secondaryLabelColor : .systemOrange

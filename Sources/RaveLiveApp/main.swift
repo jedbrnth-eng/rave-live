@@ -110,8 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         hud.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
         hud.textColor = NSColor(white: 1, alpha: 0.75)
-        hud.frame = NSRect(x: 12, y: 8, width: 1200, height: 18)
-        hud.autoresizingMask = [.maxYMargin]
+        hud.frame = NSRect(x: 12, y: 8, width: max(100, window.contentView!.bounds.width - 24), height: 18)
+        hud.autoresizingMask = [.maxYMargin, .width]
+        hud.lineBreakMode = .byTruncatingTail             // ends in "…" at the window edge instead of a cut-off word
         window.contentView!.addSubview(hud)
         status.font = .systemFont(ofSize: 15, weight: .semibold)
         status.textColor = .white
@@ -335,13 +336,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("[", _): if let v = r.visuals { v.preset = (v.preset + VisualsRenderer.count - 1) % VisualsRenderer.count; v.autoCycle = false }
         case ("y", false):
             guard let l = lyrics else { break }
+            guard l.source.adapter != nil else { flashStatus("Lyrics need the Now Playing reader (see Settings)"); break }   // nothing to switch on
             l.setLyrics(!l.lyricsOn)
-            flashStatus(l.lyricsOn ? (l.source.adapter == nil ? "Lyrics need the Now Playing reader (see Settings)" : "Lyrics on: track titles are looked up on lrclib.net") : "Lyrics off")
+            flashStatus(l.lyricsOn ? "Lyrics on: track titles are looked up on lrclib.net" : "Lyrics off")
         case ("n", false):
             guard let l = lyrics else { break }
+            guard l.source.adapter != nil else { flashStatus("The player card needs the Now Playing reader (see Settings)"); break }
             l.setCard(!l.cardOn); flashStatus(l.cardOn ? "Player card on" : "Player card off")
         case ("-", _), ("_", _), ("=", _), ("+", _):
-            guard let l = lyrics else { break }
+            guard let l = lyrics, l.source.adapter != nil else { break }
             l.setOffset(l.offsetMs + (ch == "-" || ch == "_" ? -50 : 50))
             flashStatus(l.offsetMs == 0 ? "Lyrics timing 0 ms" : String(format: "Lyrics timing %+d ms (%@)", l.offsetMs, l.offsetMs > 0 ? "later" : "earlier"))
         case ("1", _), ("2", _), ("3", _), ("4", _), ("5", _), ("6", _), ("7", _), ("8", _):

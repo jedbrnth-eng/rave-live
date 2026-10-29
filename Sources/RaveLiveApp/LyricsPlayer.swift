@@ -143,6 +143,15 @@ final class LyricsController: NSObject {
 
     func wake() { lastWake = CACurrentMediaTime() }
 
+    /// One 30 Hz step of the card fade: eases toward visible while awake, toward 0 otherwise. A faded-out card is
+    /// hidden: an invisible card would still catch clicks meant for the visuals (and could pause the music), and
+    /// window snapshots draw subviews regardless of alpha. Any mouse movement wakes it again.
+    static func cardStep(alpha: CGFloat, want: Bool, awake: Bool) -> (alpha: CGFloat, hidden: Bool) {
+        guard want else { return (0, true) }
+        let a = alpha + ((awake ? 1 : 0) - alpha) * 0.15
+        return (a, !awake && a < 0.02)
+    }
+
     // MARK: Now Playing -> lyrics
 
     private func nowPlayingChanged(_ i: NowPlayingInfo?) {
@@ -253,9 +262,11 @@ final class LyricsController: NSObject {
         // card: visible for a few seconds after mouse movement / a track or play-state change
         let awake = now - lastWake < 4
         let wantCard = cardOn && info != nil && !clean && source.adapter != nil
-        card.isHidden = !wantCard
+        let (alpha, hidden) = Self.cardStep(alpha: card.alphaValue, want: wantCard, awake: awake || card.hovering)
+        if hidden && !card.isHidden { card.resetHover() }   // a hidden view gets no mouseExited
+        card.alphaValue = alpha
+        card.isHidden = hidden
         if wantCard {
-            card.alphaValue += ((awake || card.hovering ? 1 : 0) - card.alphaValue) * 0.15
             card.setNote(lyricsOn ? state.note : nil)
             if let i = info { card.setProgress(position: i.position(at: Date().timeIntervalSince1970), duration: i.duration, playing: i.playing) }
         }
@@ -481,6 +492,7 @@ final class PlayerCardView: NSView {
     override func mouseEntered(with e: NSEvent) { hovering = true; onHover?() }
     override func mouseExited(with e: NSEvent) { hovering = false; onHover?() }
     override func mouseMoved(with e: NSEvent) { onHover?() }
+    func resetHover() { hovering = false }
 
     func update(_ i: NowPlayingInfo?, app: String) {
         guard let i else { return }
@@ -514,7 +526,7 @@ final class PlayerCardView: NSView {
     }
 
     static func mmss(_ t: Double) -> String {
-        let s = max(0, Int(t.rounded(.down)))
+        let s = t.isFinite ? max(0, Int(min(t, 1e7).rounded(.down))) : 0
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }
 }

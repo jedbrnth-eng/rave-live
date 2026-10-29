@@ -84,7 +84,7 @@ and a small player card bottom left with artwork, title, artist, the source app,
 - **Lyrics are off until you turn them on** (Settings → Lyrics, or **Y**): while on, the playing track's title, artist,
   album and length are looked up on [lrclib.net](https://lrclib.net), a free lyrics database. Results are cached on your Mac
   (`~/Library/Application Support/RAVE LIVE/Lyrics`).
-- **Remixes, edits, bootlegs, VIPs, flips and mashups get no lyrics** (and are never looked up): original-song timing
+- **Remixes, edits, bootlegs, VIPs, flips, mashups and sped-up / slowed / nightcore / 8D versions get no lyrics** (and are never looked up): original-song timing
   doesn't fit them and wrongly timed lyrics look broken. Lyrics also stay off when the track length is more than 3 s
   away from the LRCLIB match. The card then says "lyrics off: remix/edit" (or "lyrics off: other version" for a length mismatch).
 - The current line sits large and low in the middle, the next line smaller below it; lines crossfade and breathe very
