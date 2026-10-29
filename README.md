@@ -48,7 +48,7 @@
 1. Click the big **Download RAVE LIVE for Mac** button above. A file called `RAVE-LIVE.dmg` lands in your Downloads folder.
 2. Double-click it, then drag **RAVE LIVE** onto the **Applications** shortcut in the window that opens.
 3. Open RAVE LIVE from Applications. macOS will say it can't verify the app, because RAVE LIVE isn't notarized by Apple yet. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to RAVE LIVE, then confirm. You only do this once.
-4. Allow **Screen & System Audio Recording** when macOS asks. It is how RAVE LIVE hears what your Mac is playing; nothing is recorded.
+4. Allow **Screen & System Audio Recording** when macOS asks, then quit RAVE LIVE (`⌘Q`) and open it again (macOS may offer **Quit & Reopen** for you); the app hears system audio only after that restart. It is how RAVE LIVE hears what your Mac is playing; nothing is recorded. If the visuals stay quiet, check that RAVE LIVE is turned on in **System Settings → Privacy & Security → Screen & System Audio Recording**, or press `M` to listen to a microphone or other input instead.
 
 ### Requirements
 
