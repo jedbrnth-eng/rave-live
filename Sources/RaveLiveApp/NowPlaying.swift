@@ -54,6 +54,14 @@ struct NowPlayingStream {
         } else {
             payload = p.filter { !($0.value is NSNull) }
         }
+        // An elapsed time without its own timestamp was measured about now: anchor it here, or the position would stay
+        // frozen at that elapsed time while playing and the lyrics would fall behind until the next update.
+        let hasElapsed = p["elapsedTimeMicros"] != nil || p["elapsedTime"] != nil
+        let hasStamp = p["timestampEpochMicros"] != nil || p["timestamp"] != nil
+        if hasElapsed && !hasStamp {
+            payload.removeValue(forKey: "timestamp")
+            payload["timestampEpochMicros"] = NSNumber(value: now * 1e6)
+        }
         return true
     }
 

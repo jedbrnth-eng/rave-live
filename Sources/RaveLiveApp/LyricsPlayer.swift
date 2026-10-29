@@ -429,15 +429,16 @@ final class LyricsController: NSObject {
     /// Song position the listener hears now: adapter position minus the audio output latency, minus the user trim.
     func heardPosition() -> Double? {
         guard let i = info else { return nil }
-        let lat = app?.renderer?.outputLatency.seconds ?? 0
-        return i.position(at: Date().timeIntervalSince1970) - lat - Double(offsetMs) / 1000 - (state == .synced ? introOffset + videoNudge : 0)
+        return LyricsTiming.heardPosition(sourcePosition: i.position(at: Date().timeIntervalSince1970), bundleID: i.bundleID,
+                                          outputLatency: app?.renderer?.outputLatency.seconds ?? 0, userOffsetMs: offsetMs,
+                                          videoOffset: state == .synced ? introOffset + videoNudge : 0)
     }
 
     /// Test log line for snapshots: position, the line index and its LRC timestamp.
     func describeNow(_ tag: String) {
         let pos = info.map { $0.position(at: Date().timeIntervalSince1970) } ?? -1
         let heard = heardPosition() ?? -1
-        let idx = LRC.index(at: heard, in: lines)
+        let idx = LyricsTiming.lineIndex(heard: heard, in: lines)
         // which LRC line the overlay's text actually is (first line with that text at or before `heard`)
         let shownText = overlay.currentText
         let shownIdx = overlay.isHidden || shownText.isEmpty ? nil : lines.indices.last { lines[$0].text == shownText && lines[$0].time <= heard + 0.5 }
@@ -479,7 +480,7 @@ final class LyricsController: NSObject {
         let wantLyrics = lyricsOn && state == .synced && info != nil && !clean
         overlay.isHidden = !wantLyrics
         guard wantLyrics, let heard = heardPosition() else { return }
-        let idx = LRC.index(at: heard, in: lines)
+        let idx = LyricsTiming.lineIndex(heard: heard, in: lines)
         if idx != shownIndex, let n = idx, logURL != nil, let i = info {      // test log: when each line went up
             log(String(format: "lyrics: linechange idx=%d lrc=%.3f src=%.3f heard=%.3f latency=%.0fms tsAge=%.3f", n, lines[n].time,
                        i.position(at: Date().timeIntervalSince1970), heard, (app?.renderer?.outputLatency.seconds ?? 0) * 1000,
