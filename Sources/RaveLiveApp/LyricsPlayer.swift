@@ -480,6 +480,11 @@ final class LyricsController: NSObject {
         overlay.isHidden = !wantLyrics
         guard wantLyrics, let heard = heardPosition() else { return }
         let idx = LRC.index(at: heard, in: lines)
+        if idx != shownIndex, let n = idx, logURL != nil, let i = info {      // test log: when each line went up
+            log(String(format: "lyrics: linechange idx=%d lrc=%.3f src=%.3f heard=%.3f latency=%.0fms tsAge=%.3f", n, lines[n].time,
+                       i.position(at: Date().timeIntervalSince1970), heard, (app?.renderer?.outputLatency.seconds ?? 0) * 1000,
+                       i.timestamp.map { Date().timeIntervalSince1970 - $0 } ?? -1))
+        }
         shownIndex = idx
         let cur = idx.map { lines[$0].text } ?? ""
         let nextIdx = (idx ?? -1) + 1

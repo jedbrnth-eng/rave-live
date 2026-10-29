@@ -11,7 +11,15 @@ import Foundation
 enum OutputLatency {
     struct Info { var seconds: Double; var name: String; var transport: String }
 
+    /// Test hook: `RAVE_TEST_OUTPUT_LATENCY_MS=<ms>` pretends the output is a Bluetooth device with that latency
+    /// (silent e2e runs prove lyric timing with Bluetooth-sized latency without real headphones).
+    static func testOverride(env: [String: String] = ProcessInfo.processInfo.environment) -> Info? {
+        guard let s = env["RAVE_TEST_OUTPUT_LATENCY_MS"], let ms = Double(s), ms.isFinite, ms >= 0, ms < 5000 else { return nil }
+        return Info(seconds: ms / 1000, name: "test", transport: "bluetooth")
+    }
+
     static func current() -> Info {
+        if let t = testOverride() { return t }
         var dev = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
