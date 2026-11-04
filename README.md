@@ -32,7 +32,7 @@
   <sub>Every look in one reel: Stage, all 48 Classic Visuals presets, AURORA and six of the 149 built-in MilkDrop presets, about a second each. Frames captured by the app itself from its built-in synthetic 128 BPM signal, with name captions added afterwards.</sub>
 </p>
 
-> **Status: pre-release.** The latest download is **0.6.0**: synced lyrics with six music-reactive lyric styles, a Now Playing card, and a performance and robustness pass. Expect rough edges. Issues and pull requests are welcome.
+> **Status: pre-release.** The latest download is **0.6.1**: 0.6.0 (synced lyrics with six music-reactive lyric styles, a Now Playing card, and a performance and robustness pass) plus a fix for the system audio permission getting stuck after an update. Expect rough edges. Issues and pull requests are welcome.
 
 > **Platform: Mac only, Linux/Windows planned.** RAVE LIVE is written for macOS (Swift, Metal and Apple's audio capture), so it does not run on Linux or Windows yet. A cross-platform version is planned; there is no date. Follow along or help in the issues.
 
@@ -40,7 +40,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/rave-live/releases/latest/download/RAVE-LIVE.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20RAVE%20LIVE%20for%20Mac-Free-ff2d95?style=for-the-badge&logo=apple&logoColor=white" alt="Download RAVE LIVE for Mac, free" height="56"></a><br>
-  <sub>Free · Apple silicon and Intel · macOS 12+ · about 8 MB · version 0.6.0</sub>
+  <sub>Free · Apple silicon and Intel · macOS 12+ · about 8 MB · version 0.6.1</sub>
 </p>
 
 ## Download (no Terminal needed)
