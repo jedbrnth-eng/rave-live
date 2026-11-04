@@ -120,6 +120,11 @@ final class AudioMenu: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         let help = NSMenuItem(title: "Visualize System Audio with BlackHole…", action: #selector(openHelp), keyEquivalent: "")
         menu.addItem(help)
+        if SystemAudio.isSupported {
+            let reset = NSMenuItem(title: Self.resetPermissionTitle, action: #selector(resetPermission), keyEquivalent: "")
+            reset.toolTip = "Use this when Screen & System Audio Recording is ON for RAVE LIVE but it still can't hear your Mac (common after an update)."
+            menu.addItem(reset)
+        }
         for it in menu.items where it.action != nil { it.target = self }
     }
 
@@ -146,4 +151,19 @@ final class AudioMenu: NSObject, NSMenuDelegate {
     }
 
     @objc private func openHelp() { NSWorkspace.shared.open(Self.compatibilityURL) }
+
+    static let resetPermissionTitle = "Reset System Audio Permission…"
+
+    /// Removes RAVE LIVE's (possibly stale) Screen & System Audio Recording entry, asks macOS again and opens the pane.
+    @objc private func resetPermission() {
+        let ok = ScreenCapturePermissionReset.run()
+        CapturePermission.requestScreenRecording()
+        if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(u) }
+        let a = NSAlert()
+        a.messageText = ok ? "Permission reset" : "Couldn't reset the permission"
+        a.informativeText = ok
+            ? "Turn on RAVE LIVE under Screen & System Audio Recording (allow it if macOS asks), then quit and reopen RAVE LIVE."
+            : "In System Settings → Privacy & Security → Screen & System Audio Recording, select RAVE LIVE, click − to remove it, then reopen RAVE LIVE and allow it again."
+        a.runModal()
+    }
 }

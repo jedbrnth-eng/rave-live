@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- **"Needs Screen & System Audio Recording" no longer gets stuck after an update.** Release builds are ad-hoc signed, so macOS ties that permission to one exact build: after updating, the switch could still show ON while macOS refused the new copy, and toggling it did nothing. The new **Audio → Reset System Audio Permission…** removes RAVE LIVE's own stale entry (`tccutil reset ScreenCapture`, nothing else is touched), asks again and opens the right Settings pane. The on-screen fix text now names this step.
+- When system audio is waiting for the permission, RAVE LIVE tries again each time you switch back to it, and the fix text goes away as soon as capture starts. The failure is now logged (`capture: system audio did not start`).
+
 ## [0.6.0]
 
 ### Added

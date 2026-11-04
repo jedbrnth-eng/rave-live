@@ -22,6 +22,8 @@ public enum CapturePermission {
     It never records your screen; it only reads the audio.
     Fix: System Settings → Privacy & Security → Screen & System Audio Recording →
     turn on RAVE LIVE (or your terminal app), then quit and reopen it.
+    Already on and still stuck? macOS kept the switch from an older copy of the app (this happens after an update):
+    Audio menu → Reset System Audio Permission, allow it again, then quit and reopen RAVE LIVE.
     No permission? Use microphone input instead (press M).
     """
     /// Shown on macOS 12, where ScreenCaptureKit can't capture audio.
