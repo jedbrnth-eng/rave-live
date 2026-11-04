@@ -73,6 +73,8 @@ final class AudioEngine: @unchecked Sendable {
     private(set) var source: InputSource = .system
     private(set) var sourceLabel = "system"     // shown in the HUD/metrics
     private var loggedFirstAudio = false
+    /// System audio failed to start for lack of Screen & System Audio Recording (the fix text is on screen).
+    private(set) var systemPermissionMissing = false
     private var deviceObserver: AnyObject?
     private var listeningTo: AudioInputDevice?  // the device the current input source resolved to
     /// Called on the main queue when the input device list changes (menu refresh).
@@ -148,6 +150,13 @@ final class AudioEngine: @unchecked Sendable {
 
     var tempo: TempoTracker? { analyzer?.tempo }
 
+    /// The user came back to RAVE LIVE (often from System Settings): if system audio is still waiting for the
+    /// permission, try once more, so the fix text goes away as soon as capture works instead of staying up.
+    func retrySystemIfPermissionMissing() {
+        guard PermissionRetry.shouldRetry(missing: systemPermissionMissing, isSystem: source == .system, label: sourceLabel) else { return }
+        Task { await self.start(.system) }
+    }
+
     func start(_ src: InputSource) async {
         if deviceObserver == nil {
             deviceObserver = AudioInputDevice.observeChanges { [weak self] in self?.devicesChanged() }
@@ -167,14 +176,20 @@ final class AudioEngine: @unchecked Sendable {
                 sys.onSamples = handler
                 sys.onError = { [weak self] e in self?.onStatus?("Capture error: \(e)") }
                 sys.onStopped = { [weak self] e in DispatchQueue.main.async { self?.systemCaptureInterrupted("stream stopped: \(e.localizedDescription)") } }
-                do { try await sys.start(); onStatus?("") }
-                catch { onStatus?(CapturePermission.fixInstructions) }
+                do { try await sys.start(); systemPermissionMissing = false; onStatus?("") }
+                catch {
+                    systemPermissionMissing = true
+                    NSLog("RAVE LIVE: system audio did not start: %@", "\(error)")
+                    onEvent?("capture: system audio did not start (permission?)")
+                    onStatus?(CapturePermission.fixInstructions)
+                }
             } else {
                 // macOS 12: ScreenCaptureKit has no audio. Use the default input and say how to get system audio.
                 await startDevice(nil, handler: handler)
                 onStatus?(CapturePermission.macOS12Instructions)
             }
         case .device(let uid):
+            systemPermissionMissing = false
             await startDevice(uid, handler: handler)
         }
     }

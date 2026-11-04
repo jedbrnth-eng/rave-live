@@ -167,6 +167,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Keep full frame rate when another app is in front (Syphon / projector feeds): no App Nap timer throttling.
         appActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Rendering live visuals")
+        // Back from System Settings (or anywhere): if system audio still waits for the permission, try again.
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.audio.retrySystemIfPermissionMissing()
+        }
         NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
             guard let self, let r = self.renderer else { return }
             r.metrics.event(self.window.occlusionState.contains(.visible) ? "window:visible" : "window:occluded", at: CACurrentMediaTime())
