@@ -38,7 +38,7 @@ final class OutputWindow: NSObject, MTKViewDelegate {
         window.level = sameScreenAsControls ? .normal : .screenSaver
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.title = "RAVE LIVE Output"
-        view = MTKView(frame: NSRect(origin: .zero, size: screen.frame.size), device: dev)
+        view = ScreenLinkedView(frame: NSRect(origin: .zero, size: screen.frame.size), device: dev)   // paced by its own screen
         view.autoresizingMask = [.width, .height]
         view.colorPixelFormat = mainView.colorPixelFormat
         view.framebufferOnly = false                      // Syphon + preview read the drawable

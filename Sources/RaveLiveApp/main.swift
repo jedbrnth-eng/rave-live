@@ -7,7 +7,7 @@ import MetalKit
 import RaveAudio
 
 /// Key handling lives on the view so it works fullscreen too.
-final class StageView: MTKView {
+final class StageView: ScreenLinkedView {   // drawn from a display link that follows its screen
     var onKey: ((NSEvent) -> Void)?
     var onMouse: ((NSPoint, NSPoint, Bool, Bool) -> Void)?   // location (0..1, top-left), delta, down, click
     var onDropFiles: (([URL]) -> Void)?                      // .milk files / folders dropped on the window
