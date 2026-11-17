@@ -1,0 +1,13 @@
+<!doctype html><!-- Copyright (c) 2026 Jed Brown. SPDX-License-Identifier: GPL-3.0-only --><html><body><h1>RAVE LIVE sync probe</h1><audio id=a src="tone.wav" preload=auto></audio>
+<script>
+const a=document.getElementById('a'); a.volume=0.001; const mode=location.hash.slice(1);
+navigator.mediaSession.metadata=new MediaMetadata({title:'SyncProbe Tone',artist:'RaveProbe'});
+function send(ev){fetch('/log',{method:'POST',body:JSON.stringify({ev,t:Date.now()/1000,ct:a.currentTime,paused:a.paused,mode})});}
+setInterval(()=>send('tick'),200);
+a.addEventListener('playing',()=>send('playing'));a.addEventListener('pause',()=>send('pause'));
+if(mode==='pos'){setInterval(()=>{try{navigator.mediaSession.setPositionState({duration:a.duration,position:a.currentTime,playbackRate:1})}catch(e){}},5000);}
+// scripted: play at load, seek to 40 at 20s, pause 30-33, play
+a.play().catch(e=>send('playfail:'+e));
+setTimeout(()=>{a.currentTime=40;send('seek40')},20000);
+setTimeout(()=>{a.pause()},30000);setTimeout(()=>{a.play()},33000);
+</script></body></html>
