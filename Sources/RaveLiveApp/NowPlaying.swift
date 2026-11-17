@@ -17,6 +17,8 @@ struct NowPlayingInfo: Equatable {
     var elapsed: Double, timestamp: Double?
     var rate: Double, playing: Bool
     var artwork: Data?
+    /// The player sent no position for this track, so `elapsed`/`timestamp` are our own clock started when it appeared.
+    var positionEstimated = false
 
     /// Playback position at epoch time `now`: elapsed + (now - timestamp) × rate while playing, clamped to the length.
     func position(at now: Double) -> Double {
@@ -32,20 +34,34 @@ struct NowPlayingInfo: Equatable {
 }
 
 /// Merges the adapter's `stream` lines: `diff:false` replaces the state, `diff:true` updates it, null removes a key.
+///
+/// Some players stop sending a position. YouTube in Zen (Firefox engine) after an autoplay to the next video nulls the
+/// elapsed time and length a second into the song and then sends only new timestamps (recorded 2026-11-17). A missing
+/// elapsed time used to read as 0 at the newest timestamp, so every such update restarted the song clock and the lyrics
+/// fell a minute behind. Now each track keeps its own clock: the last position the player really sent (and its length),
+/// or, if it never sent one, a clock started when the track appeared (`positionEstimated`).
 struct NowPlayingStream {
     private var payload: [String: Any] = [:]
+
+    private struct Clock { var elapsed: Double, timestamp: Double, estimated: Bool, duration: Double?, leftAt: Double? }
+    /// Per track (`clockID`), for players that send no position. Small: pruned in `feed`.
+    private var clocks: [String: Clock] = [:]
+    private var currentID: String?
+    /// A page can show a half-updated title for a moment (seen: the next video's title with the old channel for 2 s).
+    /// Coming back to a track within this long counts as the same play and keeps its clock.
+    static let glitchWindow = 15.0
 
     /// Returns false (state unchanged) for anything that isn't a valid data line.
     mutating func feed(_ line: Data, now: Double = Date().timeIntervalSince1970) -> Bool {
         guard !line.isEmpty, let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
               obj["type"] as? String == "data", let p = obj["payload"] as? [String: Any] else { return false }
+        let before = info
         if (obj["diff"] as? Bool) == true {
-            let before = info
             for (k, v) in p { if v is NSNull { payload.removeValue(forKey: k) } else { payload[k] = v } }
             // A play/pause flip can arrive a moment before the new elapsed/timestamp. Re-anchor at the position we had,
             // so the clock neither jumps ahead by the pause length (resume) nor snaps back (pause).
             let newTime = p["timestampEpochMicros"] != nil || p["timestamp"] != nil || p["elapsedTimeMicros"] != nil || p["elapsedTime"] != nil
-            if let b = before, let nowPlaying = p["playing"] as? Bool, nowPlaying != b.playing, !newTime {
+            if sourceElapsed != nil, let b = before, let nowPlaying = p["playing"] as? Bool, nowPlaying != b.playing, !newTime {
                 let pos = b.position(at: now)
                 payload.removeValue(forKey: "timestamp"); payload.removeValue(forKey: "elapsedTime")
                 payload["elapsedTimeMicros"] = NSNumber(value: pos * 1e6)
@@ -62,22 +78,64 @@ struct NowPlayingStream {
             payload.removeValue(forKey: "timestamp")
             payload["timestampEpochMicros"] = NSNumber(value: now * 1e6)
         }
+        updateClock(before: before, now: now)
         return true
+    }
+
+    private mutating func updateClock(before: NowPlayingInfo?, now: Double) {
+        let id = clockID
+        if currentID != id, let old = currentID { clocks[old]?.leftAt = now }
+        defer { currentID = id }
+        guard let id else { return }
+        var c: Clock?
+        if id == currentID { c = clocks[id] }
+        else if let old = clocks[id], let left = old.leftAt, now - left <= Self.glitchWindow { c = old }
+        let duration = sourceDuration ?? c?.duration
+        if let e = sourceElapsed, let ts = sourceTimestamp {
+            c = Clock(elapsed: e, timestamp: ts, estimated: false, duration: duration, leftAt: nil)
+        } else if var k = c {
+            // Play/pause without a position: freeze or resume the clock where it was.
+            if id == currentID, let b = before, b.playing != (payload["playing"] as? Bool ?? false) {
+                k.elapsed = b.position(at: now); k.timestamp = now
+            }
+            k.duration = duration; k.leftAt = nil
+            c = k
+        } else {
+            c = Clock(elapsed: 0, timestamp: now, estimated: true, duration: duration, leftAt: nil)
+        }
+        clocks[id] = c
+        if clocks.count > 8 {
+            for (k, v) in clocks where k != id && (v.leftAt ?? now) < now - Self.glitchWindow { clocks.removeValue(forKey: k) }
+        }
     }
 
     private static let iso: ISO8601DateFormatter = ISO8601DateFormatter()
     private func num(_ k: String) -> Double? { (payload[k] as? NSNumber)?.doubleValue }
+    private var sourceElapsed: Double? { num("elapsedTimeMicros").map { $0 / 1e6 } ?? num("elapsedTime") }
+    private var sourceTimestamp: Double? {
+        if let t = num("timestampEpochMicros") { return t / 1e6 }
+        return (payload["timestamp"] as? String).flatMap { Self.iso.date(from: $0)?.timeIntervalSince1970 }
+    }
+    private var sourceDuration: Double? {
+        (num("durationMicros").map { $0 / 1e6 } ?? num("duration")).flatMap { $0.isFinite && $0 > 0 && $0 < 1e7 ? $0 : nil }
+    }
+    /// Track identity without the length (players drop and re-send it).
+    private var clockID: String? {
+        guard let title = payload["title"] as? String, !title.isEmpty else { return nil }
+        return "\(payload["bundleIdentifier"] as? String ?? "")|\(title)|\(payload["artist"] as? String ?? "")"
+    }
 
     var info: NowPlayingInfo? {
         guard let title = payload["title"] as? String, !title.isEmpty else { return nil }
-        let duration = (num("durationMicros").map { $0 / 1e6 } ?? num("duration")).flatMap { $0.isFinite && $0 > 0 && $0 < 1e7 ? $0 : nil }
-        let elapsed = num("elapsedTimeMicros").map { $0 / 1e6 } ?? num("elapsedTime") ?? 0
-        var ts = num("timestampEpochMicros").map { $0 / 1e6 }
-        if ts == nil, let s = payload["timestamp"] as? String { ts = Self.iso.date(from: s)?.timeIntervalSince1970 }
+        let clock = clockID.flatMap { clocks[$0] }
+        var elapsed = sourceElapsed ?? 0, ts = sourceTimestamp, estimated = false
+        if sourceElapsed == nil, let c = clock { elapsed = c.elapsed; ts = c.timestamp; estimated = c.estimated }
         return NowPlayingInfo(title: title, artist: payload["artist"] as? String ?? "", album: payload["album"] as? String ?? "",
-                              bundleID: payload["bundleIdentifier"] as? String ?? "", duration: duration, elapsed: elapsed, timestamp: ts,
+                              bundleID: payload["bundleIdentifier"] as? String ?? "", duration: sourceDuration ?? clock?.duration,
+                              elapsed: elapsed, timestamp: ts,
                               rate: num("playbackRate") ?? 0, playing: payload["playing"] as? Bool ?? false,
-                              artwork: (payload["artworkData"] as? String).flatMap { Data(base64Encoded: $0) })
+                              artwork: (payload["artworkData"] as? String).flatMap { Data(base64Encoded: $0) },
+                              positionEstimated: estimated)
     }
 }
 

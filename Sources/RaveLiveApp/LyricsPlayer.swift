@@ -294,7 +294,11 @@ final class LyricsController: NSObject {
             lookupTitle = ""; lookupArtist = ""
             hintChangedAt = CACurrentMediaTime()
             refreshLyrics()
-        } else if old?.playing != i?.playing {
+        } else if old?.positionEstimated != i?.positionEstimated, let i {
+            log(i.positionEstimated ? "nowplaying: player sends no position, timing guessed from when the track appeared"
+                                    : String(format: "nowplaying: player position %.2f s", i.position(at: Date().timeIntervalSince1970)))
+        }
+        if old?.trackKey == i?.trackKey, old?.playing != i?.playing {
             log("nowplaying: \(i?.playing == true ? "playing" : "paused") at \(String(format: "%.2f", i?.position(at: Date().timeIntervalSince1970) ?? 0)) s")
             wake()
         }
@@ -340,8 +344,10 @@ final class LyricsController: NSObject {
         }
         var t = lookupTitle, a = lookupArtist
         if t.isEmpty { let x = TrackTitle.lookupIdentity(title: i.title, artist: i.artist, bundleID: i.bundleID); t = x.title; a = x.artist }
+        // The player sent no position for this track: the lyrics run on a clock started when it appeared.
+        let shown = i.positionEstimated ? decision + " · timing guessed (player sends no position)" : decision
         return Self.debugLine(app: NowPlayingSource.appName(i.bundleID), title: t, artist: a, trackDuration: i.duration,
-                              matchDuration: matchDuration, decision: decision, offset: introOffset + videoNudge)
+                              matchDuration: matchDuration, decision: shown, offset: introOffset + videoNudge)
     }
 
     /// L: sync a skipped song anyway, or undo that. Returns the status line to flash.
