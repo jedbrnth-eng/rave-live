@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Lyrics stay in time with YouTube in Zen, Firefox and other players that stop sending a position.** After YouTube autoplays the next video, the Firefox engine drops the song position and length a second in and then only sends new timestamps. RAVE LIVE read that as "the song just restarted", so the lyrics fell behind (a recorded case: 65 s behind by the end of the song) and the length check skipped the song. Each track now keeps its own clock: the last position the player really sent plus the time since, and the last length it sent. A player that never sends a position gets a clock started when the track appeared, and the HUD debug line says the timing is guessed. A page that shows a half-updated title for a moment no longer resets the song.
+
 ## [0.6.1] - 2026-11-04
 
 ### Fixed
