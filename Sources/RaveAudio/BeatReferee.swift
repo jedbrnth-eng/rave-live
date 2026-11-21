@@ -44,17 +44,23 @@ public final class BeatReferee: @unchecked Sendable {
     /// (+- 10 ms), so correcting smaller errors injects jitter; our own onset tracking is finer. Big flips are separate (0.2).
     static let phaseDead = Double(ProcessInfo.processInfo.environment["RAVE_PHDEAD"] ?? "") ?? 0.1
     /// Where the optional referee lives, resolved at run time (no build-time paths are baked into the binary).
-    /// Order: `RAVE_REFEREE_DIR`; a `tools/` folder next to the checkout above the executable (works for
-    /// `.build/release/...` and for `build/RAVE LIVE.app`); `~/Library/Application Support/RAVE LIVE/tools`.
-    /// If nothing is found the app runs without the referee.
+    /// Order: `RAVE_REFEREE_DIR`; the `tools/` folder of the checkout the executable was built in (the folder
+    /// holding `.build/` for `swift build`, or `build/` for `build/RAVE LIVE.app`);
+    /// `~/Library/Application Support/RAVE LIVE/tools`. If nothing is found the app runs without the referee.
+    /// Only those two build folders count: an installed app must not run a `tools/referee.py` that someone else
+    /// put in /Applications, ~/Downloads or the home folder.
     public static func locateToolsDir(env: [String: String], executable: URL?, home: String,
                                       exists: (String) -> Bool) -> String {
         if let d = env["RAVE_REFEREE_DIR"], !d.isEmpty { return NSString(string: d).expandingTildeInPath }
         var dir = executable?.deletingLastPathComponent()
         for _ in 0..<6 {
             guard let d = dir, d.path != "/" else { break }
-            if exists(d.appendingPathComponent("tools/referee.py").path) { return d.appendingPathComponent("tools").path }
-            dir = d.deletingLastPathComponent()
+            let checkout = d.deletingLastPathComponent()
+            if [".build", "build"].contains(d.lastPathComponent),
+               exists(checkout.appendingPathComponent("tools/referee.py").path) {
+                return checkout.appendingPathComponent("tools").path
+            }
+            dir = checkout
         }
         return home + "/Library/Application Support/RAVE LIVE/tools"
     }

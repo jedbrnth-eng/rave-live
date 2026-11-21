@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Security
+- **The optional Beat This! referee is only picked up from the folder the app was built in.** RAVE LIVE used to look for `tools/referee.py` in every folder above the app, so an app in `/Applications` would run `/Applications/tools/referee.py`, and one in the Downloads folder would run `tools/referee.py` from Downloads or from the home folder, if someone had put a file there. It now looks only beside a `.build/` or `build/` folder (a source checkout), then in `~/Library/Application Support/RAVE LIVE/tools`. `RAVE_REFEREE_DIR` still works. Present in 0.6.1 and earlier.
+
 ### Fixed
 - **Lyrics stay in time with YouTube in Zen, Firefox and other players that stop sending a position.** After YouTube autoplays the next video, the Firefox engine drops the song position and length a second in and then only sends new timestamps. RAVE LIVE read that as "the song just restarted", so the lyrics fell behind (a recorded case: 65 s behind by the end of the song) and the length check skipped the song. Each track now keeps its own clock: the last position the player really sent plus the time since, and the last length it sent. A player that never sends a position gets a clock started when the track appeared, and the HUD debug line says the timing is guessed. A page that shows a half-updated title for a moment no longer resets the song.
 
