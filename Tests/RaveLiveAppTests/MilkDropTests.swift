@@ -107,6 +107,33 @@ final class MilkDropLibraryTests: XCTestCase {
         XCTAssertEqual(own.author, ""); XCTAssertEqual(own.name, "my thing")
     }
 
+    /// The "Get more presets" download must be one fixed version of the pack, the same one the bundled presets
+    /// were picked from, not whatever the pack's main branch holds on the day of the click.
+    func testPackDownloadIsPinnedToTheCommitOfTheBundledPresets() throws {
+        let list = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Resources/MilkDrop/bundled.txt")
+        let line = try XCTUnwrap(String(contentsOf: list, encoding: .utf8).split(separator: "\n").first { $0.hasPrefix("# commit ") })
+        let commit = String(line.dropFirst("# commit ".count)).trimmingCharacters(in: .whitespaces)
+        XCTAssertEqual(commit.count, 40)
+        XCTAssertEqual(MilkDropLibrary.packCommit, commit)
+        XCTAssertEqual(MilkDropLibrary.packURL.absoluteString,
+                       "https://codeload.github.com/projectM-visualizer/presets-cream-of-the-crop/zip/" + commit)
+    }
+
+    /// A pinned download unpacks to "presets-cream-of-the-crop-<commit>". Favourites and ratings are stored under
+    /// the old folder name, so the folder gets that name back.
+    func testPinnedPackKeepsTheFolderNameFavouritesWereSavedUnder() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("milkpin-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dir) }
+        let sub = dir.appendingPathComponent("presets-cream-of-the-crop-\(MilkDropLibrary.packCommit)/Dancer/Blobby")
+        try fm.createDirectory(at: sub, withIntermediateDirectories: true)
+        try "x".write(to: sub.appendingPathComponent("A - b.milk"), atomically: true, encoding: .utf8)
+        MilkDropLibrary.restorePackFolderName(in: dir)
+        XCTAssertTrue(fm.fileExists(atPath: dir.appendingPathComponent("presets-cream-of-the-crop-master/Dancer/Blobby/A - b.milk").path))
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: dir.path), ["presets-cream-of-the-crop-master"])
+    }
+
     func testScanSearchFavouritesBrokenAndPicking() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("milktest-\(UUID().uuidString)")
         let pack = dir.appendingPathComponent("presets-test/Sparkle/Sub"), trans = dir.appendingPathComponent("presets-test/! Transition/x")

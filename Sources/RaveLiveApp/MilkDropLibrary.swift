@@ -24,7 +24,12 @@ final class MilkDropLibrary: @unchecked Sendable {
 
     /// The pack offered by "Get MilkDrop presets…". Presets are mostly unlicensed community works that projectM treats as
     /// public domain (removal on author request); we download on the user's click and never commit them.
-    static let packURL = URL(string: "https://github.com/projectM-visualizer/presets-cream-of-the-crop/archive/refs/heads/master.zip")!
+    /// One fixed version of the pack (the commit in Resources/MilkDrop/bundled.txt), so the download can't change
+    /// under the app when the pack's main branch does. A test keeps the two in step.
+    static let packCommit = "0180df21f5e0bd39b9060cc5de420ed2f1f9e509"
+    static let packURL = URL(string: "https://codeload.github.com/projectM-visualizer/presets-cream-of-the-crop/zip/\(packCommit)")!
+    /// The folder the pack used to unpack to. Preset keys (favourites, ratings, broken) start with it.
+    static let packFolder = "presets-cream-of-the-crop-master"
     static let packInfo = "projectM \"cream of the crop\": about 9,800 presets, a 32 MB download (about 130 MB on disk)"
     static let getMoreTitle = "Get 9,800 More Presets…"
     /// Pack categories that are made for loud moments vs. calm ones (folder names in cream of the crop).
@@ -243,6 +248,7 @@ final class MilkDropLibrary: @unchecked Sendable {
                 try p.run(); p.waitUntilExit()
                 try? fm.removeItem(at: zip)
                 guard p.terminationStatus == 0 else { throw NSError(domain: "unzip", code: Int(p.terminationStatus)) }
+                Self.restorePackFolderName(in: staging)
                 try? fm.removeItem(at: Self.packDir)
                 try fm.moveItem(at: staging, to: Self.packDir)
             } catch {
@@ -256,6 +262,15 @@ final class MilkDropLibrary: @unchecked Sendable {
         progressObs = t.progress.observe(\.fractionCompleted) { [weak self] pr, _ in self?.download = .downloading(pr.fractionCompleted) }
         task = t
         t.resume()
+    }
+
+    /// The pinned download unpacks to "presets-cream-of-the-crop-<commit>"; rename it to `packFolder` so the
+    /// favourites and ratings saved under the old name still match.
+    static func restorePackFolderName(in dir: URL) {
+        let fm = FileManager.default
+        let pinned = dir.appendingPathComponent("presets-cream-of-the-crop-\(packCommit)", isDirectory: true)
+        guard fm.fileExists(atPath: pinned.path) else { return }
+        try? fm.moveItem(at: pinned, to: dir.appendingPathComponent(packFolder, isDirectory: true))
     }
 
     /// Ask (showing the size) and then download. Main thread.

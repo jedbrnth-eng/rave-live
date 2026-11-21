@@ -6,24 +6,37 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     name: Build and publish
     runs-on: macos-15
     timeout-minutes: 45
+    permissions:
+      contents: write        # create the release and its tag
+      # For the build attestation: a record, signed through GitHub, that the downloads were built by this workflow
+      # from this commit. Check one with: gh attestation verify RAVE-LIVE.zip --repo jedbrnth-eng/rave-live
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Read version
         id: v
-        run: echo "tag=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+        run: |
+          v="$(tr -d '[:space:]' < VERSION)"
+          # Plain x.y.z only: the value becomes a tag, a title and part of shell commands below.
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::VERSION must look like 1.2.3, got: $v"; exit 1; }
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
       - name: Stop if this version is already released
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
         run: |
-          if gh release view "${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then
-            echo "::error::${{ steps.v.outputs.tag }} already exists. Bump VERSION and add a CHANGELOG section first."; exit 1
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG already exists. Bump VERSION and add a CHANGELOG section first."; exit 1
           fi
       - name: Test
         run: swift test
@@ -54,15 +67,25 @@ jobs:
         run: |
           ditto -c -k --sequesterRsrc --keepParent "build/RAVE LIVE.app" RAVE-LIVE.zip
           scripts/make_dmg.sh
+          # Checksum install.sh verifies the download against.
+          shasum -a 256 RAVE-LIVE.zip > RAVE-LIVE.zip.sha256
+          cat RAVE-LIVE.zip.sha256
+      - name: Attest the downloads
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            RAVE-LIVE.zip
+            build/RAVE-LIVE.dmg
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
         run: |
           # Release notes = the install steps first (for everyone), then this version's CHANGELOG section.
-          v="$(tr -d '[:space:]' < VERSION)"
+          v="${TAG#v}"
           cat .github/release-notes.md > notes.md
           echo >> notes.md
           awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && /^## \[/ {exit} on' CHANGELOG.md >> notes.md
-          gh release create "${{ steps.v.outputs.tag }}" build/RAVE-LIVE.dmg RAVE-LIVE.zip \
-            --title "RAVE LIVE ${{ steps.v.outputs.tag }}" \
+          gh release create "$TAG" build/RAVE-LIVE.dmg RAVE-LIVE.zip RAVE-LIVE.zip.sha256 \
+            --title "RAVE LIVE $TAG" \
             --notes-file notes.md
