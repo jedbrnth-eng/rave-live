@@ -9,7 +9,12 @@
 set -euo pipefail
 
 REPO="jedbrnth-eng/rave-live"
-URL="${RAVE_ZIP_URL:-https://github.com/$REPO/releases/latest/download/RAVE-LIVE.zip}"
+URL="https://github.com/$REPO/releases/latest/download/RAVE-LIVE.zip"
+# HTTPS only, also across redirects (GitHub sends release downloads to its CDN).
+CURL=(curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2)
+# The testing override may point at a local server or a file.
+if [ -n "${RAVE_ZIP_URL:-}" ]; then URL="$RAVE_ZIP_URL"; CURL=(curl -fL); fi
+SUM_URL="$URL.sha256"
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
@@ -26,7 +31,24 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 say "Downloading RAVE LIVE..."
-curl -fL --progress-bar -o "$TMP/RAVE-LIVE.zip" "$URL" || die "Download failed. Check your internet connection, or see the README to build from source."
+"${CURL[@]}" --progress-bar -o "$TMP/RAVE-LIVE.zip" "$URL" || die "Download failed. Check your internet connection, or see the README to build from source."
+
+# Releases from 0.6.2 on publish RAVE-LIVE.zip.sha256 next to the zip. If it's there, the download must match it.
+# Only a clean "404 not found" (a release older than 0.6.2) skips the check; any other failure stops the install.
+SUM_HTTP="$("${CURL[@]}" -s -o "$TMP/RAVE-LIVE.zip.sha256" -w '%{http_code}' "$SUM_URL" 2>/dev/null)" || true
+# A file:// download has no HTTP status: the checksum file is either there or it isn't.
+case "$SUM_URL" in file://*) if [ -s "$TMP/RAVE-LIVE.zip.sha256" ]; then SUM_HTTP=200; else SUM_HTTP=404; fi ;; esac
+if [ "$SUM_HTTP" = "200" ]; then
+  WANT="$(awk 'NR==1 {print $1}' "$TMP/RAVE-LIVE.zip.sha256")"
+  GOT="$(shasum -a 256 "$TMP/RAVE-LIVE.zip" | awk '{print $1}')"
+  [[ "$WANT" =~ ^[0-9a-f]{64}$ ]] || die "The checksum file looks wrong. Nothing was installed. Please open an issue."
+  [ "$WANT" = "$GOT" ] || die "Checksum mismatch: the download is damaged or was changed. Nothing was installed."
+  say "Checksum OK ($GOT)"
+elif [ "$SUM_HTTP" = "404" ]; then
+  say "No checksum published for this release (older than 0.6.2); continuing without it."
+else
+  die "Couldn't download the checksum (HTTP ${SUM_HTTP:-none}). Nothing was installed; please try again."
+fi
 
 say "Installing to $DEST..."
 ditto -x -k "$TMP/RAVE-LIVE.zip" "$TMP/out"

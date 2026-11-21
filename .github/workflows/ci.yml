@@ -47,6 +47,8 @@ jobs:
         run: scripts/make_dmg.sh
       - name: Installer script is valid shell
         run: bash -n install.sh
+      - name: Installer checks the download's checksum
+        run: scripts/test_install.sh
       - name: Data files are valid JSON
         run: |
           for f in $(git ls-files "*.json"); do python3 -m json.tool "$f" > /dev/null || { echo "bad JSON: $f"; exit 1; }; done

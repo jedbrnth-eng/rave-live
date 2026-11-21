@@ -64,7 +64,7 @@ Prefer one command? Paste this into Terminal. It downloads the latest release, p
 curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/rave-live/main/install.sh | bash
 ```
 
-<sub>Want to read the script first? It's [install.sh](install.sh), about 50 lines. The app is open source, so you can read every line it runs.</sub>
+<sub>Want to read the script first? It's [install.sh](install.sh), about 80 lines. It checks the download against the checksum published with the release. The app is open source, so you can read every line it runs.</sub>
 
 ## Photosensitivity warning
 
