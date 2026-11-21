@@ -25,6 +25,24 @@ final class RefereeLocationTests: XCTestCase {
         XCTAssertEqual(d, "/work/rave/tools")
     }
 
+    func testFindsCheckoutAboveArchBuildFolder() {
+        let exe = URL(fileURLWithPath: "/work/rave/.build/arm64-apple-macosx/release/RaveLiveApp")
+        let d = BeatReferee.locateToolsDir(env: [:], executable: exe, home: home, exists: { $0 == "/work/rave/tools/referee.py" })
+        XCTAssertEqual(d, "/work/rave/tools")
+    }
+
+    /// An installed app must never run a `tools/referee.py` that merely sits in a folder around it: /Applications is
+    /// writable by every admin, and an unpacked download can drop a `tools` folder into ~/Downloads or the home folder.
+    func testInstalledAppIgnoresToolsFoldersAroundIt() {
+        for app in ["/Applications", "/home/someone/Applications", "/home/someone/Downloads", "/Volumes/RAVE LIVE"] {
+            let exe = URL(fileURLWithPath: app + "/RAVE LIVE.app/Contents/MacOS/RaveLiveApp")
+            var probed: [String] = []
+            let d = BeatReferee.locateToolsDir(env: [:], executable: exe, home: home, exists: { probed.append($0); return true })
+            XCTAssertEqual(d, "/home/someone/Library/Application Support/RAVE LIVE/tools", "installed in \(app)")
+            XCTAssertEqual(probed, [], "installed in \(app)")
+        }
+    }
+
     func testFallsBackToApplicationSupport() {
         let exe = URL(fileURLWithPath: "/Applications/RAVE LIVE.app/Contents/MacOS/RaveLiveApp")
         let d = BeatReferee.locateToolsDir(env: [:], executable: exe, home: home, exists: { _ in false })
