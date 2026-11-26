@@ -20,11 +20,15 @@ swift scripts/shadercheck.swift             # compile-check the Classic Visuals 
 ```
 Shader errors only show up at runtime, so after any shader edit also run the app once (`--demo --snap 5`) and look at the frame.
 
-For visual changes, attach before/after frames rendered at fixed times:
+For visual changes, attach before/after frames rendered at fixed times. `--offscreen` renders with no window on a
+fixed clock (each frame moves it exactly 1/fps and the demo track is fed up to it first), so nothing pops up while you
+work, and two runs with the same `--seed` give the same frames:
 ```
-open -n -W "build/RAVE LIVE.app" --args --accept-warning --demo --visuals --preset 24 \
-  --snap 20,41 --snapdir /tmp/rave-snaps --metrics /tmp/rave-metrics.json --autoquit 45
+"build/RAVE LIVE.app/Contents/MacOS/RaveLive" --offscreen --demo --visuals --preset 24 --seed 7 \
+  --seconds 45 --snap 20,41 --snapdir /tmp/rave-snaps --metrics /tmp/rave-snaps/metrics.json
 ```
+Add `--frames DIR --frame-step 2` to write every second frame as a PNG sequence for a 30 fps video. Next to
+`metrics.json`, `offscreen.json` holds what each frame really cost (CPU encode, and CPU + GPU until it was done).
 
 ## Guidelines
 - **Safety first.** Keep the photosensitivity warning and the default 3-flashes-per-second strobe limit. Any change that adds flashing must respect the limiter.

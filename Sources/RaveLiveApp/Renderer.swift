@@ -34,8 +34,8 @@ final class Renderer: NSObject, MTKViewDelegate {
     private(set) var beatLocked = false
 
     // Show state
-    private var t0 = CACurrentMediaTime()
-    private var lastFrame = CACurrentMediaTime()
+    private var t0 = RenderClock.now()
+    private var lastFrame = RenderClock.now()
     private var kickEnv: Float = 0, snareEnv: Float = 0, hatEnv: Float = 0      // raw onset envelopes (triggers, limiter logic)
     // what the visuals see: eased attack/release pulses and smoothed band levels (Smoothing.swift)
     private var kickPulse = Pulse(attack: 0.018, release: 0.16), predPulse = Pulse(attack: 0.018, release: 0.16)
@@ -133,7 +133,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         aurora = AuroraRenderer(device: dev, pixelFormat: view.colorPixelFormat, particles: pc)
         milk = MilkDropRenderer(device: dev, pixelFormat: view.colorPixelFormat, library: MilkDropLibrary())
         super.init()
-        milk?.onEvent = { [weak self] e in self?.metrics.event(e, at: CACurrentMediaTime()) }
+        milk?.onEvent = { [weak self] e in self?.metrics.event(e, at: RenderClock.now()) }
         metrics.event(String(format: "renderer:t0 host=%.4f", t0), at: t0)     // lets tests line --smoothlog times up with other host-clock logs
     }
 
@@ -155,7 +155,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
-        let now = CACurrentMediaTime()
+        let now = RenderClock.now()
         let dt = Float(min(0.1, now - lastFrame))
         metrics.frame(interval: now - lastFrame)
         lastFrame = now
@@ -536,6 +536,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     private var upcomingForDrop = false
     private var dropScenes = 0
     private var showRng: UInt64 = 0x5EED
+    private var showGen = SeededGenerator(seed: RenderClock.seed ^ 0x5EED)
     private var offA: MTLTexture?, offB: MTLTexture?
     static let transitionNames = ["flash cut", "iris", "liquid melt", "zoom punch", "glitch", "pixel dissolve", "spin kaleido", "crossfade"]
     private func srand(_ n: Int) -> Int { showRng ^= showRng << 13; showRng ^= showRng >> 7; showRng ^= showRng << 17; return Int(showRng % UInt64(n)) }
@@ -549,7 +550,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         if slots.isEmpty || !slots.contains(where: { $0 != showScene }) {
             var bag = [Mode](repeating: .visuals, count: 10) + [.aurora, .aurora, .aurora, .stage, .stage]
             if milk?.ready == true && showMilkDrop { bag += [.milkdrop, .milkdrop, .milkdrop] }
-            slots = bag.shuffled() + slots
+            slots = bag.shuffled(using: &showGen) + slots
         }
         if let i = slots.lastIndex(where: { $0 != showScene }) { return slots.remove(at: i) }
         return slots.removeLast()
@@ -633,9 +634,12 @@ final class Renderer: NSObject, MTKViewDelegate {
         startTransition(to: next, type: type, beats: beats, at: Double(bar * 4), ctx: ctx)
     }
 
-    /// Set while the main window is covered and Syphon is publishing: frames go to `headless`, not to a drawable.
+    /// Set while the main window is covered and Syphon is publishing, and by `--offscreen`: frames go to `headless`,
+    /// not to a drawable.
     var renderOffscreen = false
     private var headless: MTLTexture?
+    /// The last frame drawn offscreen (`--offscreen` reads it back for `--frames`).
+    var offscreenFrame: MTLTexture? { headless }
     private func headlessTarget(_ size: CGSize) -> MTLTexture? {
         let w = max(16, Int(size.width)), h = max(16, Int(size.height))
         if let t = headless, t.width == w, t.height == h { return t }
@@ -694,7 +698,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     private var vCached = VisualsRenderer.Input()
     /// Called from the view's mouse handler (main thread) so clicks are never lost between frames.
     func pointerEvent(pos: SIMD2<Float>, down: Bool, click: Bool) {
-        let now = CACurrentMediaTime()
+        let now = RenderClock.now()
         vLastMouse = now
         if click { vClicks.append((pos, now)); if vClicks.count > 8 { vClicks.removeFirst() } }
     }
@@ -745,6 +749,12 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
 
     private func saveSnapshot(_ tex: MTLTexture, name: String) {
+        try? FileManager.default.createDirectory(at: snapDir, withIntermediateDirectories: true)
+        Self.writePNG(tex, to: snapDir.appendingPathComponent(name))
+    }
+
+    /// Reads a finished BGRA frame back and writes it as a PNG (snapshots, `--offscreen --frames`).
+    static func writePNG(_ tex: MTLTexture, to url: URL) {
         let w = tex.width, h = tex.height
         var bytes = [UInt8](repeating: 0, count: w * h * 4)
         tex.getBytes(&bytes, bytesPerRow: w * 4, from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
@@ -755,7 +765,6 @@ final class Renderer: NSObject, MTKViewDelegate {
                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
                                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return }
         let rep = NSBitmapImageRep(cgImage: img)
-        try? FileManager.default.createDirectory(at: snapDir, withIntermediateDirectories: true)
-        try? rep.representation(using: .png, properties: [:])?.write(to: snapDir.appendingPathComponent(name))
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 }

@@ -87,6 +87,10 @@ final class Metrics: @unchecked Sendable {
     var state: String { get { locked { _state } } set { locked { _state = newValue } } }
     var sync: String { get { locked { _sync } } set { locked { _sync = newValue } } }
     let started = Date()
+    /// Host time at start, for runs on the fixed `--offscreen` clock (where wall time says nothing about the show).
+    private let hostStarted = RenderClock.now()
+    /// Seconds since start: wall clock normally, the render clock under `--offscreen`.
+    private func elapsed() -> Double { RenderClock.fixed != nil ? RenderClock.now() - hostStarted : Date().timeIntervalSince(started) }
     /// Background queue for encoding + writing; serial, so dumps land in order.
     private let io = DispatchQueue(label: "rave.metrics.dump", qos: .utility)
 
@@ -108,7 +112,7 @@ final class Metrics: @unchecked Sendable {
 
     func event(_ name: String, at t: Double) {
         let s = name.count > Self.maxEventLength ? String(name.prefix(Self.maxEventLength)) + "…" : name
-        let e: [String: Any] = ["t": t - CACurrentMediaTime() + Date().timeIntervalSince(started), "event": s]
+        let e: [String: Any] = ["t": t - RenderClock.now() + elapsed(), "event": s]
         locked {
             events.append(e)
             if events.count > Self.eventCap {               // keep the head (t0 marker, launch), drop the oldest after it
@@ -170,7 +174,7 @@ final class Metrics: @unchecked Sendable {
         let snap = Snapshot(fh: frameHist, gh: gpuHist, lh: latHist, frames: recentFrames, presents: presents,
                             maxF: maxFlashes, frameCount: framesSeen, events: events, dropped: eventsDropped,
                             firstReaction: _firstReaction, state: _state, sync: _sync, display: r_displayInfo,
-                            elapsed: Date().timeIntervalSince(started))
+                            elapsed: elapsed())
         lock.unlock()
         let work = { Self.write(snap, to: url) }
         if wait { io.sync(execute: work) } else { io.async(execute: work) }

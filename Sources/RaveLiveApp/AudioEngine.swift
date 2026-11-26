@@ -232,9 +232,40 @@ final class AudioEngine: @unchecked Sendable {
     /// Demo / test mode: a synthetic EDM arrangement (groove -> build -> gap -> drop) streamed through
     /// the same analysis path in real time. Nothing is played out loud.
     private var demoTimer: DispatchSourceTimer?
+    private var demoAudio: [Float] = [], demoPos = 0, demoStart = 0.0
+    private static let demoRate = 48000.0
     func startDemo() {
+        prepareDemo(at: hostNow())
+        let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "rave.demo", qos: .userInteractive))
+        t.schedule(deadline: .now(), repeating: .milliseconds(5))
+        t.setEventHandler { [weak self] in self?.pumpDemo(until: hostNow()) }     // keep the feed locked to the wall clock
+        t.resume(); demoTimer = t
+    }
+
+    /// Builds the demo track and starts its clock at host time `start`. `--offscreen` then calls `pumpDemo` itself
+    /// before every frame instead of running the timer.
+    func prepareDemo(at start: Double) {
         source = .system; sourceLabel = "demo"
-        let sr = 48000.0
+        demoAudio = Self.demoTrack(sr: Self.demoRate); demoPos = 0; demoStart = start
+        onStatus?("")
+    }
+
+    /// Feeds the demo track (looped) up to host time `t`, in 480-frame chunks stamped with their place on the clock.
+    func pumpDemo(until t: Double) {
+        let sr = Self.demoRate, chunk = 480
+        guard !demoAudio.isEmpty else { return }
+        let due = Int((t - demoStart) * sr)
+        while demoPos + chunk <= due {
+            let i = demoPos % demoAudio.count
+            if i + chunk <= demoAudio.count {
+                demoAudio.withUnsafeBufferPointer { b in ingest(UnsafeBufferPointer(rebasing: b[i..<(i + chunk)]), sr, demoStart + Double(demoPos) / sr) }
+            }
+            demoPos += chunk
+        }
+    }
+
+    /// 128 BPM: quiet intro 0-15 s, groove 15-30 s, build 30-37.5 s, a 1 s gap, then the drop (~38.5 s) for 30 s.
+    static func demoTrack(sr: Double) -> [Float] {
         var groove = Synth.house; groove.bpm = 128
         var buildA = Synth.Pattern(name: "build", bpm: 128, kick: "................", snare: "x...x...x...x...", hat: "..x...x...x...x.")
         var buildB = buildA; buildB.snare = "x.x.x.x.x.x.x.x."
@@ -252,24 +283,7 @@ final class AudioEngine: @unchecked Sendable {
         audio += [Float](repeating: 0.002, count: Int(beat * 2 * sr))                     // pre-drop gap
         var drop = Synth.house; drop.bpm = 128; drop.hat = "x.x.x.x.x.x.x.x."
         audio += Synth.render(drop, seconds: beat * 64, sr: sr, seed: 6).map { min(1, $0 * 1.3) }
-        let chunk = 480
-        var pos = 0
-        let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "rave.demo", qos: .userInteractive))
-        let start = hostNow()
-        t.schedule(deadline: .now(), repeating: .milliseconds(5))
-        t.setEventHandler { [weak self] in
-            // keep the feed locked to the wall clock
-            let due = Int((hostNow() - start) * sr)
-            while pos + chunk <= due {
-                let i = pos % audio.count
-                if i + chunk <= audio.count {
-                    audio.withUnsafeBufferPointer { b in self?.ingest(UnsafeBufferPointer(rebasing: b[i..<(i + chunk)]), sr, start + Double(pos) / sr) }
-                }
-                pos += chunk
-            }
-        }
-        t.resume(); demoTimer = t
-        onStatus?("")
+        return audio
     }
 
     private func ingest(_ buf: UnsafeBufferPointer<Float>, _ sr: Double, _ pts: Double) {
@@ -320,4 +334,5 @@ final class AudioEngine: @unchecked Sendable {
     }
 }
 
-func hostNow() -> Double { CMClockGetTime(CMClockGetHostTimeClock()).seconds }
+/// Host clock (seconds). `--offscreen` fixes it per frame (RenderClock), so the demo feed and the renderer agree.
+func hostNow() -> Double { RenderClock.fixed ?? CMClockGetTime(CMClockGetHostTimeClock()).seconds }

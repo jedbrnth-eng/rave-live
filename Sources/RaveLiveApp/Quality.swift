@@ -102,7 +102,7 @@ final class QualityController: NSObject {
                 r.aurora = a
             }
             r.aurora?.fullBloom = t.fullBloom
-            r.metrics.event("quality:\(t.rawValue) (\(choice)) particles=\(t.particlesEffective) scale=\(t.renderScale) gpu=\(detected.1) cpu=\(Self.cpuArch)", at: CACurrentMediaTime())
+            r.metrics.event("quality:\(t.rawValue) (\(choice)) particles=\(t.particlesEffective) scale=\(t.renderScale) gpu=\(detected.1) cpu=\(Self.cpuArch)", at: RenderClock.now())
         }
         viewChanged()
         rebuildMenu()

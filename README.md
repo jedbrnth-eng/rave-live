@@ -296,7 +296,7 @@ Rebuild the app and it finds `tools/.venv` and `tools/referee.py` in the folder 
 - CI runs on every push and pull request: release build, tests, the synthetic-pattern probe, an ad-hoc-signed app bundle, and a check that no personal file paths are committed.
 - `.build/release/rave-probe synth` checks the tracker against deterministic drum patterns, and `rave-probe file <audio> <bpm>` against a real track.
 - `scripts/bench.py` benchmarks tempo lock time against BPM values you supply as a JSON list of `[path, bpm, genre]` (for example exported from a DJ library): `scripts/bench.py [clip_start_s] <tracks.json>`. No track list or per-track results ship with the repo. `tools/eval_sync.py` scores beat phase against Beat This! ground truth. Both need your own audio files; no music is stored in this repo.
-- Visual changes are checked by rendering fixed timestamps with `--demo --snap t1,t2,… --metrics run.json` and comparing the frames.
+- Visual changes are checked by rendering fixed timestamps with `--offscreen --demo --seed N --snap t1,t2,… --metrics run.json` and comparing the frames. `--offscreen` opens no window and runs on a fixed clock, so the same seed gives the same frames; `scripts/smoke_test.sh` and CI use it.
 
 ## Project layout
 

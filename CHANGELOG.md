@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **`--offscreen`: render with no window.** The show renders into its own texture on a fixed clock: every frame moves the clock exactly 1/fps and the `--demo` track is fed up to that point first, so two runs with the same `--seed` give the same frames, whatever else the machine is doing. Use it with `--seconds`, `--snap`, `--frames DIR` (a gap-free PNG sequence for video) and `--metrics` (plus `offscreen.json`, the real CPU and GPU cost of each frame). The smoke test and CI use it, so they no longer open a window or take focus.
+
 ## [0.6.2] - 2026-11-21
 
 ### Security

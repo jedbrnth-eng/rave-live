@@ -126,23 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSLog("RAVE LIVE %@", startup)
         r.metrics.event(startup, at: CACurrentMediaTime())
         QualityController.shared.attach(r)
-        r.forcedLook = arg("--look").flatMap(Float.init); r.forcedBeam = arg("--beam").flatMap(Float.init); r.forcedLaser = arg("--laser").flatMap(Float.init)
-        if args.contains("--visuals") { r.mode = .visuals }
-        if args.contains("--stage") { r.mode = .stage }
-        if args.contains("--aurora") { r.mode = .aurora }
-        if args.contains("--show") { r.mode = .show }
-        if let sd = arg("--snapdir") { r.snapDir = URL(fileURLWithPath: NSString(string: sd).expandingTildeInPath) }
-        r.fakeMouseFrom = arg("--fakemouse-from").flatMap(Double.init) ?? -1
-        r.fakeHandsFrom = arg("--fakehands-from").flatMap(Double.init) ?? 0
-        r.fakeHands = args.contains("--fakehands") || arg("--fakehands-from") != nil
-        if let iv = arg("--intensity").flatMap(Int.init), let it = Renderer.Intensity(rawValue: iv) { r.intensity = it }
-        if let tr = arg("--trim").flatMap(Double.init) { r.userOffset = tr / 1000 }
-        if let pr = arg("--preset").flatMap(Int.init) { r.visuals?.preset = pr; r.visuals?.autoCycle = false }
-        if let s = arg("--snap") { r.snapTimes = s.split(separator: ",").compactMap { Double($0) }.sorted() }
-        r.snapTransitions = arg("--snap-transitions").flatMap(Int.init) ?? 0
-        r.showHoldOverride = arg("--show-hold").flatMap(Double.init)
-        r.lumLogPath = arg("--lumlog").map { NSString(string: $0).expandingTildeInPath }
-        if let sl = arg("--smoothlog") { r.smooth = SmoothProbe(device: r.device, path: NSString(string: sl).expandingTildeInPath) }
+        r.applyLaunchFlags(args)
         setupMilkDrop(args)
         applySavedPrefs(args)
 
@@ -433,6 +417,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings?.window?.isVisible == true { settings?.refresh() }
     }
 }
+
+// --offscreen: render on a fixed clock with no window at all (tests, CI, contact sheets, video), then exit.
+if CommandLine.arguments.contains("--offscreen") { exit(OfflineRender.run(CommandLine.arguments)) }
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
