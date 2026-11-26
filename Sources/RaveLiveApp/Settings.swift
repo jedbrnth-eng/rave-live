@@ -54,6 +54,11 @@ struct Prefs {
         get { bool("strobeEnabled", true) }
         nonmutating set { set(newValue, "strobeEnabled") }
     }
+    /// Festival drop: the lights dip before a drop and confetti cannons fire on it (DropFX).
+    var dropMoment: Bool {
+        get { bool("dropMoment", true) }
+        nonmutating set { set(newValue, "dropMoment") }
+    }
     /// Visual sync trim in whole milliseconds (+ = visuals later), clamped to ±500.
     var offsetMs: Int {
         get { max(-500, min(500, int("syncOffsetMs", 0))) }
@@ -110,7 +115,7 @@ struct Prefs {
 
     func reset() {
         guard !frozen else { return }
-        for k in ["overlayLevel", "startMode", "lastMode", "startFullscreen", "intensity", "strobeEnabled", "syncOffsetMs",
+        for k in ["overlayLevel", "startMode", "lastMode", "startFullscreen", "intensity", "strobeEnabled", "dropMoment", "syncOffsetMs",
                   "lyricsEnabled", "playerCard", "lyricsSize", "lyricsOffsetMs", "lyricsStyle", "lyricsPosition"] { defaults.removeObject(forKey: k) }
     }
 }
@@ -124,6 +129,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let fullscreen = NSButton(checkboxWithTitle: "Open in fullscreen", target: nil, action: nil)
     private let intensity = NSSegmentedControl(labels: Renderer.Intensity.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
     private let strobe = NSButton(checkboxWithTitle: "Strobe effects (max 3 flashes per second)", target: nil, action: nil)
+    private let dropMoment = NSButton(checkboxWithTitle: "Festival drop: lights dip before the drop, confetti on it", target: nil, action: nil)
     private let offset = NSSlider(value: 0, minValue: -250, maxValue: 250, target: nil, action: nil)
     private let offsetLabel = NSTextField(labelWithString: "")
     private let quality = NSPopUpButton()
@@ -134,7 +140,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     init(app: AppDelegate) {
         self.app = app
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 740), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 770), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "RAVE LIVE Settings"
         w.isReleasedWhenClosed = false
         super.init(window: w)
@@ -169,6 +175,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             [NSGridCell.emptyContentView, fullscreen],
             [label("Intensity"), intensity],
             [NSGridCell.emptyContentView, strobe],
+            [NSGridCell.emptyContentView, dropMoment],
             [label("Audio"), audioSource],
             [label("Quality"), quality],
             [label("Visual sync"), offsetRow],
@@ -207,6 +214,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         fullscreen.target = self; fullscreen.action = #selector(fullscreenChanged(_:))
         intensity.target = self; intensity.action = #selector(intensityChanged(_:))
         strobe.target = self; strobe.action = #selector(strobeChanged(_:))
+        dropMoment.target = self; dropMoment.action = #selector(dropMomentChanged(_:))
         offset.target = self; offset.action = #selector(offsetChanged(_:)); offset.isContinuous = true
     }
 
@@ -219,6 +227,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         fullscreen.state = p.startFullscreen ? .on : .off
         intensity.selectedSegment = r.intensity.rawValue
         strobe.state = r.strobeEnabled ? .on : .off
+        dropMoment.state = r.dropFX?.enabled == false ? .off : .on
         let ms = Int((r.userOffset * 1000).rounded())
         offset.doubleValue = Double(ms)
         offsetLabel.stringValue = ms == 0 ? "0 ms" : String(format: "%+d ms %@", ms, ms > 0 ? "later" : "earlier")
@@ -260,6 +269,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         app?.renderer.intensity = it; Prefs.shared.intensity = it.rawValue
     }
     @objc private func strobeChanged(_ s: NSButton) { app?.renderer.strobeEnabled = s.state == .on; Prefs.shared.strobe = s.state == .on }
+    @objc private func dropMomentChanged(_ s: NSButton) { app?.renderer.dropFX?.enabled = s.state == .on; Prefs.shared.dropMoment = s.state == .on }
     @objc private func offsetChanged(_ s: NSSlider) {
         let ms = Int((s.doubleValue / 5).rounded()) * 5
         app?.renderer.userOffset = Double(ms) / 1000; Prefs.shared.offsetMs = ms
@@ -270,7 +280,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     @objc private func resetAll(_ b: NSButton) {
         Prefs.shared.reset()
         guard let app, let r = app.renderer else { return }
-        r.intensity = .normal; r.strobeEnabled = true; r.userOffset = 0
+        r.intensity = .normal; r.strobeEnabled = true; r.userOffset = 0; r.dropFX?.enabled = true
         QualityController.shared.select("auto")
         app.vj.setOverlay(.status)
         app.lyrics?.resetToDefaults()

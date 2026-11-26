@@ -20,6 +20,7 @@ enum ShaderWarmup {
             ("aurora", { _ = try? AuroraRenderer.pipelines(device: device, pixelFormat: pixelFormat) }),
             ("stage", { _ = try? Renderer.pipelines(device: device, pixelFormat: pixelFormat) }),
             ("milkdrop", { _ = try? MilkDropRenderer.pipelines(device: device, pixelFormat: pixelFormat) }),
+            ("drop", { _ = try? DropFX.pipelines(device: device, pixelFormat: pixelFormat) }),
         ]
         var times = [Double](repeating: 0, count: jobs.count)
         times.withUnsafeMutableBufferPointer { t in

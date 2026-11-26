@@ -24,6 +24,8 @@ final class ShowDirector {
         var laser: Float = 0, fire: Float = 0, jetMask: Float = 15, fireball: Float = 1
         var sparks: Float = 0, co2: Float = 0, blinder: Float = 0, build: Float = 0
         var drop: Float = 0, smoke: Float = 0
+        /// 0...1, the breath: after a build, once the music falls quiet, the lights dip until the drop lands (DropFX)
+        var gap: Float = 0
         var flashRequest = false   // blinder hit: must pass the strobe limiter
     }
 
@@ -89,6 +91,11 @@ final class ShowDirector {
         if i.kick && buildPeak > 0.35 && gapSinceKick > 0.4 && now - dropTime > 8 { triggerDrop(i, "drop(build)") }
         out.build = buildScore
 
+        // ---- the breath: after a build, once the music falls quiet, the lights dip with it until the drop lands.
+        // Eased both ways (no flash); a drop resets it (triggerDrop clears the build peak), and so does the music coming back.
+        let hush = buildPeak > 0.35 && ratio < 0.6 && now - dropTime > 8
+        out.gap += ((hush ? 1 : 0) - out.gap) * min(1, dt * (hush ? 7 : 12))
+
         // ---- after a drop: jets on kicks for 8 beats, sparks 16 beats
         let sinceDropBeats = i.beatIndex - dropBeat
         if i.kick && sinceDropBeats >= 0 && sinceDropBeats < 8 {
@@ -114,7 +121,7 @@ final class ShowDirector {
 
     private func triggerDrop(_ i: Input, _ why: String) {
         dropTime = i.now; dropBeat = i.beatIndex
-        out.drop = 1; out.co2 = 1; out.fire = 1; out.jetMask = 15
+        out.drop = 1; out.co2 = 1; out.fire = 1; out.jetMask = 15; out.gap = 0
         fireballStart = i.now
         out.blinder = 1; out.flashRequest = true
         buildScore = 0; buildPeak = 0

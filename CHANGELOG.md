@@ -4,6 +4,7 @@
 
 ### Added
 - **`--offscreen`: render with no window.** The show renders into its own texture on a fixed clock: every frame moves the clock exactly 1/fps and the `--demo` track is fed up to that point first, so two runs with the same `--seed` give the same frames, whatever else the machine is doing. Use it with `--seconds`, `--snap`, `--frames DIR` (a gap-free PNG sequence for video) and `--metrics` (plus `offscreen.json`, the real CPU and GPU cost of each frame). The smoke test and CI use it, so they no longer open a window or take focus.
+- **The festival drop, in every mode.** When a build ends in a hush, the lights dip with it (eased, never a cut), and on the drop kick four confetti cannons fire: metallic gold, silver and champagne paper, one piece in ten in the scene's colour, that tumbles down over the next 10-15 s and catches the light as it turns. On the Stage the cannons stand on the deck; over Classic, AURORA and MILKDROP they fire from just below the frame. Chill fires fewer pieces and dips less, Wild more. Settings → "Festival drop" turns both off (`--no-drop-fx` for one run). No new flashing: the dip is one eased fade per drop and the pieces glint out of step with each other.
 
 ## [0.6.2] - 2026-11-21
 

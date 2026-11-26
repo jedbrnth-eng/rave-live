@@ -19,6 +19,7 @@ final class PrefsTests: XCTestCase {
         XCTAssertEqual(p.launchMode, Renderer.Mode.show.rawValue)
         XCTAssertEqual(p.intensity, Renderer.Intensity.normal.rawValue)
         XCTAssertTrue(p.strobe)
+        XCTAssertTrue(p.dropMoment)
         XCTAssertFalse(p.startFullscreen)
         XCTAssertEqual(p.offsetMs, 0)
     }
@@ -26,16 +27,18 @@ final class PrefsTests: XCTestCase {
     func testSavesAndResets() {
         let d = fresh()
         let p = Prefs(defaults: d, frozen: false)
-        p.overlay = .clean; p.intensity = 0; p.strobe = false; p.offsetMs = 120; p.startFullscreen = true
+        p.overlay = .clean; p.intensity = 0; p.strobe = false; p.offsetMs = 120; p.startFullscreen = true; p.dropMoment = false
         p.startMode = Renderer.Mode.aurora.rawValue
         let q = Prefs(defaults: d, frozen: false)          // a later launch
         XCTAssertEqual(q.overlay, .clean)
         XCTAssertEqual(q.intensity, 0)
         XCTAssertFalse(q.strobe)
+        XCTAssertFalse(q.dropMoment)
         XCTAssertEqual(q.offsetMs, 120)
         XCTAssertTrue(q.startFullscreen)
         XCTAssertEqual(q.launchMode, Renderer.Mode.aurora.rawValue)
         q.reset()
+        XCTAssertTrue(q.dropMoment)
         XCTAssertEqual(q.overlay, .status)
         XCTAssertEqual(q.offsetMs, 0)
         XCTAssertEqual(q.launchMode, Renderer.Mode.show.rawValue)

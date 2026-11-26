@@ -76,6 +76,8 @@ final class Renderer: NSObject, MTKViewDelegate {
     var onModeChange: ((Mode) -> Void)?
     var visuals: VisualsRenderer?
     var milk: MilkDropRenderer?
+    /// The festival drop on top of every mode: the breath before a drop, confetti cannons on it (Settings → Festival drop).
+    var dropFX: DropFX?
     private var lastDropTime = -100.0
     private var eventsLogged = 0
     private var strobeFromBlinder = false
@@ -132,6 +134,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         let pc = QualityTier.active.particlesEffective   // 1M on High; RAVE_PARTICLES overrides
         aurora = AuroraRenderer(device: dev, pixelFormat: view.colorPixelFormat, particles: pc)
         milk = MilkDropRenderer(device: dev, pixelFormat: view.colorPixelFormat, library: MilkDropLibrary())
+        dropFX = DropFX(device: dev, pixelFormat: view.colorPixelFormat)
         super.init()
         milk?.onEvent = { [weak self] e in self?.metrics.event(e, at: RenderClock.now()) }
         metrics.event(String(format: "renderer:t0 host=%.4f", t0), at: t0)     // lets tests line --smoothlog times up with other host-clock logs
@@ -357,6 +360,14 @@ final class Renderer: NSObject, MTKViewDelegate {
             encodeScene(mode, cb: cb, rpd: rpd, ctx: ctx)
         }
         lastDropTime = director.dropTime
+        // festival drop, over whatever is on screen: the lights dip in the hush after a build, confetti cannons fire on
+        // the drop (from the deck when the drop lands on the Stage, from below the frame over the other scenes)
+        if let fx = dropFX {
+            fx.update(dropStarted: dropStarted, now: now, fromStage: mode == .stage || (mode == .show && showScene == .stage))
+            if !blackout, let du = fx.uniforms(now: now, size: size, kick: kickVisual, gap: d.gap, hue: u[2] * 0.03 + floor(beatIdx / 16) * 0.17, intensity: intensity) {
+                fx.encode(cb: cb, target: frameTex, uniforms: du)
+            }
+        }
 
         // audio->photon latency: the first presented frame after a new kick
         if s.kickCount != lastKickDrawn && pendingKickHost > 0 && s.playing {
