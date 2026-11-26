@@ -54,7 +54,7 @@ extension Renderer {
 /// `--offscreen`: render the show into a texture with no window, no Dock icon and no audio capture, on a fixed clock.
 ///
 ///     RaveLive --offscreen --demo --seconds 45 --fps 60 --width 1280 --height 720 --seed 7 \
-///              --snap 10,34,40 --snapdir DIR --metrics DIR/metrics.json [--frames DIR --frame-step 2] [--stage|--show|...]
+///              --snap 10,34,40 --snapdir DIR --metrics DIR/metrics.json [--frames DIR --frame-step 2] [--realtime] [--stage|--show|...]
 ///
 /// Every frame advances the clock by exactly 1/fps and first feeds the demo track up to that time, so the analyzer,
 /// the beat clock and the show director see the same input whatever the machine load: two runs with one seed give the
@@ -66,6 +66,7 @@ enum OfflineRender {
         var seconds = 45.0, fps = 60.0, width = 1280, height = 720
         var framesDir: URL?, frameStep = 1, frameFrom = 0.0
         var metrics: URL?
+        var realtime = false
     }
 
     static func options(_ args: [String]) -> Options {
@@ -79,6 +80,7 @@ enum OfflineRender {
         o.frameStep = max(1, arg("--frame-step").flatMap(Int.init) ?? 1)
         o.frameFrom = max(0, arg("--frames-from").flatMap(Double.init) ?? 0)
         o.metrics = arg("--metrics").map { URL(fileURLWithPath: NSString(string: $0).expandingTildeInPath) }
+        o.realtime = args.contains("--realtime")
         return o
     }
 
@@ -99,13 +101,15 @@ enum OfflineRender {
         guard let r = Renderer(view: view, audio: audio) else { return nil }
         QualityController.shared.attach(r)
         r.renderOffscreen = true
+        // nothing is played, so this Mac's speakers or headphones must not shift the beat grid (RAVE_TEST_OUTPUT_LATENCY_MS still works)
+        r.outputLatency = OutputLatency.testOverride() ?? .init(seconds: 0, name: "offscreen", transport: "none")
         return Rig(renderer: r, view: view, audio: audio)
     }
 
     /// Draws frame `index` (1-based) of a run that started at host time `start`: moves the clock, feeds the demo up to
     /// it, draws, and waits for the GPU. Returns (CPU encode, CPU + GPU) seconds.
     @discardableResult
-    static func step(_ rig: Rig, index: Int, start: Double, fps: Double, demo: Bool) -> (Double, Double) {
+    static func step(_ rig: Rig, index: Int, start: Double, fps: Double, demo: Bool) -> (cpu: Double, total: Double) {
         let t = start + Double(index) / fps
         RenderClock.fixed = t
         if demo { rig.audio.pumpDemo(until: t) }
@@ -141,12 +145,16 @@ enum OfflineRender {
         if let d = o.framesDir { try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
 
         let frames = Int((o.seconds * o.fps).rounded())
-        var cpu = [Double](), total = [Double]()
-        cpu.reserveCapacity(frames); total.reserveCapacity(frames)
+        var cpu = [Double](), total = [Double](), gpu = [Double]()
+        cpu.reserveCapacity(frames); total.reserveCapacity(frames); gpu.reserveCapacity(frames)
         var written = 0
+        let wall0 = CACurrentMediaTime()
         for i in 0..<frames {
+            // --realtime: no faster than the clock, so the GPU load matches the live app at this frame rate
+            if o.realtime { let due = wall0 + Double(i) / o.fps - CACurrentMediaTime(); if due > 0 { Thread.sleep(forTimeInterval: due) } }
             let (c, t) = step(rig, index: i + 1, start: start, fps: o.fps, demo: demo)
             cpu.append(c); total.append(t)
+            gpu.append(r.metrics.summary(recent: 1).gpuP95)          // this frame's GPU time (its handler ran before the wait returned)
             let elapsed = Double(i + 1) / o.fps
             if let dir = o.framesDir, elapsed >= o.frameFrom, i % o.frameStep == 0, let tex = r.offscreenFrame {
                 Renderer.writePNG(tex, to: dir.appendingPathComponent(String(format: "f_%05d.png", written)))
@@ -159,7 +167,7 @@ enum OfflineRender {
         if let m = o.metrics {
             try? FileManager.default.createDirectory(at: m.deletingLastPathComponent(), withIntermediateDirectories: true)
             r.metrics.dump(to: m, wait: true)
-            writePerf(cpu: cpu, total: total, o: o, frames: written, renderer: r, to: m.deletingLastPathComponent().appendingPathComponent("offscreen.json"))
+            writePerf(cpu: cpu, total: total, gpu: gpu, o: o, frames: written, to: m.deletingLastPathComponent().appendingPathComponent("offscreen.json"))
         }
         r.smooth?.finish()
         let p = percentiles(Array(total.dropFirst(30)))
@@ -175,18 +183,29 @@ enum OfflineRender {
         return (q(0.5), q(0.95), q(0.99))
     }
 
-    private static func writePerf(cpu: [Double], total: [Double], o: Options, frames: Int, renderer r: Renderer, to url: URL) {
+    private static func writePerf(cpu: [Double], total: [Double], gpu: [Double], o: Options, frames: Int, to url: URL) {
         func j(_ v: Double) -> Any { v.isFinite ? v * 1000 : NSNull() }
+        func block(_ a: [Double]) -> [String: Any] { let p = percentiles(a); return ["p50": j(p.0), "p95": j(p.1), "p99": j(p.2), "max": j(a.max() ?? .nan)] }
         // the first 30 frames (pipeline creation, first texture allocations) are left out, like the live metrics
-        let c = percentiles(Array(cpu.dropFirst(30))), t = percentiles(Array(total.dropFirst(30)))
-        let s = r.metrics.summary()
+        let skip = min(30, max(0, total.count - 1))
+        // per second of show time, to see what a build or a drop costs
+        var perSecond: [[String: Any]] = []
+        let n = Int(o.fps.rounded())
+        var i = 0
+        while i < total.count {
+            let k = min(total.count, i + n)
+            perSecond.append(["t": Double(k) / o.fps, "gpu_ms_p95": j(percentiles(Array(gpu[i..<k])).1), "frame_cost_ms_p95": j(percentiles(Array(total[i..<k])).1)])
+            i = k
+        }
+        let t = percentiles(Array(total.dropFirst(skip)))
         let d: [String: Any] = [
-            "frames": total.count, "seconds": o.seconds, "fps_clock": o.fps, "width": o.width, "height": o.height,
+            "frames": total.count, "seconds": o.seconds, "fps_clock": o.fps, "width": o.width, "height": o.height, "realtime": o.realtime,
             "seed": String(RenderClock.seed), "frames_written": frames,
-            "cpu_encode_ms": ["p50": j(c.0), "p95": j(c.1), "p99": j(c.2)],
-            "frame_cost_ms": ["p50": j(t.0), "p95": j(t.1), "p99": j(t.2), "max": j(total.dropFirst(30).max() ?? .nan)],
-            "gpu_ms_p95": j(s.gpuP95),
+            "cpu_encode_ms": block(Array(cpu.dropFirst(skip))),
+            "gpu_ms": block(Array(gpu.dropFirst(skip)).filter { $0.isFinite }),
+            "frame_cost_ms": block(Array(total.dropFirst(skip))),
             "max_fps_from_p50": t.0 > 0 ? 1 / t.0 : NSNull(),
+            "per_second": perSecond,
             "load_average": ProcessInfo.processInfo.loadAverage,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: url, options: .atomic) }
