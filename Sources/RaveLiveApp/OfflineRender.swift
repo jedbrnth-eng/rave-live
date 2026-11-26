@@ -85,6 +85,9 @@ enum OfflineRender {
         return o
     }
 
+    /// The host time an offscreen run starts at (any fixed value works; this one looks like a normal uptime).
+    static let startHostTime = 10_000.0
+
     /// A renderer drawing into its own texture, with a view that never draws by itself and has no window.
     struct Rig { let renderer: Renderer; let view: MTKView; let audio: AudioEngine }
 
@@ -133,7 +136,9 @@ enum OfflineRender {
         // No Dock icon, no menu bar, never activated: nothing can appear on screen or take focus.
         NSApplication.shared.setActivationPolicy(.prohibited)
         guard let dev = MTLCreateSystemDefaultDevice() else { FileHandle.standardError.write("offscreen: no Metal device\n".data(using: .utf8)!); return 2 }
-        let start = CACurrentMediaTime()
+        // A fixed host time, not this Mac's uptime: before the beat locks, the director counts phrases on the host clock
+        // (every 8 s), so starting at a different uptime would pick different looks.
+        let start = startHostTime
         RenderClock.fixed = start
         let quality = args.firstIndex(of: "--quality").flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil } ?? "high"
         guard let rig = makeRig(device: dev, width: o.width, height: o.height, quality: quality) else {
@@ -173,7 +178,7 @@ enum OfflineRender {
         r.smooth?.finish()
         let p = percentiles(Array(total.dropFirst(30)))
         print(String(format: "offscreen: %d frames (%.1f s at %.0f fps, %dx%d) in %.1f s; frame cost p50 %.2f ms p95 %.2f ms p99 %.2f ms; %d frames written",
-                     frames, o.seconds, o.fps, o.width, o.height, CACurrentMediaTime() - start, p.0 * 1000, p.1 * 1000, p.2 * 1000, written))
+                     frames, o.seconds, o.fps, o.width, o.height, CACurrentMediaTime() - wall0, p.0 * 1000, p.1 * 1000, p.2 * 1000, written))
         return 0
     }
 
