@@ -54,6 +54,11 @@ vertex VOut vmain(uint vid [[vertex_id]]) {
 #define SMOKE u[36]      // lingering smoke after pyro
 #define INTENSITY u[38]  // 0 Chill, 1 Normal, 2 Wild
 
+// Crowd rows, in a row's own units (screen / scale): a person spans -0.07 (feet) to 1.37 (hands up at the top of a
+// jump: hop 0.168 + 1.085 x height 1.10), plus the 0.0125 edge band. Pixels outside a row's band skip it.
+#define CROWD_Q_LO -0.10
+#define CROWD_Q_HI 1.40
+
 constant float PI = 3.14159265;
 
 float hash11(float n) { return fract(sin(n * 127.1) * 43758.5453); }
@@ -354,6 +359,8 @@ fragment float4 fmain(VOut in [[stage_in]], constant float *u [[buffer(0)]]) {
     // ---- Crowd silhouettes (rim light picks up fire and blinders)
     float3 rim = palette(hue + 0.25, PALETTE) * (0.25 + 0.75 * live * (0.4 + 0.6 * BEAT));
     rim += float3(1.0, 0.5, 0.15) * (FIRE * 0.8 + (1.0 - FIREBALL) * 0.8) + float3(1.0, 0.85, 0.6) * BLINDER;
+    // Each row evaluates three people twice (body and the rim probe): most of the Stage's cost. Rows a pixel can't
+    // touch and the rim probe where nobody stands are skipped; they would mix with weight 0 (StageCrowdCullTests).
     const int ROWS = 6;
     for (int r = 0; r < ROWS; r++) {
         float fr = float(r) / float(ROWS - 1);
@@ -361,23 +368,32 @@ fragment float4 fmain(VOut in [[stage_in]], constant float *u [[buffer(0)]]) {
         float baseY = mix(-0.36, -1.28, fr);
         float spacing = 0.21 * scale;
         float2 q = float2(p.x / scale, (p.y - baseY) / scale);
+        if (q.y < CROWD_Q_LO || q.y > CROWD_Q_HI) continue;   // [crowd-cull] nobody in this row reaches this pixel
         float idx = floor(q.x / (spacing / scale) + 0.5);
         float dmin = 1e5, dup = 1e5;
         float2 qu = q + float2(0.0, 0.018 / scale);   // probe slightly above: rim only on top edges (back-lit)
+        float pc[3], ph[3], pj[3], pa[3], ps[3];
+        bool on[3];
         for (int j = -1; j <= 1; j++) {
+            int k = j + 1;
             float id = idx + float(j);
             float seed = hash11(id * 13.7 + float(r) * 71.3);
-            if (seed > mix(0.15, 1.0, DENSITY)) continue;
+            on[k] = seed <= mix(0.15, 1.0, DENSITY);
+            if (!on[k]) continue;
             float cx = id * (spacing / scale) + (seed - 0.5) * 0.12;
             float hgt = 0.85 + 0.25 * hash11(seed * 91.0);
             float hop = JUMP * abs(sin(PI * (PHASE + seed * 0.18))) * 0.12 * (0.6 + 0.8 * seed);
             float sway = (1.0 - JUMP) * 0.03 * sin(t * 1.3 + seed * 6.0);
             float hands = clamp(HANDS * (0.6 + 0.8 * seed) - 0.1, 0.0, 1.0);
-            dmin = min(dmin, person(q - float2(cx + sway, 0.0), hgt, hop, hands, seed));
-            dup = min(dup, person(qu - float2(cx + sway, 0.0), hgt, hop, hands, seed));
+            pc[k] = cx + sway; ph[k] = hgt; pj[k] = hop; pa[k] = hands; ps[k] = seed;
+            dmin = min(dmin, person(q - float2(pc[k], 0.0), hgt, hop, hands, seed));
         }
         float d = dmin * scale;
         float cover = 1.0 - smoothstep(0.0, 0.003, d);
+        if (cover <= 0.0) continue;                          // [crowd-cull] no one here: the rim probe can't show
+        for (int k = 0; k < 3; k++) {
+            if (on[k]) dup = min(dup, person(qu - float2(pc[k], 0.0), ph[k], pj[k], pa[k], ps[k]));
+        }
         float above = 1.0 - smoothstep(0.0, 0.003, dup * scale);
         float edge = cover * (1.0 - above);
         col = mix(col, float3(0.008, 0.008, 0.012) + rim * edge * mix(0.9, 0.35, fr), cover);
