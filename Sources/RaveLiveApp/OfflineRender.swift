@@ -48,6 +48,7 @@ extension Renderer {
         showHoldOverride = arg("--show-hold").flatMap(Double.init)
         lumLogPath = arg("--lumlog").map { NSString(string: $0).expandingTildeInPath }
         if let sl = arg("--smoothlog") { smooth = SmoothProbe(device: device, path: NSString(string: sl).expandingTildeInPath) }
+        if args.contains("--no-drop-fx") { dropFX?.enabled = false }
     }
 }
 

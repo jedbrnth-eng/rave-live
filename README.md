@@ -80,7 +80,7 @@ Play music in any app (Spotify, Apple Music, YouTube, Serato, a DJ controller on
 
 | Mode | What you get |
 |---|---|
-| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals, AURORA and MILKDROP every 32 beats on a bar line, with 7 beat-locked transitions; the next scene starts a bar early offscreen, so it fades in already running. Drops get one clean cut. |
+| **SHOW** (default) | One continuous set. Moves between Stage, Classic Visuals, AURORA and MILKDROP every 32 beats on a bar line, with 7 beat-locked transitions; the next scene starts a bar early offscreen, so it fades in already running. Drops get one clean cut, and in every mode a festival drop: the lights dip in the hush after a build, then confetti cannons fire on the drop kick (Settings → Festival drop). |
 | **Stage** | A procedural club stage: LED wall looks, moving heads, lasers, haze, flame jets, fireballs and a crowd that reacts. A show director picks looks per phrase and tracks builds and drops. |
 | **Classic Visuals** | 48 presets, from feedback classics (Tunnel, MilkWarp, Kaleido) to Synthwave, Galaxy, Neon City, Terrain, reaction-diffusion Coral, Fireworks, Julia, Game of Life, Disco Ball, Laser Show and a scratchable Vinyl. Many react to your mouse or hands, and every preset pulses on the shared beat clock. Write your own in **Shader Lab** (drop a `.metal` file in a folder; it hot-reloads) and tweak any preset with the **Tweak panel** (`Shift`+`T`), saved as `.ravelook` files. |
 | **AURORA** | A GPU fluid simulation with about a million particles and bloom. Stir it with the mouse, or turn on the camera and paint it with your hands and body. |

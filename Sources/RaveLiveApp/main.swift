@@ -329,6 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !args.contains("--intensity"), let it = Renderer.Intensity(rawValue: p.intensity) { r.intensity = it }
         if !args.contains("--trim") { r.userOffset = Double(p.offsetMs) / 1000 }
         r.strobeEnabled = p.strobe
+        if !args.contains("--no-drop-fx") { r.dropFX?.enabled = p.dropMoment }
     }
 
     /// Keys and MIDI change intensity, strobe and trim too; remember where they ended up.
