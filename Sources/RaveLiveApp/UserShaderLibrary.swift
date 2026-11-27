@@ -25,7 +25,9 @@ final class UserShaderLibrary {
     private(set) var entries: [Entry] = []
     /// Bumped whenever the list or a pipeline changes (lets the renderer react cheaply).
     private(set) var generation = 0
-    var device: MTLDevice? { didSet { if oldValue == nil && device != nil { start() } } }
+    var device: MTLDevice? { didSet { if oldValue == nil && device != nil && Self.watchesFolder(args: CommandLine.arguments) { start() } } }
+    /// Whether this run creates, polls and compiles the Shader Lab folder.
+    static func watchesFolder(args: [String]) -> Bool { true }
     let folder: URL
     private let queue = DispatchQueue(label: "rave.shaderlab", qos: .userInitiated)
     private var timer: Timer?

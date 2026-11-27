@@ -124,7 +124,9 @@ final class PresetLab: NSObject {
     private(set) var tweaks: [String: LookTweak] = [:]
     var panelOpen = false
     private var row = 0
-    private let persist = !CommandLine.arguments.contains("--lab-ephemeral")    // tests don't touch the user's saved tweaks
+    private let persist = PresetLab.persists(args: CommandLine.arguments)
+    /// Tests don't touch the user's saved tweaks.
+    static func persists(args: [String]) -> Bool { !args.contains("--lab-ephemeral") }
     private var panel: TextOverlay?
     private var errorBox: TextOverlay?
     private var message: (text: String, until: Double)?
