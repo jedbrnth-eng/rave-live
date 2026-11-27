@@ -41,7 +41,8 @@ final class BreathFlutterTests: XCTestCase {
         XCTAssertLessThanOrEqual(r.maxFallPerFrame, 1 / (0.3 * 60) + 0.001, "largest one-frame recovery \(r.maxFallPerFrame)")
     }
 
-    /// The designed moment is untouched: build, 2 beats of silence (lights down), drop (lights up at once).
+    /// The designed moment: build, 2 beats of silence (lights down), drop (lights back up within a quarter second,
+    /// eased over a few frames so the lift is not a one-frame cut that bypasses the strobe limit).
     func testDesignedBuildSilenceDropStillDipsAndDrops() throws {
         let r = BreathHarness.designedDrop()
         XCTAssertEqual(r.drops.count, 1)
@@ -54,9 +55,13 @@ final class BreathFlutterTests: XCTestCase {
         for i in 0..<dropFrame where r.gaps[i] > deepest { deepest = r.gaps[i] }
         XCTAssertGreaterThan(deepest, 0.8, "the lights are well down in the silence")
         XCTAssertGreaterThan(r.gaps[dropFrame - 1], 0.8, "and still down on the frame before the drop")
-        XCTAssertEqual(r.gaps[dropFrame], 0, "the drop clears the dip")
+        let liftFrames = Int((0.25 * BreathHarness.fps).rounded())
+        XCTAssertEqual(r.gaps[dropFrame + liftFrames], 0, "the drop clears the dip within 0.25 s")
+        var lift: Float = 0
+        for i in dropFrame..<(dropFrame + liftFrames) { lift = max(lift, r.gaps[i - 1] - r.gaps[i]) }
+        XCTAssertLessThanOrEqual(lift, 0.2, "the lights ease up on the drop (largest one-frame lift \(lift))")
         var after: Float = 0
-        for i in dropFrame..<r.gaps.count where r.gaps[i] > after { after = r.gaps[i] }
+        for i in (dropFrame + liftFrames)..<r.gaps.count where r.gaps[i] > after { after = r.gaps[i] }
         XCTAssertLessThan(after, 0.01, "no dip after the drop")
         XCTAssertLessThanOrEqual(r.pairsPerSecond, 1)
     }
