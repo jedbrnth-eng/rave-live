@@ -62,7 +62,7 @@ final class DropFX {
         let since = burst.map { now - $0.time } ?? .infinity
         let breath = gap * Self.breathDepth(intensity)
         guard since < Self.airTime || breath > 0.002 else { return nil }
-        u[0] = Float(size.width); u[1] = Float(size.height)
+        u[0] = max(1, Float(size.width)); u[1] = max(1, Float(size.height))   // the shader divides by the aspect
         u[2] = since < Self.airTime ? Float(since) : -1
         u[3] = Float((burst?.number ?? 0) % 997)
         u[4] = Float(Self.pieces(intensity))
@@ -123,7 +123,7 @@ float2 flight(float2 v0, float2 vt, float k, float t) { return vt * t + (v0 - vt
 vertex CVOut confettiVert(uint vid [[vertex_id]], uint iid [[instance_id]], constant float *u [[buffer(0)]]) {
     CVOut o;
     o.pos = float4(0.0, 0.0, 2.0, 1.0); o.q = float2(0.0); o.col = float3(0.0); o.glint = 0.0; o.alpha = 0.0;
-    float aspect = u[0] / max(u[1], 1.0);
+    float aspect = max(u[0], 1.0) / max(u[1], 1.0);
     float n = float(iid) * 1.618 + u[3] * 97.31;
     float r0 = ch(n * 12.9898 + 1.0), r1 = ch(n * 78.233 + 2.0), r2 = ch(n * 37.719 + 3.0), r3 = ch(n * 93.989 + 4.0);
     float r4 = ch(n * 51.413 + 5.0), r5 = ch(n * 27.127 + 6.0), r6 = ch(n * 63.731 + 7.0), r7 = ch(n * 19.391 + 8.0);
