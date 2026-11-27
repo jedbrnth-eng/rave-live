@@ -27,7 +27,7 @@ final class UserShaderLibrary {
     private(set) var generation = 0
     var device: MTLDevice? { didSet { if oldValue == nil && device != nil && Self.watchesFolder(args: CommandLine.arguments) { start() } } }
     /// Whether this run creates, polls and compiles the Shader Lab folder.
-    static func watchesFolder(args: [String]) -> Bool { true }
+    static func watchesFolder(args: [String]) -> Bool { !OfflineRender.isolates(args: args) || args.contains("--shaderdir") }
     let folder: URL
     private let queue = DispatchQueue(label: "rave.shaderlab", qos: .userInitiated)
     private var timer: Timer?
