@@ -158,7 +158,7 @@ vertex CVOut confettiVert(uint vid [[vertex_id]], uint iid [[instance_id]], cons
     o.pos = float4(pp.x / aspect, pp.y, 0.0, 1.0);
     o.q = corner;
 
-    // metallic gold, silver and champagne; one piece in ten takes the scene's colour
+    // metallic gold, silver and champagne; one piece in ten in an accent that follows the Stage's hue clock (new each phrase)
     float3 gold = float3(0.96, 0.72, 0.30), silver = float3(0.82, 0.86, 0.93), champagne = float3(1.0, 0.87, 0.66);
     float3 accent = 0.5 + 0.5 * cos(6.28318 * (u[7] + float3(0.0, 0.33, 0.67)));
     float3 base = r11 < 0.42 ? gold : r11 < 0.72 ? silver : r11 < 0.90 ? champagne : accent;
