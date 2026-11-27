@@ -38,13 +38,18 @@ final class MilkDropLibrary: @unchecked Sendable {
     /// Folders never picked automatically: the pack's "fade to black" transition presets.
     static let skipCategories: Set<String> = ["! Transition"]
 
-    static let root: URL = {
+    static let root: URL = rootURL(args: CommandLine.arguments, env: ProcessInfo.processInfo.environment)
+    static func rootURL(args: [String], env: [String: String]) -> URL {
         // RAVE_MILKDROP_ROOT moves everything elsewhere (tests, portable setups)
-        if let r = ProcessInfo.processInfo.environment["RAVE_MILKDROP_ROOT"] { return URL(fileURLWithPath: r, isDirectory: true) }
+        if let r = env["RAVE_MILKDROP_ROOT"] { return URL(fileURLWithPath: r, isDirectory: true) }
+        // --offscreen: an empty library in the temp folder (bundled presets only), never the user's favourites or packs
+        if OfflineRender.isolates(args: args) {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("RAVE LIVE offscreen/MilkDrop", isDirectory: true)
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSString(string: "~/Library/Application Support").expandingTildeInPath)
         return base.appendingPathComponent("RAVE LIVE/MilkDrop", isDirectory: true)
-    }()
+    }
     static var packDir: URL { root.appendingPathComponent("presets", isDirectory: true) }
     static var userDir: URL { root.appendingPathComponent("My Presets", isDirectory: true) }
     /// Presets shipped inside the app bundle (Contents/Resources/MilkDrop, laid out like the pack so keys match).

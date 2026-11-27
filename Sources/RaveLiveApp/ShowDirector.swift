@@ -40,6 +40,18 @@ final class ShowDirector {
     /// score itself decays) doesn't cancel the drop. On the demo only the first drop of the session used to be detected.
     private var buildPeak: Float = 0
     private var lowSince = 0.0
+    /// The breath's latch. Level = short average / long average. Times in seconds.
+    static let hushEnter: Float = 0.6, hushLeave: Float = 0.8
+    static let hushMinHold = 0.4, hushMaxHold = 2.5
+    /// The lights come back over this long when no drop lands.
+    static let hushRelease: Float = 0.4
+    /// On the drop the lights come back over this long: still on the kick, but not a one-frame jump in brightness
+    /// (that would be a full-frame cut the strobe limiter never sees).
+    static let dropRelease: Float = 0.15
+    private var dropLift = false
+    private var hushOn = false
+    private var hushArmed = true
+    private var hushSince = 0.0
     private(set) var dropTime = -100.0
     private var dropBeat = -1000
     private var lastHypeBeat = -1000
@@ -92,9 +104,22 @@ final class ShowDirector {
         out.build = buildScore
 
         // ---- the breath: after a build, once the music falls quiet, the lights dip with it until the drop lands.
-        // Eased both ways (no flash); a drop resets it (triggerDrop clears the build peak), and so does the music coming back.
-        let hush = buildPeak > 0.35 && ratio < 0.6 && now - dropTime > 8
-        out.gap += ((hush ? 1 : 0) - out.gap) * min(1, dt * (hush ? 7 : 12))
+        // It dims the whole frame, so it must never flutter: the hush is latched (in below `hushEnter`, out only above
+        // `hushLeave`, held at least `hushMinHold`), one dip is capped at `hushMaxHold`, and the next one has to wait
+        // until the level has been back above `hushLeave`. At most one dip starts per `hushMinHold`, whatever the input.
+        // Eased both ways (no flash). A drop lifts it over `dropRelease` (triggerDrop).
+        let canHush = buildPeak > 0.35 && now - dropTime > 8
+        if ratio > Self.hushLeave { hushArmed = true }
+        if hushOn {
+            let held = now - hushSince
+            if held >= Self.hushMaxHold || (held >= Self.hushMinHold && (ratio > Self.hushLeave || !canHush)) { hushOn = false }
+        } else if canHush && hushArmed && ratio < Self.hushEnter {
+            hushOn = true; hushArmed = false; hushSince = now
+        }
+        if hushOn { out.gap += (1 - out.gap) * min(1, dt * 7); dropLift = false } else {
+            out.gap = max(0, out.gap - dt / (dropLift ? Self.dropRelease : Self.hushRelease))
+            if out.gap == 0 { dropLift = false }
+        }
 
         // ---- after a drop: jets on kicks for 8 beats, sparks 16 beats
         let sinceDropBeats = i.beatIndex - dropBeat
@@ -121,7 +146,7 @@ final class ShowDirector {
 
     private func triggerDrop(_ i: Input, _ why: String) {
         dropTime = i.now; dropBeat = i.beatIndex
-        out.drop = 1; out.co2 = 1; out.fire = 1; out.jetMask = 15; out.gap = 0
+        out.drop = 1; out.co2 = 1; out.fire = 1; out.jetMask = 15; dropLift = out.gap > 0; hushOn = false
         fireballStart = i.now
         out.blinder = 1; out.flashRequest = true
         buildScore = 0; buildPeak = 0

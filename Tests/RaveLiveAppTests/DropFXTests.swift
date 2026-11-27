@@ -37,9 +37,12 @@ final class DropFXTests: XCTestCase {
         let dropAt = try XCTUnwrap(drop, "the drop after the build must be detected")
         let before = gap.filter { $0.0 < dropAt }.map(\.1).max() ?? 0
         XCTAssertGreaterThan(before, 0.8, "the lights should be well down just before the drop")
-        let onDrop = try XCTUnwrap(gap.first { $0.0 >= dropAt })
-        XCTAssertEqual(onDrop.1, 0, "the drop frame is full brightness")
-        XCTAssertLessThan(gap.filter { $0.0 > dropAt }.map(\.1).max() ?? 1, 0.01, "no second dip after the drop")
+        // the lights come up with the drop, eased over a few frames (a one-frame jump is a cut the strobe limit never sees)
+        let lift = gap.filter { $0.0 >= dropAt - 1e-9 && $0.0 <= dropAt + DropFXTests.dropLiftLimit }
+        XCTAssertEqual(try XCTUnwrap(lift.last).1, 0, "full brightness within \(DropFXTests.dropLiftLimit) s of the drop")
+        let onDrop = try XCTUnwrap(gap.first { $0.0 >= dropAt - 1e-9 })
+        XCTAssertGreaterThan(onDrop.1, 0.5, "the drop frame starts the lift, it doesn't cut to full brightness")
+        XCTAssertLessThan(gap.filter { $0.0 > dropAt + DropFXTests.dropLiftLimit }.map(\.1).max() ?? 1, 0.01, "no second dip after the drop")
         let groove = gap.filter { $0.0 < 16 }.map(\.1).max() ?? 1
         XCTAssertLessThan(groove, 0.01, "no dip during the groove")
     }
@@ -49,12 +52,29 @@ final class DropFXTests: XCTestCase {
         XCTAssertLessThan(gap.map(\.1).max() ?? 1, 0.05, "a quiet patch without a build isn't a drop: keep the lights")
     }
 
-    /// The breath rises over a few frames, never as a one-frame cut (no flashing).
+    /// The lights may lift by at most this much in one 60 fps frame, and must be fully back this long after the drop.
+    static let dropMaxLiftPerFrame: Float = 0.2
+    static let dropLiftLimit = 0.25
+
+    /// The breath rises over a few frames and lifts over a few frames, never as a one-frame cut (no flashing).
     func testBreathIsEasedNotCut() {
         let (gap, _, _) = playSet(build: true)
-        var maxStep: Float = 0
-        for i in 1..<gap.count where gap[i].1 > gap[i - 1].1 { maxStep = max(maxStep, gap[i].1 - gap[i - 1].1) }
+        var maxStep: Float = 0, maxLift: Float = 0
+        for i in 1..<gap.count {
+            if gap[i].1 > gap[i - 1].1 { maxStep = max(maxStep, gap[i].1 - gap[i - 1].1) }
+            else { maxLift = max(maxLift, gap[i - 1].1 - gap[i].1) }
+        }
         XCTAssertLessThan(maxStep, 0.15, "the dip must ease in")
+        XCTAssertLessThanOrEqual(maxLift, DropFXTests.dropMaxLiftPerFrame, "the lights must ease back up on the drop, not jump in one frame")
+    }
+
+    /// A zero-width view (a minimised window, the first layout pass) must not divide by zero in the confetti shader.
+    func testUniformsNeverHandTheShaderAZeroSize() throws {
+        guard let dev = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal device on this machine") }
+        let fx = try XCTUnwrap(DropFX(device: dev, pixelFormat: .bgra8Unorm))
+        let u = try XCTUnwrap(fx.uniforms(now: 5, size: .zero, kick: 0, gap: 1, hue: 0, intensity: .normal))
+        XCTAssertGreaterThanOrEqual(u[0], 1, "width")
+        XCTAssertGreaterThanOrEqual(u[1], 1, "height")
     }
 
     func testBurstFollowsTheDropAndEnds() throws {

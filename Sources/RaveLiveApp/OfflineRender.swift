@@ -85,6 +85,10 @@ enum OfflineRender {
         return o
     }
 
+    /// `--offscreen` keeps away from the user's own RAVE LIVE data (Shader Lab folder, MilkDrop library, look tweaks,
+    /// saved settings), so frames don't depend on whose Mac renders them and a run never changes them.
+    static func isolates(args: [String]) -> Bool { args.contains("--offscreen") }
+
     /// The host time an offscreen run starts at (any fixed value works; this one looks like a normal uptime).
     static let startHostTime = 10_000.0
 

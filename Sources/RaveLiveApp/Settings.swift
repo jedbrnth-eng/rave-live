@@ -16,8 +16,10 @@ enum OverlayLevel: Int, CaseIterable {
 /// `--factory-settings`) start from the defaults and never save, so benchmarks stay reproducible.
 struct Prefs {
     static let lastUsedMode = -1
-    static let shared = Prefs(defaults: .standard,
-                              frozen: CommandLine.arguments.contains("--autoquit") || CommandLine.arguments.contains("--factory-settings"))
+    static let shared = Prefs(defaults: .standard, frozen: isFrozen(args: CommandLine.arguments))
+    static func isFrozen(args: [String]) -> Bool {
+        args.contains("--autoquit") || args.contains("--factory-settings") || OfflineRender.isolates(args: args)
+    }
 
     let defaults: UserDefaults
     /// Read the built-in defaults and ignore writes.
