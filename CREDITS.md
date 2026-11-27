@@ -9,6 +9,9 @@
   Copyright (c) 2017 Pavel Dobryakov. Permission is hereby granted, free of charge, under the MIT License (full text at
   https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/LICENSE).
 - **Apollonian fractal / cosine palettes** — formulations published by Inigo Quilez (re-implemented).
+- **Festival drop confetti** (`DropFX.swift`) — the tilt-and-wobble model of falling paper (drag towards a slow fall, sideways
+  flutter, a flip that turns each piece to the light) follows canvas-confetti by Kiril Vatev (ISC licence,
+  https://github.com/catdad/canvas-confetti); re-implemented as a closed-form Metal vertex shader, no code copied.
 - **Visuals pack 1 (presets 23-31)** — techniques re-implemented from scratch, no Shadertoy code copied: Gray-Scott reaction-diffusion
   (Pearson 1993 parameters; the Du=1.0 / Dv=0.5 nine-point-stencil formulation described by Karl Sims, "Reaction-Diffusion Tutorial"),
   damped 2D wave equation (Pond), curl-of-potential advection (Ink Water), Vogel/golden-angle phyllotaxis (Flower),

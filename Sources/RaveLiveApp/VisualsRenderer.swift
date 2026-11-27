@@ -96,7 +96,7 @@ final class VisualsRenderer {
     private var lastChange = -100.0
     private var holdUntil = 0.0
     /// Hold each preset >= 6 s (12 s after a drop) so phrase changes right after a switch don't flicker.
-    func direct(look: Float, dropStarted: Bool, now: Double = CACurrentMediaTime()) {
+    func direct(look: Float, dropStarted: Bool, now: Double = RenderClock.now()) {
         guard autoCycle else { lastLook = look; return }
         if dropStarted {
             preset = nextFromBag(prefer: [0, 8, 9, 10, 11, 18, 20, 22, 25, 27, 31, 36, 40, 43, 44, 45]); newVariant(); lastChange = now; holdUntil = now + 12
@@ -118,13 +118,13 @@ final class VisualsRenderer {
     }
     /// Give a visit its own palette + variation so a preset never looks identical twice.
     func newVariant() { paletteIndex = next(7); variation = Float(next(1000)) / 1000 }
-    private var gen = SystemRandomNumberGenerator()
+    private var gen = SeededGenerator(seed: RenderClock.seed)
     private func next(_ n: Int) -> Int { rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17; return Int(rng % UInt64(n)) }
 
     func encode(cb: MTLCommandBuffer, rpd: MTLRenderPassDescriptor, size: CGSize, dt: Float,
                 s: AudioSnapshot, u: [Float], input: Input = Input()) {
         let w = max(1, Int(size.width)), h = max(1, Int(size.height))
-        let sl = slot, now = CACurrentMediaTime()
+        let sl = slot, now = RenderClock.now()
         var stale = slotPreset[sl] != preset || now - slotLastUse[sl] > 0.25
         if texSets[sl].first?.width != w || texSets[sl].first?.height != h {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: w, height: h, mipmapped: false)

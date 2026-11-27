@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Part of RAVE LIVE: https://github.com/jedbrnth-eng/rave-live
 
-# Headless smoke test: runs the built app for a few seconds on synthetic audio (nothing is played) and checks
-# that a rendered snapshot isn't black. Skips with exit 0 and a clear message when there is no Metal device
-# (CI virtual machines often have no GPU). Usage: scripts/smoke_test.sh ["path/to/RAVE LIVE.app"]
+# Headless smoke test: renders 8 s of the Stage with --offscreen (no window, nothing shown or played, synthetic
+# audio on a fixed clock) and checks that the snapshot isn't black. Skips with exit 0 and a clear message when there
+# is no Metal device (CI virtual machines often have no GPU). Usage: scripts/smoke_test.sh ["path/to/RAVE LIVE.app"]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP="${1:-build/RAVE LIVE.app}"
@@ -44,11 +44,11 @@ echo "smoke: Metal device: $GPU"
 
 # Stage mode is bright from the first second, so a black frame really means nothing rendered.
 set +e
-perl -e 'alarm 90; exec @ARGV' "$EXE" --accept-warning --demo --no-referee --stage --autoquit 8 --snap 4 \
+perl -e 'alarm 90; exec @ARGV' "$EXE" --offscreen --accept-warning --demo --no-referee --stage --seconds 8 --snap 4 \
   --snapdir "$OUT" --metrics "$PWD/$OUT/metrics.json" --width 640 --height 360 > "$OUT/log.txt" 2>&1
 STATUS=$?
 set -e
-grep -E "RAVE LIVE: (quality|analyzer)|Shader error" "$OUT/log.txt" || true
+grep -E "RAVE LIVE: (quality|analyzer)|Shader error|^offscreen:" "$OUT/log.txt" || true
 [ "$STATUS" -eq 0 ] || { echo "smoke: app exited with status $STATUS"; tail -20 "$OUT/log.txt"; exit 1; }
 SNAP="$(ls "$OUT"/snap_*.png 2>/dev/null | head -1)"
 [ -n "$SNAP" ] || { echo "smoke: no snapshot written"; tail -20 "$OUT/log.txt"; exit 1; }
